@@ -1,0 +1,25 @@
+# Secret environment variables
+.env
+.env.local
+*.env
+
+# Python build & bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Node & Frontend build
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
