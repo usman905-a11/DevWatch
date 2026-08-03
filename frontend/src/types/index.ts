@@ -20,6 +20,7 @@ export interface ReviewReport {
   high_count: number;
   medium_count: number;
   low_count: number;
+  files_to_review?: string[];
 }
 
 export interface AgentStepUpdate {
