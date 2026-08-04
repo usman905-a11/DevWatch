@@ -56,7 +56,9 @@ export DEVWATCH_HEAVY_MODEL="gpt-4o"                   # Model for Security & Qu
 ```
 
 ### 3. Run FastAPI Backend Server
+Run this from the **repository root directory** (`E:\dewatch`):
 ```bash
+# Ensure you are at the project root: cd E:\dewatch
 uvicorn devwatch.server:app --reload --port 8000
 ```
 

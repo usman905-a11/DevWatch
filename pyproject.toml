@@ -23,6 +23,9 @@ dependencies = [
 [project.scripts]
 devwatch = "devwatch.cli:app"
 
+[tool.setuptools.packages.find]
+include = ["devwatch*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

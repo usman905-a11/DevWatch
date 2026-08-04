@@ -1,6 +1,10 @@
 import re
 import ast
-import git
+try:
+    import git
+except ImportError:
+    git = None
+
 from typing import List, Dict, Any, Optional
 from devwatch.models import CodeIssue, IssueSeverity
 
@@ -30,6 +34,8 @@ class GitDiffTool:
     description: str = "Extracts git diff for modified files in target repository."
 
     def _run(self, repo_path: str) -> str:
+        if git is None:
+            return "Git diff disabled (gitpython package not installed)."
         try:
             repo = git.Repo(repo_path, search_parent_directories=True)
             diff_text = repo.git.diff("HEAD")
