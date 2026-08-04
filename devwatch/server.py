@@ -50,6 +50,9 @@ def verify_api_key(x_api_key: Optional[str] = Header(None, alias="x-api-key")):
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
+from devwatch.tools.fix_applier import apply_code_fix
+
+
 class ReviewRequest(BaseModel):
     target_path: str = "."
 
@@ -63,6 +66,14 @@ class WriteFileRequest(BaseModel):
     root_path: str = "."
     file_path: str
     content: str
+
+
+class ApplyFixRequest(BaseModel):
+    root_path: str = "."
+    file_path: str
+    line_number: int = 1
+    target_snippet: str = ""
+    replacement_code: str
 
 
 @app.get("/api/health")
@@ -156,6 +167,28 @@ async def trigger_review(request: ReviewRequest):
     return report_data
 
 
+@app.post("/api/review/apply-fix", dependencies=[Depends(verify_api_key)])
+def apply_quick_fix(request: ApplyFixRequest):
+    try:
+        success = apply_code_fix(
+            root_dir=request.root_path,
+            file_path=request.file_path,
+            line_number=request.line_number,
+            target_snippet=request.target_snippet,
+            replacement_code=request.replacement_code,
+        )
+        return {
+            "status": "success",
+            "file_path": request.file_path,
+            "line_number": request.line_number,
+            "modified": success,
+        }
+    except (ValueError, FileNotFoundError) as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Failed to apply code fix: {str(err)}")
+
+
 @app.get("/api/reports/{report_id}", dependencies=[Depends(verify_api_key)])
 def get_report(report_id: str):
     if report_id in REPORTS_DB:
@@ -192,7 +225,9 @@ async def websocket_review_endpoint(websocket: WebSocket):
                 item = await queue.get()
                 if item is None:
                     break
-                await websocket.send_json(item.model_dump())
+                payload = item.model_dump()
+                payload["type"] = "agent_update"
+                await websocket.send_json(payload)
                 queue.task_done()
 
         stream_task = asyncio.create_task(stream_queue())
@@ -204,6 +239,7 @@ async def websocket_review_endpoint(websocket: WebSocket):
 
         await websocket.send_json(
             {
+                "type": "review_completion",
                 "status": "COMPLETED",
                 "message": "Review complete!",
                 "report": report.model_dump(),
@@ -212,7 +248,7 @@ async def websocket_review_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        await websocket.send_json({"status": "FAILED", "message": str(e)})
+        await websocket.send_json({"type": "review_error", "status": "FAILED", "message": str(e)})
     finally:
         try:
             await websocket.close()

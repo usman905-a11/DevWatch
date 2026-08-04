@@ -51,7 +51,7 @@ def test_call_llm_structured_self_correction_retry():
 
     calls = [invalid_response, valid_response]
 
-    def mock_completion(prompt, system_prompt):
+    def mock_completion(prompt, system_prompt="", **kwargs):
         return calls.pop(0)
 
     with patch("devwatch.agents.llm.is_llm_available", return_value=True):

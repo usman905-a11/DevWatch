@@ -1,0 +1,93 @@
+{
+  "report_id": "0104fcce-6283-4d05-8794-06b4294ede9e",
+  "target_path": "C:\\Users\\HP\\AppData\\Local\\Temp\\pytest-of-HP\\pytest-31\\test_get_report_by_id0",
+  "status": "completed",
+  "timestamp": 1785827011.4052334,
+  "steps": [
+    {
+      "agent_name": "Planner Agent",
+      "status": "RUNNING",
+      "message": "Mapping risk areas for C:\\Users\\HP\\AppData\\Local\\Temp\\pytest-of-HP\\pytest-31\\test_get_report_by_id0",
+      "timestamp": 1785827011.4042282
+    },
+    {
+      "agent_name": "Planner Agent",
+      "status": "COMPLETED",
+      "message": "Scope planned: 1 files to analyze",
+      "timestamp": 1785827011.4052334
+    },
+    {
+      "agent_name": "Security Auditor",
+      "status": "RUNNING",
+      "message": "Auditing test.py for OWASP vulnerabilities",
+      "timestamp": 1785827011.4052334
+    },
+    {
+      "agent_name": "Quality Auditor",
+      "status": "RUNNING",
+      "message": "Auditing test.py for logic & exception flaws",
+      "timestamp": 1785827011.4052334
+    },
+    {
+      "agent_name": "Verification Agent",
+      "status": "RUNNING",
+      "message": "Verifying candidate issues in test.py",
+      "timestamp": 1785827011.4052334
+    },
+    {
+      "agent_name": "Security Auditor",
+      "status": "COMPLETED",
+      "message": "Found 2 security issues in test.py",
+      "timestamp": 1785827011.4052334
+    },
+    {
+      "agent_name": "Quality Auditor",
+      "status": "COMPLETED",
+      "message": "Found 0 quality issues in test.py",
+      "timestamp": 1785827011.4052334
+    },
+    {
+      "agent_name": "Verification Agent",
+      "status": "COMPLETED",
+      "message": "Verified 2 true positive findings in test.py",
+      "timestamp": 1785827011.4052334
+    },
+    {
+      "agent_name": "Synthesizer Agent",
+      "status": "RUNNING",
+      "message": "Deduplicating & prioritizing issues",
+      "timestamp": 1785827011.4052334
+    },
+    {
+      "agent_name": "Synthesizer Agent",
+      "status": "COMPLETED",
+      "message": "Report generated: 1 total issues",
+      "timestamp": 1785827011.4052334
+    }
+  ],
+  "report": {
+    "target_path": "C:\\Users\\HP\\AppData\\Local\\Temp\\pytest-of-HP\\pytest-31\\test_get_report_by_id0",
+    "issues": [
+      {
+        "file_path": "test.py",
+        "line_number": 1,
+        "severity": "CRITICAL",
+        "category": "Security",
+        "title": "Hardcoded Secret Credential",
+        "description": "Plaintext secret or API key credential found in source code.",
+        "suggestion": "Store credentials in environment variables or a secret vault.",
+        "code_snippet": "SECRET_KEY = '[REDACTED_SECRET]'",
+        "replacement_code": null,
+        "confidence_score": 1.0,
+        "cwe_id": null
+      }
+    ],
+    "summary": "# DevWatch Code Review Report\n**Target Path:** `C:\\Users\\HP\\AppData\\Local\\Temp\\pytest-of-HP\\pytest-31\\test_get_report_by_id0`\n**Total Issues Found:** 1 (Critical: 1, High: 0, Medium: 0, Low: 0)\n\n## Detailed Findings\n\n### 1. [CRITICAL] Hardcoded Secret Credential\n- **File:** `test.py:1` | Confidence: 1.00\n- **Category:** Security\n- **Description:** Plaintext secret or API key credential found in source code.\n```python\nSECRET_KEY = '[REDACTED_SECRET]'\n```\n- **Suggestion:** Store credentials in environment variables or a secret vault.\n",
+    "total_issues": 1,
+    "critical_count": 1,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 0
+  },
+  "summary_markdown": "# DevWatch Code Review Report\n**Target Path:** `C:\\Users\\HP\\AppData\\Local\\Temp\\pytest-of-HP\\pytest-31\\test_get_report_by_id0`\n**Total Issues Found:** 1 (Critical: 1, High: 0, Medium: 0, Low: 0)\n\n## Detailed Findings\n\n### 1. [CRITICAL] Hardcoded Secret Credential\n- **File:** `test.py:1` | Confidence: 1.00\n- **Category:** Security\n- **Description:** Plaintext secret or API key credential found in source code.\n```python\nSECRET_KEY = '[REDACTED_SECRET]'\n```\n- **Suggestion:** Store credentials in environment variables or a secret vault.\n"
+}

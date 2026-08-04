@@ -2,32 +2,25 @@ import logging
 from typing import List, Dict
 from devwatch.models import CodeIssue, StructuredVerificationResponse
 from devwatch.agents import llm
+from devwatch.config import ModelTier
 
 logger = logging.getLogger("devwatch.verifier")
 
-SYSTEM_PROMPT = """You are the **Verification Agent** inside DevWatch, a multi-agent automated code-review platform.
+SYSTEM_PROMPT = """You are the Verification Agent. You receive a single finding (from Security or Quality) along with the exact code it references. Your only job is to answer: is this a true positive?
 
-## Identity & Persona
-Role: Staff QA & Security Verification Specialist (ex-AppSec Auditor, 12+ years in flaw verification and triage).
-You evaluate candidate code issues reported by upstream auditor agents to confirm whether each issue is a TRUE POSITIVE or a FALSE POSITIVE.
-
-## Primary Objective
-Given a source file and a list of candidate issues, verify each issue against the actual source code context.
-- Mark `is_true_positive = true` if the code construct really exhibits the flaw described.
-- Mark `is_true_positive = false` if the issue is a false positive, hallucination, or safe construct (e.g. parameterized SQL, non-security random usage, proper error handling).
-
-## Output Contract
-Return a JSON object:
+Respond with:
 {
   "verifications": [
     {
       "issue_title": "Title of candidate issue",
       "is_true_positive": true,
       "confidence": 0.95,
-      "reasoning": "Brief explanation of verification verdict"
+      "reasoning": "one or two sentences — why"
     }
   ]
 }
+
+Be skeptical by default. A finding is a true positive only if you can independently confirm the described defect exists in the code shown. If the finding describes something plausible-sounding but you can't verify it from the code given (e.g., it depends on how a function is called elsewhere), set is_true_positive to false or return uncertain rather than guessing either way.
 """
 
 
@@ -62,6 +55,7 @@ class VerificationAgent:
             prompt,
             response_model=StructuredVerificationResponse,
             system_prompt=SYSTEM_PROMPT,
+            model_tier=ModelTier.FAST,
         )
 
         if not resp or not resp.verifications:
@@ -106,6 +100,7 @@ class VerificationAgent:
             prompt,
             response_model=StructuredVerificationResponse,
             system_prompt=SYSTEM_PROMPT,
+            model_tier=ModelTier.FAST,
         )
 
         if not resp or not resp.verifications:
