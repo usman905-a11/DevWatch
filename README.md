@@ -49,11 +49,14 @@ pip install -e .
 
 ### 2. Configure Environment (Optional)
 ```bash
-export OPENAI_API_KEY="your-api-key"
+export OPENAI_API_KEY="your-openai-api-key"
+# OR use OpenRouter:
+export OPENROUTER_API_KEY="your-openrouter-api-key"
 export DEVWATCH_API_KEY="your-server-api-key"        # Optional REST/WS authentication
 export DEVWATCH_FAST_MODEL="gpt-4o-mini"               # Model for Planner & Verifier
 export DEVWATCH_HEAVY_MODEL="gpt-4o"                   # Model for Security & Quality Auditors
 ```
+
 
 ### 3. Run FastAPI Backend Server
 Run this from the **repository root directory** (`E:\dewatch`):

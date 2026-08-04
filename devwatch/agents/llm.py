@@ -11,11 +11,39 @@ logger = logging.getLogger("devwatch.llm")
 def is_llm_available() -> bool:
     """Check if any LLM API key is set in environment."""
     return bool(
+        os.getenv("OPENROUTER_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("GROQ_API_KEY")
+    )
+
+
+def _get_llm_client_kwargs() -> Dict[str, Any]:
+    """Determine client initialization arguments (api_key, base_url, default_headers) for LLM provider."""
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if openrouter_key:
+        base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        headers = {
+            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://github.com/devwatch"),
+            "X-Title": os.getenv("OPENROUTER_SITE_NAME", "DevWatch"),
+        }
+        return {
+            "api_key": openrouter_key,
+            "base_url": base_url,
+            "default_headers": headers,
+        }
+
+    api_key = (
         os.getenv("OPENAI_API_KEY")
         or os.getenv("GEMINI_API_KEY")
         or os.getenv("ANTHROPIC_API_KEY")
         or os.getenv("GROQ_API_KEY")
     )
+    kwargs: Dict[str, Any] = {"api_key": api_key}
+    if os.getenv("OPENAI_BASE_URL"):
+        kwargs["base_url"] = os.getenv("OPENAI_BASE_URL")
+    return kwargs
 
 
 def get_llm_model_name(model_tier: ModelTier = ModelTier.HEAVY) -> str:
@@ -30,21 +58,16 @@ def call_llm_completion(
     system_prompt: str = "You are an expert AI code auditor.",
     model_tier: ModelTier = ModelTier.HEAVY,
 ) -> Optional[str]:
-    """Call LLM completion directly via OpenAI / LiteLLM API client if available."""
+    """Call LLM completion directly via OpenAI / LiteLLM / OpenRouter API client if available."""
     if not is_llm_available():
         return None
 
     model_name = get_llm_model_name(model_tier)
-    api_key = (
-        os.getenv("OPENAI_API_KEY")
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("ANTHROPIC_API_KEY")
-        or os.getenv("GROQ_API_KEY")
-    )
+    client_kwargs = _get_llm_client_kwargs()
 
     try:
         import openai
-        client = openai.OpenAI(api_key=api_key)
+        client = openai.OpenAI(**client_kwargs)
         response = client.chat.completions.create(
             model=model_name,
             messages=[
@@ -71,17 +94,13 @@ async def acall_llm_completion(
         return None
 
     model_name = get_llm_model_name(model_tier)
-    api_key = (
-        os.getenv("OPENAI_API_KEY")
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("ANTHROPIC_API_KEY")
-        or os.getenv("GROQ_API_KEY")
-    )
+    client_kwargs = _get_llm_client_kwargs()
 
     try:
+        import asyncio
         import openai
         if hasattr(openai, "AsyncOpenAI"):
-            client = openai.AsyncOpenAI(api_key=api_key)
+            client = openai.AsyncOpenAI(**client_kwargs)
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[
@@ -92,10 +111,11 @@ async def acall_llm_completion(
             )
             if response.choices and len(response.choices) > 0:
                 return response.choices[0].message.content
-        return await asyncio.to_thread(call_llm_completion, prompt, system_prompt)
+        return await asyncio.to_thread(call_llm_completion, prompt, system_prompt, model_tier)
     except Exception as err:
         logger.warning(f"Async LLM completion call failed, falling back to thread: {err}")
-        return await asyncio.to_thread(call_llm_completion, prompt, system_prompt)
+        return await asyncio.to_thread(call_llm_completion, prompt, system_prompt, model_tier)
+
 
 
 

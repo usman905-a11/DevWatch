@@ -83,3 +83,16 @@ def test_llm_integration_mocked(monkeypatch):
     qual_issues = quality.analyze("src/app.py", "f = open(path)")
     assert any(i.title == "Resource Leak" for i in qual_issues)
 
+
+def test_openrouter_integration(monkeypatch):
+    from devwatch.agents import llm
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-mock-key")
+    
+    assert llm.is_llm_available() is True
+    kwargs = llm._get_llm_client_kwargs()
+    assert kwargs["api_key"] == "sk-or-v1-mock-key"
+    assert kwargs["base_url"] == "https://openrouter.ai/api/v1"
+    assert kwargs["default_headers"]["X-Title"] == "DevWatch"
+
+
