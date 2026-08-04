@@ -1,14 +1,16 @@
+import os
 import uuid
 import time
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from devwatch.crew.orchestrator import CodeReviewEngine
 from devwatch.scanner import CodebaseScanner
 from devwatch.models import ReviewReport, AgentStepUpdate
+from devwatch.storage import ReportStorage
 
 app = FastAPI(
     title="DevWatch API",
@@ -16,16 +18,36 @@ app = FastAPI(
     version="0.1.0",
 )
 
+
+def get_allowed_origins() -> List[str]:
+    raw = os.getenv(
+        "DEVWATCH_ALLOWED_ORIGINS",
+        "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173",
+    )
+    if raw.strip() == "*":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
+report_storage = ReportStorage()
 REPORTS_DB: Dict[str, Dict[str, Any]] = {}
 executor = ThreadPoolExecutor(max_workers=4)
+
+
+def verify_api_key(x_api_key: Optional[str] = Header(None, alias="x-api-key")):
+    """Enforce API Key verification if DEVWATCH_API_KEY environment variable is configured."""
+    expected_key = os.getenv("DEVWATCH_API_KEY")
+    if expected_key:
+        if not x_api_key or x_api_key != expected_key:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 class ReviewRequest(BaseModel):
@@ -48,38 +70,47 @@ def health_check():
     return {"status": "ok", "app": "DevWatch API", "version": "0.1.0"}
 
 
-@app.get("/api/fs/tree")
+@app.get("/api/fs/tree", dependencies=[Depends(verify_api_key)])
 def get_fs_tree(root: str = Query(".", description="Root directory path")):
-    scanner = CodebaseScanner(root)
-    tree = scanner.get_tree_structure()
-    files = scanner.get_files()
-    return {"root": root, "tree": tree, "files": files}
+    try:
+        scanner = CodebaseScanner(root)
+        tree = scanner.get_tree_structure()
+        files = scanner.get_files()
+        return {"root": root, "tree": tree, "files": files}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/api/fs/read")
+@app.get("/api/fs/read", dependencies=[Depends(verify_api_key)])
 def read_file_content(
     path: str = Query(..., description="Relative file path"),
     root: str = Query(".", description="Root directory path"),
 ):
-    scanner = CodebaseScanner(root)
-    content = scanner.read_file(path)
-    return {"path": path, "content": content}
+    try:
+        scanner = CodebaseScanner(root)
+        content = scanner.read_file(path)
+        return {"path": path, "content": content}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/api/fs/write")
+@app.post("/api/fs/write", dependencies=[Depends(verify_api_key)])
 def write_file_content(request: WriteFileRequest):
-    scanner = CodebaseScanner(request.root_path)
-    success = scanner.write_file(request.file_path, request.content)
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to write file")
-    return {"status": "success", "path": request.file_path}
+    try:
+        scanner = CodebaseScanner(request.root_path)
+        success = scanner.write_file(request.file_path, request.content)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to write file")
+        return {"status": "success", "path": request.file_path}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/api/review/file")
-def trigger_file_audit(request: SingleFileAuditRequest):
+@app.post("/api/review/file", dependencies=[Depends(verify_api_key)])
+async def trigger_file_audit(request: SingleFileAuditRequest):
     crew = CodeReviewEngine()
     try:
-        report = crew.run_file_audit(request.file_path, request.content)
+        report = await crew.arun_file_audit(request.file_path, request.content)
         report_dict = report.model_dump()
         report_dict["total_issues"] = report.total_issues
         return {"status": "completed", "report": report_dict}
@@ -87,8 +118,8 @@ def trigger_file_audit(request: SingleFileAuditRequest):
         raise HTTPException(status_code=500, detail=f"File audit failed: {str(e)}")
 
 
-@app.post("/api/review")
-def trigger_review(request: ReviewRequest):
+@app.post("/api/review", dependencies=[Depends(verify_api_key)])
+async def trigger_review(request: ReviewRequest):
     report_id = str(uuid.uuid4())
     steps: List[AgentStepUpdate] = []
 
@@ -99,7 +130,7 @@ def trigger_review(request: ReviewRequest):
     crew = CodeReviewEngine(step_callback=on_step)
 
     try:
-        report: ReviewReport = crew.run(request.target_path)
+        report: ReviewReport = await crew.arun(request.target_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Review failed: {str(e)}")
 
@@ -121,20 +152,31 @@ def trigger_review(request: ReviewRequest):
     }
 
     REPORTS_DB[report_id] = report_data
+    report_storage.save_report(report_id, report_data)
     return report_data
 
 
-@app.get("/api/reports/{report_id}")
+@app.get("/api/reports/{report_id}", dependencies=[Depends(verify_api_key)])
 def get_report(report_id: str):
-    if report_id not in REPORTS_DB:
+    if report_id in REPORTS_DB:
+        return REPORTS_DB[report_id]
+    report_data = report_storage.get_report(report_id)
+    if not report_data:
         raise HTTPException(status_code=404, detail="Report not found")
-    return REPORTS_DB[report_id]
+    REPORTS_DB[report_id] = report_data
+    return report_data
 
 
 @app.websocket("/ws/review")
 async def websocket_review_endpoint(websocket: WebSocket):
+    expected_key = os.getenv("DEVWATCH_API_KEY")
+    if expected_key:
+        api_key = websocket.query_params.get("api_key") or websocket.headers.get("x-api-key")
+        if not api_key or api_key != expected_key:
+            await websocket.close(code=4001, reason="Unauthorized: Invalid API key")
+            return
+
     await websocket.accept()
-    loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
 
     try:
@@ -143,7 +185,7 @@ async def websocket_review_endpoint(websocket: WebSocket):
 
         def sync_step_callback(update: AgentStepUpdate):
             update.timestamp = time.time()
-            loop.call_soon_threadsafe(queue.put_nowait, update)
+            queue.put_nowait(update)
 
         async def stream_queue():
             while True:
@@ -155,11 +197,8 @@ async def websocket_review_endpoint(websocket: WebSocket):
 
         stream_task = asyncio.create_task(stream_queue())
 
-        def run_crew():
-            crew = CodeReviewEngine(step_callback=sync_step_callback)
-            return crew.run(target_path)
-
-        report = await loop.run_in_executor(executor, run_crew)
+        crew = CodeReviewEngine(step_callback=sync_step_callback)
+        report = await crew.arun(target_path)
         await queue.put(None)
         await stream_task
 
@@ -179,4 +218,5 @@ async def websocket_review_endpoint(websocket: WebSocket):
             await websocket.close()
         except Exception:
             pass
+
 

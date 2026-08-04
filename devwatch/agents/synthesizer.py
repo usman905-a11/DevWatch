@@ -1,4 +1,4 @@
-from devwatch.models import ReviewReport, IssueSeverity
+from devwatch.models import ReviewReport, IssueSeverity, StructuredSynthesizerResponse
 from devwatch.agents import llm
 
 
@@ -42,19 +42,16 @@ When multiple findings point to the same root cause (e.g., 5 SQL injection findi
 If the Security Agent and Quality Agent report overlapping issues on the same line/function, consolidate into the higher-severity version and note both perspectives. Do not present the same defect twice from different angles.
 
 ## Output Contract
-Return raw markdown text — bullet points and short paragraphs only. No H1/H2 headers (the surrounding report template already provides those). No JSON. No code blocks unless quoting a specific vulnerable line.
-
-## Constraints
-- Target 200-400 words for the executive summary (scale up for codebases with 10+ findings).
-- Never invent findings that were not provided in the input.
-- Never downplay CRITICAL findings.
-- If there are zero findings, write a brief positive assessment acknowledging the clean audit.
+Return a single JSON object with keys:
+- "verdict": "BLOCK deployment" | "Deploy with conditions" | "Safe to deploy"
+- "top_threat": concise description of top threat with file:line reference
+- "summary_bullets": array of 3-5 bullet point strings
+- "executive_summary": full markdown text of executive summary
 """
 
 
 class ReportSynthesizerAgent:
     """Synthesizer Agent: Deduplicates issues and renders formatted Markdown reports."""
-
 
     def __init__(self, role: str = "Technical Review Editor"):
         self.role = role
@@ -77,7 +74,8 @@ class ReportSynthesizerAgent:
         if llm.is_llm_available() and report.issues:
             issues_summary = "\n".join(
                 [
-                    f"- [{i.severity.value}] {i.title} in `{i.file_path}:{i.line_number or 'N/A'}`: {i.description}"
+                    f"- [{i.severity.value}] {i.title} in `{i.file_path}:{i.line_number or 'N/A'}` "
+                    f"(CWE: {i.cwe_id or 'N/A'}, Confidence: {i.confidence_score:.2f}): {i.description}"
                     for i in report.issues[:20]
                 ]
             )
@@ -87,17 +85,26 @@ class ReportSynthesizerAgent:
                 f"(Critical: {report.critical_count}, High: {report.high_count}, "
                 f"Medium: {report.medium_count}, Low: {report.low_count})\n\n"
                 f"Findings:\n{issues_summary}\n\n"
-                "Write the Executive Summary following your report structure rules."
+                "Synthesize findings and return JSON output."
             )
-            ai_summary = llm.call_llm_completion(prompt, system_prompt=SYSTEM_PROMPT)
-            if ai_summary and ai_summary.strip():
+            synth_res = llm.call_llm_structured(
+                prompt,
+                response_model=StructuredSynthesizerResponse,
+                system_prompt=SYSTEM_PROMPT,
+            )
+            if synth_res and synth_res.executive_summary:
                 md.append("## Executive AI Summary & Recommendation\n")
-                md.append(ai_summary.strip() + "\n")
+                md.append(f"**Verdict:** {synth_res.verdict}\n")
+                if synth_res.top_threat:
+                    md.append(f"**Top Threat:** {synth_res.top_threat}\n")
+                md.append(synth_res.executive_summary.strip() + "\n")
 
         md.append("## Detailed Findings\n")
         for idx, issue in enumerate(report.issues, 1):
+            cwe_str = f" | CWE: {issue.cwe_id}" if issue.cwe_id else ""
+            conf_str = f" | Confidence: {issue.confidence_score:.2f}"
             md.append(f"### {idx}. [{issue.severity.value}] {issue.title}")
-            md.append(f"- **File:** `{issue.file_path}:{issue.line_number or 'N/A'}`")
+            md.append(f"- **File:** `{issue.file_path}:{issue.line_number or 'N/A'}`{cwe_str}{conf_str}")
             md.append(f"- **Category:** {issue.category}")
             md.append(f"- **Description:** {issue.description}")
             if issue.code_snippet:

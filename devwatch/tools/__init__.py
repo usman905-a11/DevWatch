@@ -5,6 +5,26 @@ from typing import List, Dict, Any, Optional
 from devwatch.models import CodeIssue, IssueSeverity
 
 
+def redact_secret_in_snippet(snippet: Optional[str]) -> Optional[str]:
+    """Redact literal secret key/token values in code snippets before storing in reports or logs."""
+    if not snippet:
+        return snippet
+    # Redact quoted secret assignments: KEY = 'secret...'
+    redacted = re.sub(
+        r"((?:SECRET|PASSWORD|TOKEN|API_KEY|AWS_KEY|PRIVATE_KEY|KEY|AUTH|CREDENTIAL)[A-Za-z0-9_\-]*\s*=\s*)(['\"])[^'\"]+(['\"])",
+        r"\1\2[REDACTED_SECRET]\3",
+        snippet,
+        flags=re.IGNORECASE,
+    )
+    # Redact raw secret tokens (e.g. sk-..., akia..., ghp_...)
+    redacted = re.sub(
+        r"\b(sk-[A-Za-z0-9_\-]{16,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36})\b",
+        "[REDACTED_SECRET]",
+        redacted,
+    )
+    return redacted
+
+
 class GitDiffTool:
     name: str = "GitDiffTool"
     description: str = "Extracts git diff for modified files in target repository."
@@ -33,7 +53,7 @@ class SecurityPatternTool:
             re.IGNORECASE,
         )
         sql_pattern = re.compile(
-            r"(execute|query)\s*\(\s*f['\"].*(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)",
+            r"((execute|query)\s*\(\s*f['\"]|.*(sql|query|stmt|cmd)\s*=\s*f['\"]).*(SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)",
             re.IGNORECASE,
         )
         eval_pattern = re.compile(r"\b(eval|exec)\s*\(", re.IGNORECASE)
@@ -52,7 +72,7 @@ class SecurityPatternTool:
                         title="Hardcoded Secret Credential",
                         description="Plaintext secret or API key credential found in source code.",
                         suggestion="Store credentials in environment variables or a secret vault.",
-                        code_snippet=line.strip(),
+                        code_snippet=redact_secret_in_snippet(line.strip()),
                     )
                 )
             if sql_pattern.search(line):
@@ -219,11 +239,10 @@ class LogicAnalyzerTool:
 
 class IssueDeduplicatorTool:
     name: str = "IssueDeduplicatorTool"
-    description: str = "Deduplicates issues by file path & line number and sorts by severity."
+    description: str = "Deduplicates issues by file path, line proximity (+/- 3 lines), and root-cause/CWE ID."
 
     def _run(self, issues: List[CodeIssue]) -> List[CodeIssue]:
-        seen = set()
-        unique_issues = []
+        unique_issues: List[CodeIssue] = []
 
         severity_rank = {
             IssueSeverity.CRITICAL: 0,
@@ -233,11 +252,30 @@ class IssueDeduplicatorTool:
             IssueSeverity.INFO: 4,
         }
 
-        for issue in issues:
-            key = (issue.file_path, issue.line_number, issue.title)
-            if key not in seen:
-                seen.add(key)
-                unique_issues.append(issue)
+        for candidate in issues:
+            duplicate_found = False
+            for idx, existing in enumerate(unique_issues):
+                if candidate.file_path != existing.file_path:
+                    continue
+
+                line_dist = abs((candidate.line_number or 0) - (existing.line_number or 0))
+
+                # Check exact match or line proximity (+/- 3 lines) with matching CWE or title similarity
+                same_cwe = (candidate.cwe_id and existing.cwe_id and candidate.cwe_id == existing.cwe_id)
+                same_title = candidate.title.lower().strip() == existing.title.lower().strip()
+                close_lines = line_dist <= 3
+
+                if (candidate.line_number == existing.line_number and same_title) or (close_lines and (same_cwe or same_title)):
+                    duplicate_found = True
+                    # Keep the issue with higher severity rank or higher confidence score
+                    cand_rank = severity_rank.get(candidate.severity, 99)
+                    exist_rank = severity_rank.get(existing.severity, 99)
+                    if cand_rank < exist_rank or (cand_rank == exist_rank and candidate.confidence_score > existing.confidence_score):
+                        unique_issues[idx] = candidate
+                    break
+
+            if not duplicate_found:
+                unique_issues.append(candidate)
 
         unique_issues.sort(key=lambda i: severity_rank.get(i.severity, 99))
         return unique_issues

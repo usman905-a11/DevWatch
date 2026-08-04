@@ -59,6 +59,170 @@ def call_llm_completion(prompt: str, system_prompt: str = "You are an expert AI 
     return None
 
 
+async def acall_llm_completion(prompt: str, system_prompt: str = "You are an expert AI code auditor.") -> Optional[str]:
+    """Async wrapper for LLM completion API call."""
+    if not is_llm_available():
+        return None
+
+    model_name = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    api_key = (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("GROQ_API_KEY")
+    )
+
+    try:
+        import openai
+        if hasattr(openai, "AsyncOpenAI"):
+            client = openai.AsyncOpenAI(api_key=api_key)
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+            )
+            if response.choices and len(response.choices) > 0:
+                return response.choices[0].message.content
+        return await asyncio.to_thread(call_llm_completion, prompt, system_prompt)
+    except Exception as err:
+        logger.warning(f"Async LLM completion call failed, falling back to thread: {err}")
+        return await asyncio.to_thread(call_llm_completion, prompt, system_prompt)
+
+
+
+import time
+from typing import Type, TypeVar
+from pydantic import BaseModel, ValidationError
+
+T = TypeVar("T", bound=BaseModel)
+
+
+def call_llm_structured(
+    prompt: str,
+    response_model: Type[T],
+    system_prompt: str = "You are an expert AI code auditor.",
+    max_retries: int = 3,
+) -> Optional[T]:
+    """Call LLM and parse/validate response into Pydantic response_model with self-correction retries."""
+    if not is_llm_available():
+        return None
+
+    current_prompt = prompt
+    last_error: Optional[str] = None
+    start_time = time.time()
+    model_name = get_llm_model_name()
+
+    for attempt in range(1, max_retries + 1):
+        logger.info(
+            f"LLM structured call [Attempt {attempt}/{max_retries}] Target Schema: {response_model.__name__} Model: {model_name}"
+        )
+
+        response_text = call_llm_completion(current_prompt, system_prompt=system_prompt)
+        if not response_text:
+            logger.warning(f"Attempt {attempt}: Received empty completion from LLM provider")
+            continue
+
+        try:
+            raw_data = parse_llm_json(response_text)
+            if raw_data is None:
+                raise ValueError("JSON parsing returned None or empty string")
+
+            # Handle case where LLM returns a JSON list directly when wrapping object expected
+            if isinstance(raw_data, list) and ("issues" in getattr(response_model, "model_fields", {})):
+                validated_obj = response_model.model_validate({"issues": raw_data})
+            elif isinstance(raw_data, dict):
+                validated_obj = response_model.model_validate(raw_data)
+            else:
+                validated_obj = response_model.model_validate(raw_data)
+
+            duration = time.time() - start_time
+            logger.info(
+                f"LLM structured call succeeded in {duration:.2f}s [Attempt {attempt}/{max_retries}] Schema: {response_model.__name__}"
+            )
+            return validated_obj
+
+        except (ValidationError, ValueError, json.JSONDecodeError) as err:
+            last_error = str(err)
+            logger.warning(
+                f"Attempt {attempt}/{max_retries} failed schema validation for {response_model.__name__}: {last_error}"
+            )
+            # Self-correction feedback for next retry turn
+            current_prompt = (
+                f"{prompt}\n\n"
+                f"[SYSTEM FEEDBACK: Your previous JSON response failed Pydantic schema validation for '{response_model.__name__}'.]\n"
+                f"Validation Error Details:\n{last_error}\n\n"
+                f"Please fix your JSON formatting and return ONLY a valid JSON object matching the exact schema."
+            )
+
+    logger.error(
+        f"All {max_retries} LLM structured attempts failed for {response_model.__name__}. Last Error: {last_error}"
+    )
+    return None
+
+
+async def acall_llm_structured(
+    prompt: str,
+    response_model: Type[T],
+    system_prompt: str = "You are an expert AI code auditor.",
+    max_retries: int = 3,
+) -> Optional[T]:
+    """Asynchronously call LLM and parse/validate response into Pydantic model with self-correction retries."""
+    if not is_llm_available():
+        return None
+
+    current_prompt = prompt
+    last_error: Optional[str] = None
+    start_time = time.time()
+    model_name = get_llm_model_name()
+
+    for attempt in range(1, max_retries + 1):
+        logger.info(
+            f"Async LLM structured call [Attempt {attempt}/{max_retries}] Target Schema: {response_model.__name__} Model: {model_name}"
+        )
+
+        response_text = await acall_llm_completion(current_prompt, system_prompt=system_prompt)
+        if not response_text:
+            logger.warning(f"Attempt {attempt}: Received empty completion from LLM provider")
+            continue
+
+        try:
+            raw_data = parse_llm_json(response_text)
+            if raw_data is None:
+                raise ValueError("JSON parsing returned None or empty string")
+
+            if isinstance(raw_data, list) and ("issues" in getattr(response_model, "model_fields", {})):
+                validated_obj = response_model.model_validate({"issues": raw_data})
+            elif isinstance(raw_data, dict):
+                validated_obj = response_model.model_validate(raw_data)
+            else:
+                validated_obj = response_model.model_validate(raw_data)
+
+            duration = time.time() - start_time
+            logger.info(
+                f"Async LLM structured call succeeded in {duration:.2f}s [Attempt {attempt}/{max_retries}] Schema: {response_model.__name__}"
+            )
+            return validated_obj
+
+        except (ValidationError, ValueError, json.JSONDecodeError) as err:
+            last_error = str(err)
+            logger.warning(
+                f"Attempt {attempt}/{max_retries} failed schema validation for {response_model.__name__}: {last_error}"
+            )
+            current_prompt = (
+                f"{prompt}\n\n"
+                f"[SYSTEM FEEDBACK: Your previous JSON response failed Pydantic schema validation for '{response_model.__name__}'.]\n"
+                f"Validation Error Details:\n{last_error}\n\n"
+                f"Please fix your JSON formatting and return ONLY a valid JSON object matching the exact schema."
+            )
+
+    logger.error(
+        f"All {max_retries} async LLM structured attempts failed for {response_model.__name__}. Last Error: {last_error}"
+    )
+    return None
+
 
 def parse_llm_json(response: str) -> Any:
     """Clean markdown code fences and parse JSON from LLM response."""

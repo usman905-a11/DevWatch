@@ -42,6 +42,18 @@ class CodebaseScanner:
     def __init__(self, root_dir: str):
         self.root_dir = os.path.abspath(root_dir)
 
+    def _resolve_safe_path(self, rel_path: str) -> str:
+        """Resolve rel_path relative to root_dir and verify it remains strictly within root_dir."""
+        full_path = os.path.abspath(os.path.join(self.root_dir, rel_path))
+        real_root = os.path.realpath(self.root_dir)
+        real_full = os.path.realpath(full_path)
+        try:
+            if os.path.commonpath([real_root, real_full]) != real_root:
+                raise ValueError(f"Path traversal attempt blocked: '{rel_path}' is outside root '{self.root_dir}'")
+        except ValueError as err:
+            raise ValueError(f"Path traversal attempt blocked: '{rel_path}' is outside root '{self.root_dir}'") from err
+        return real_full
+
     def get_files(self) -> List[str]:
         relative_files = []
         for root, dirs, files in os.walk(self.root_dir):
@@ -55,8 +67,8 @@ class CodebaseScanner:
         return sorted(relative_files)
 
     def read_file(self, rel_path: str) -> str:
-        full_path = os.path.join(self.root_dir, rel_path)
-        if not os.path.exists(full_path):
+        full_path = self._resolve_safe_path(rel_path)
+        if not os.path.exists(full_path) or os.path.isdir(full_path):
             return ""
         with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
@@ -66,7 +78,7 @@ class CodebaseScanner:
         return {f: self.read_file(f) for f in files}
 
     def write_file(self, rel_path: str, content: str) -> bool:
-        full_path = os.path.join(self.root_dir, rel_path)
+        full_path = self._resolve_safe_path(rel_path)
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)

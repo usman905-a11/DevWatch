@@ -1,0 +1,51 @@
+{
+  "precision": 1.0,
+  "recall": 1.0,
+  "f1_score": 1.0,
+  "total_true_positives": 7,
+  "total_false_positives": 0,
+  "total_false_negatives": 0,
+  "benchmark_samples_count": 8,
+  "results_detail": [
+    {
+      "sample_name": "sqli_sample",
+      "detected_issues_count": 2,
+      "expected_has_issue": true
+    },
+    {
+      "sample_name": "cmd_inject_sample",
+      "detected_issues_count": 2,
+      "expected_has_issue": true
+    },
+    {
+      "sample_name": "secret_leak_sample",
+      "detected_issues_count": 4,
+      "expected_has_issue": true
+    },
+    {
+      "sample_name": "eval_exec_sample",
+      "detected_issues_count": 2,
+      "expected_has_issue": true
+    },
+    {
+      "sample_name": "bare_except_sample",
+      "detected_issues_count": 2,
+      "expected_has_issue": true
+    },
+    {
+      "sample_name": "http_no_timeout_sample",
+      "detected_issues_count": 1,
+      "expected_has_issue": true
+    },
+    {
+      "sample_name": "god_function_sample",
+      "detected_issues_count": 2,
+      "expected_has_issue": true
+    },
+    {
+      "sample_name": "clean_sample",
+      "detected_issues_count": 0,
+      "expected_has_issue": false
+    }
+  ]
+}
