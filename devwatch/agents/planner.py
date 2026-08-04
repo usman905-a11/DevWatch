@@ -15,19 +15,38 @@ You will receive:
 - Any existing static analysis tool output (Semgrep/Bandit summaries), if provided
 
 TASK
-Produce a structured review plan that downstream agents can execute within their context budget. For each unit of work:
-1. Identify a scoped group of files (by module, feature, or directory) small enough to fit comfortably in one agent call
-2. Assign a priority: critical_path (auth, payment, data access, external input handling), standard, or low_priority (tests, generated code, vendored dependencies, config)
-3. Note any cross-file dependencies the reviewing agent will need (e.g., "auth.py imports helpers from utils/crypto.py — include both")
-4. Flag files that exceed a reasonable single-call size and should be chunked by function/class rather than passed whole
+Select the top priority files (up to 20) for immediate security and quality audit, and identify 4–6 specific focus areas. Order files from highest risk to lowest using these heuristic signals:
 
-Do not skip files by silently truncating the list. If the codebase is too large to plan for in full detail, say so explicitly and propose a batching strategy (e.g., "plan module-by-module; request the next module's file list once the current one is reviewed") rather than dropping files without saying so.
+1. ENTRY-POINT EXPOSURE — API route handlers, CLI commands, WebSocket endpoints, serverless function handlers. Recognize language-specific patterns:
+   - Python: app.py, views.py, routes.py, server.py, manage.py, FastAPI/Flask/Django route files
+   - JavaScript/TypeScript: server.ts, api/*.ts, middleware/*.ts, next.config.js, Express/Nest handlers
+   - Go: main.go, handler.go, cmd/*.go
+   - Rust: main.rs, lib.rs, handlers/*.rs
+2. DATA-TRUST BOUNDARY CROSSINGS — Files that deserialize user input, parse config, read environment variables, or call external services (HTTP clients, DB drivers, message queues)
+3. AUTH & AUTHORIZATION LOGIC — Middleware, decorators, or modules enforcing access control, JWT validation, session management, RBAC
+4. SENSITIVE DATA HANDLING — Files touching secrets, PII, encryption, hashing, or token generation
+5. STATE-MUTATION DENSITY — Files with heavy write operations (INSERT/UPDATE/DELETE, file I/O, cache invalidation)
+6. COMPLEXITY SIGNALS — Deeply nested control flow, many if/else/try branches in a single function
+7. INFRASTRUCTURE — Dockerfiles, CI configs (.github/workflows/*.yml, .gitlab-ci.yml), IaC templates (lower priority but still reviewable)
+
+DEPRIORITIZATION RULES — Skip these from the priority list:
+- Auto-generated files: migrations, lockfiles (package-lock.json, poetry.lock), compiled assets
+- Vendored/third-party directories: node_modules/, __pycache__/, .venv/, vendor/
+- Pure test files (they are audited separately)
+- Documentation-only files (*.md, *.rst, *.txt) unless they contain executable code blocks
+- Static assets: images, fonts, CSS-only files
+
+FOCUS AREA SPECIFICITY
+Each focus area must name the concrete risk pattern AND the files/modules it applies to. Do not produce generic items.
+  Bad: "Security" or "Error Handling"
+  Good: "SQL injection risk in database query construction (db/queries.py, models/user.py)"
+  Good: "JWT validation bypass potential in auth middleware (auth.py, middleware/verify.py)"
 
 OUTPUT FORMAT
-Return a JSON object matching the ReviewPlan schema:
+Return a JSON object with exactly these keys:
 {
   "priority_files": ["relative/path/1.py", "relative/path/2.py"],
-  "focus_areas": ["OWASP Top 10", "SQL Injection", "Error Handling"]
+  "focus_areas": ["Specific risk pattern with file references", "..."]
 }
 """
 
