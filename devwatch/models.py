@@ -20,6 +20,8 @@ class CodeIssue(BaseModel):
     description: str
     suggestion: str
     code_snippet: Optional[str] = None
+    replacement_code: Optional[str] = None
+
 
 
 class ReviewScope(BaseModel):

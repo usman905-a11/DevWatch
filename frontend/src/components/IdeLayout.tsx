@@ -5,8 +5,14 @@ import { CodeEditor } from './CodeEditor';
 import { AgentChatCenter, AgentState } from './AgentChatCenter';
 import { BottomPanel } from './BottomPanel';
 import { ReviewReport, CodeIssue } from '../types';
-import { runCodeReview } from '../services/api';
-import { ShieldCheck, Play, Sparkles } from 'lucide-react';
+import {
+  fetchFileTree,
+  fetchFileContent,
+  saveFileContent,
+  auditSingleFile,
+  subscribeToReviewStream,
+} from '../services/api';
+import { ShieldCheck, Play, Sparkles, Save, FileCheck } from 'lucide-react';
 
 export const IdeLayout: React.FC = () => {
   const [activeView, setActiveView] = useState<ActivityView>('explorer');
@@ -15,16 +21,14 @@ export const IdeLayout: React.FC = () => {
   const [report, setReport] = useState<ReviewReport | null>(null);
 
   // File explorer & editor state
-  const [filesToReview, setFilesToReview] = useState<string[]>([
-    'devwatch/agents/planner.py',
-    'devwatch/agents/security.py',
-    'devwatch/agents/quality.py',
-    'devwatch/agents/synthesizer.py',
-  ]);
-  const [openFiles, setOpenFiles] = useState<string[]>(['devwatch/agents/security.py']);
-  const [activeFile, setActiveFile] = useState<string | null>('devwatch/agents/security.py');
+  const [filesToReview, setFilesToReview] = useState<string[]>([]);
+  const [openFiles, setOpenFiles] = useState<string[]>([]);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
   const [selectedIssueLine, setSelectedIssueLine] = useState<number | null>(null);
   const [isBottomPanelOpen, setIsBottomPanelOpen] = useState<boolean>(true);
+
+  // Dynamic file content cache
+  const [fileContentsMap, setFileContentsMap] = useState<Record<string, string>>({});
 
   // Agents status
   const [agents, setAgents] = useState<AgentState[]>([
@@ -34,49 +38,114 @@ export const IdeLayout: React.FC = () => {
     { name: 'Synthesizer Agent', role: 'Technical Review Editor', status: 'IDLE' },
   ]);
 
-  // Mock file contents dictionary for fallback/offline display
-  const fileContentsMap: Record<string, string> = {
-    'devwatch/agents/planner.py': `import json\nfrom devwatch.scanner import CodebaseScanner\nfrom devwatch.models import ReviewScope\n\nclass PlannerAgent:\n    def __init__(self):\n        self.role = "Senior Code Review Architect"\n\n    def plan_review(self, target_path: str) -> ReviewScope:\n        scanner = CodebaseScanner(target_path)\n        return ReviewScope(target_path=target_path, files_to_review=scanner.get_files())`,
-    'devwatch/agents/security.py': `import json\nfrom devwatch.tools import SecurityPatternTool\nfrom devwatch.agents import llm\n\nclass SecurityAuditorAgent:\n    def __init__(self):\n        self.tool = SecurityPatternTool()\n\n    def analyze(self, file_path: str, code_content: str):\n        # Scans for OWASP Top 10 vulnerabilities & secret leaks\n        issues = self.tool._run(file_path=file_path, code_content=code_content)\n        return issues`,
-    'devwatch/agents/quality.py': `from devwatch.tools import LogicAnalyzerTool\n\nclass QualityAuditorAgent:\n    def __init__(self):\n        self.tool = LogicAnalyzerTool()\n\n    def analyze(self, file_path: str, code_content: str):\n        return self.tool._run(file_path=file_path, code_content=code_content)`,
-    'devwatch/agents/synthesizer.py': `from devwatch.models import ReviewReport\n\nclass ReportSynthesizerAgent:\n    def render_markdown(self, report: ReviewReport) -> str:\n        return f"# DevWatch Report\\nTotal issues: {report.total_issues}"`,
+  // Load filesystem tree when targetPath changes
+  useEffect(() => {
+    let isMounted = true;
+    fetchFileTree(targetPath)
+      .then((data) => {
+        if (!isMounted) return;
+        setFilesToReview(data.files || []);
+        if (data.files && data.files.length > 0 && openFiles.length === 0) {
+          const defaultFile = data.files[0];
+          setOpenFiles([defaultFile]);
+          setActiveFile(defaultFile);
+          loadContent(defaultFile);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch file tree:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [targetPath]);
+
+  const loadContent = async (filePath: string) => {
+    if (fileContentsMap[filePath]) return fileContentsMap[filePath];
+    try {
+      const data = await fetchFileContent(filePath, targetPath);
+      setFileContentsMap((prev) => ({ ...prev, [filePath]: data.content }));
+      return data.content;
+    } catch (err) {
+      console.error(`Failed to load ${filePath}:`, err);
+      return '';
+    }
   };
 
-  const handleRunReview = async () => {
+  const handleRunReview = () => {
     setLoading(true);
     setReport(null);
 
     setAgents((prev) =>
-      prev.map((a) => ({ ...a, status: 'RUNNING', lastMessage: 'Auditing files...' }))
+      prev.map((a) => ({ ...a, status: 'RUNNING', lastMessage: 'Review pipeline initiated...' }))
     );
 
-    try {
-      const response = await runCodeReview(targetPath);
-      setReport(response.report);
-
-      if (response.report.files_to_review && response.report.files_to_review.length > 0) {
-        setFilesToReview(response.report.files_to_review);
+    const unsubscribe = subscribeToReviewStream(
+      targetPath,
+      (stepUpdate) => {
+        setAgents((prev) =>
+          prev.map((a) =>
+            a.name === stepUpdate.agent_name
+              ? { ...a, status: stepUpdate.status as any, lastMessage: stepUpdate.message }
+              : a
+          )
+        );
+      },
+      (completeData) => {
+        if (completeData.report) {
+          setReport(completeData.report);
+          if (completeData.report.files_to_review) {
+            setFilesToReview(completeData.report.files_to_review);
+          }
+        }
+        setAgents((prev) =>
+          prev.map((a) => ({ ...a, status: 'COMPLETED', lastMessage: 'Analysis complete.' }))
+        );
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Review WebSocket error:', err);
+        setAgents((prev) =>
+          prev.map((a) => ({ ...a, status: 'FAILED', lastMessage: err.message || 'Stream error' }))
+        );
+        setLoading(false);
       }
+    );
+  };
 
-      setAgents((prev) =>
-        prev.map((a) => ({ ...a, status: 'COMPLETED', lastMessage: 'Analysis complete.' }))
-      );
+  const handleAuditActiveFile = async () => {
+    if (!activeFile) return;
+    const content = fileContentsMap[activeFile] || (await loadContent(activeFile));
+    setLoading(true);
+    try {
+      const res = await auditSingleFile(activeFile, content);
+      setReport(res.report);
     } catch (err: any) {
-      alert(`Review Failed: ${err.message}`);
-      setAgents((prev) =>
-        prev.map((a) => ({ ...a, status: 'FAILED', lastMessage: err.message }))
-      );
+      alert(`Single file audit failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectFile = (filePath: string) => {
+  const handleSaveActiveFile = async () => {
+    if (!activeFile) return;
+    const content = fileContentsMap[activeFile];
+    if (content === undefined) return;
+    try {
+      await saveFileContent(activeFile, content, targetPath);
+      alert(`Saved ${activeFile}`);
+    } catch (err: any) {
+      alert(`Save failed: ${err.message}`);
+    }
+  };
+
+  const handleSelectFile = async (filePath: string) => {
     if (!openFiles.includes(filePath)) {
       setOpenFiles((prev) => [...prev, filePath]);
     }
     setActiveFile(filePath);
     setSelectedIssueLine(null);
+    await loadContent(filePath);
   };
 
   const handleCloseTab = (filePath: string) => {
@@ -87,8 +156,8 @@ export const IdeLayout: React.FC = () => {
     }
   };
 
-  const handleSelectIssue = (issue: CodeIssue) => {
-    handleSelectFile(issue.file_path);
+  const handleSelectIssue = async (issue: CodeIssue) => {
+    await handleSelectFile(issue.file_path);
     setSelectedIssueLine(issue.line_number || null);
 
     if (issue.line_number) {
@@ -99,9 +168,7 @@ export const IdeLayout: React.FC = () => {
     }
   };
 
-  const issuesForActiveFile = (report?.issues || []).filter(
-    (i) => i.file_path === activeFile
-  );
+  const issuesForActiveFile = (report?.issues || []).filter((i) => i.file_path === activeFile);
 
   return (
     <div
@@ -140,7 +207,30 @@ export const IdeLayout: React.FC = () => {
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {activeFile && (
+            <>
+              <button
+                onClick={handleSaveActiveFile}
+                className="btn-secondary"
+                style={{ padding: '3px 8px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                title="Save active file"
+              >
+                <Save size={11} /> Save
+              </button>
+
+              <button
+                onClick={handleAuditActiveFile}
+                disabled={loading}
+                className="btn-secondary"
+                style={{ padding: '3px 8px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                title="Audit active file buffer"
+              >
+                <FileCheck size={11} /> Audit Active File
+              </button>
+            </>
+          )}
+
           <button
             onClick={handleRunReview}
             disabled={loading}
@@ -148,7 +238,7 @@ export const IdeLayout: React.FC = () => {
             style={{ padding: '3px 10px', fontSize: '0.75rem' }}
           >
             {loading ? <Sparkles size={12} /> : <Play size={12} fill="white" />}
-            {loading ? 'Auditing...' : 'Run Review'}
+            {loading ? 'Auditing...' : 'Run Full Review'}
           </button>
         </div>
       </div>
@@ -183,7 +273,7 @@ export const IdeLayout: React.FC = () => {
             activeFile={activeFile}
             onSelectTab={handleSelectFile}
             onCloseTab={handleCloseTab}
-            fileContent={activeFile ? fileContentsMap[activeFile] || `// Code file: ${activeFile}\n// Content loaded directly from repository scanner.` : null}
+            fileContent={activeFile ? fileContentsMap[activeFile] || null : null}
             issuesForFile={issuesForActiveFile}
             selectedIssueLine={selectedIssueLine}
           />
@@ -221,7 +311,7 @@ export const IdeLayout: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <span>DevWatch CrewAI Engine</span>
+          <span>DevWatch Multi-Agent Engine</span>
           <span>{report ? `${report.total_issues} Issues Found` : 'Ready'}</span>
         </div>
         <div>UTF-8 | Python 3.11 | DevWatch OS</div>
@@ -229,3 +319,4 @@ export const IdeLayout: React.FC = () => {
     </div>
   );
 };
+

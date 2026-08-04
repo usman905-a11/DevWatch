@@ -214,7 +214,8 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({
         {activeTab === 'terminal' && (
           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.75rem', color: '#a9b7c6' }}>
             <div>[INFO] DevWatch Multi-Agent Platform Initialized.</div>
-            <div>[INFO] CrewAI Sequential Process runner standing by.</div>
+            <div>[INFO] Direct Multi-Agent Orchestrator standing by.</div>
+
             {report && (
               <>
                 <div>[SYSTEM] Scan completed for target path: {report.target_path}</div>

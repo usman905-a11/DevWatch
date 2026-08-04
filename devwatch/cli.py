@@ -3,7 +3,7 @@ import typer
 from rich.console import Console
 from rich.markdown import Markdown
 from devwatch import __version__
-from devwatch.crew.orchestrator import CodeReviewCrew
+from devwatch.crew.orchestrator import CodeReviewEngine
 
 app = typer.Typer(
     name="DevWatch",
@@ -45,7 +45,7 @@ def review(
     """Run a multi-agent review on the specified codebase path."""
     console.print(f"[bold blue]🔍 Launching DevWatch Multi-Agent Review on:[/bold blue] {path}")
 
-    crew = CodeReviewCrew()
+    crew = CodeReviewEngine()
     report = crew.run(path)
 
     md_content = report.summary

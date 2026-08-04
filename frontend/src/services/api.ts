@@ -20,6 +20,48 @@ export async function runCodeReview(targetPath: string): Promise<ReviewResponse>
   return response.json();
 }
 
+export async function fetchFileTree(rootPath: string = '.'): Promise<{ root: string; tree: any[]; files: string[] }> {
+  const response = await fetch(`${API_BASE_URL}/fs/tree?root=${encodeURIComponent(rootPath)}`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch filesystem tree');
+  }
+  return response.json();
+}
+
+export async function fetchFileContent(filePath: string, rootPath: string = '.'): Promise<{ path: string; content: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/fs/read?path=${encodeURIComponent(filePath)}&root=${encodeURIComponent(rootPath)}`
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to read file: ${filePath}`);
+  }
+  return response.json();
+}
+
+export async function saveFileContent(filePath: string, content: string, rootPath: string = '.'): Promise<{ status: string }> {
+  const response = await fetch(`${API_BASE_URL}/fs/write`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ root_path: rootPath, file_path: filePath, content }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to save file: ${filePath}`);
+  }
+  return response.json();
+}
+
+export async function auditSingleFile(filePath: string, content: string): Promise<ReviewResponse> {
+  const response = await fetch(`${API_BASE_URL}/review/file`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_path: filePath, content }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to audit file: ${filePath}`);
+  }
+  return response.json();
+}
+
 export function subscribeToReviewStream(
   targetPath: string,
   onStep: (step: AgentStepUpdate) => void,
@@ -55,3 +97,4 @@ export function subscribeToReviewStream(
     }
   };
 }
+

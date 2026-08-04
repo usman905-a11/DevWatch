@@ -34,7 +34,7 @@ export const AgentChatCenter: React.FC<AgentChatCenterProps> = ({
     {
       sender: 'agent',
       agentName: 'Planner Agent',
-      text: 'DevWatch Multi-Agent Crew ready. Click "Run Review" to scan for OWASP security threats and reliability flaws.',
+      text: 'DevWatch Multi-Agent Studio ready. Click "Run Review" to scan for OWASP security threats and reliability flaws.',
       timestamp: 'Just now',
     },
   ]);
@@ -102,18 +102,19 @@ export const AgentChatCenter: React.FC<AgentChatCenterProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <Bot size={15} color="var(--vscode-blue)" />
-          <span>AGENT CREW CENTER</span>
+          <span>AGENT STUDIO</span>
         </div>
         <span style={{ fontSize: '0.65rem', background: 'var(--vscode-bg-activity)', padding: '2px 6px', borderRadius: '4px' }}>
           LLM ACTIVE
         </span>
       </div>
 
-      {/* Crew Agent Execution Status Pipeline */}
+      {/* Agent Execution Status Pipeline */}
       <div style={{ padding: '12px', borderBottom: '1px solid var(--vscode-border)', backgroundColor: 'var(--vscode-bg-sidebar)' }}>
         <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--vscode-text-muted)', marginBottom: '8px' }}>
-          CREW PIPELINE PIPELINE STATUS:
+          ORCHESTRATOR PIPELINE STATUS:
         </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {agents.map((agent) => (
             <div

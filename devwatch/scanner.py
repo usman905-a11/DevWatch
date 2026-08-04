@@ -64,3 +64,52 @@ class CodebaseScanner:
     def get_codebase_context(self) -> Dict[str, str]:
         files = self.get_files()
         return {f: self.read_file(f) for f in files}
+
+    def write_file(self, rel_path: str, content: str) -> bool:
+        full_path = os.path.join(self.root_dir, rel_path)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return True
+
+    def get_tree_structure(self) -> List[Dict]:
+
+        """Returns recursive nested tree nodes for IDE file explorer components."""
+        def build_node(dir_path: str) -> List[Dict]:
+            items = []
+            try:
+                entries = sorted(os.listdir(dir_path))
+            except Exception:
+                return items
+
+            for entry in entries:
+                if entry in IGNORED_DIRS:
+                    continue
+                full_path = os.path.join(dir_path, entry)
+                rel_path = os.path.relpath(full_path, self.root_dir).replace("\\", "/")
+
+                if os.path.isdir(full_path):
+                    children = build_node(full_path)
+                    if children:  # Only show non-empty directories
+                        items.append(
+                            {
+                                "name": entry,
+                                "path": rel_path,
+                                "type": "directory",
+                                "children": children,
+                            }
+                        )
+                else:
+                    ext = os.path.splitext(entry)[1].lower()
+                    if ext in ALLOWED_EXTENSIONS:
+                        items.append(
+                            {
+                                "name": entry,
+                                "path": rel_path,
+                                "type": "file",
+                            }
+                        )
+            return items
+
+        return build_node(self.root_dir)
+

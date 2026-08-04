@@ -8,8 +8,8 @@ from devwatch.tools import IssueDeduplicatorTool
 from devwatch.models import ReviewReport, CodeIssue, AgentStepUpdate
 
 
-class CodeReviewCrew:
-    """CrewAI Code Review Engine orchestrating Planner, Security, Quality, and Synthesizer agents."""
+class CodeReviewEngine:
+    """Multi-Agent Code Review Engine orchestrating Planner, Security, Quality, and Synthesizer agents."""
 
     def __init__(self, step_callback: Optional[Callable[[AgentStepUpdate], None]] = None):
         self.planner = PlannerAgent()
@@ -45,7 +45,7 @@ class CodeReviewCrew:
             self._notify(
                 "Security Auditor", "RUNNING", f"Auditing {rel_path} for OWASP vulnerabilities"
             )
-            sec_issues = self.security_agent.analyze(rel_path, code)
+            sec_issues = self.security_agent.analyze(rel_path, code, focus_areas=scope.focus_areas)
             raw_issues.extend(sec_issues)
             self._notify(
                 "Security Auditor",
@@ -56,7 +56,8 @@ class CodeReviewCrew:
             self._notify(
                 "Quality Auditor", "RUNNING", f"Auditing {rel_path} for logic & exception flaws"
             )
-            qual_issues = self.quality_agent.analyze(rel_path, code)
+            qual_issues = self.quality_agent.analyze(rel_path, code, focus_areas=scope.focus_areas)
+
             raw_issues.extend(qual_issues)
             self._notify(
                 "Quality Auditor",
@@ -78,3 +79,29 @@ class CodeReviewCrew:
         )
 
         return report
+
+    def run_file_audit(self, file_path: str, code_content: str) -> ReviewReport:
+        """Instant single-file audit for active IDE editor buffer."""
+        self._notify("Security Auditor", "RUNNING", f"Auditing active file: {file_path}")
+        sec_issues = self.security_agent.analyze(file_path, code_content)
+
+        self._notify("Quality Auditor", "RUNNING", f"Auditing active file: {file_path}")
+        qual_issues = self.quality_agent.analyze(file_path, code_content)
+
+        raw_issues = sec_issues + qual_issues
+        deduped = self.deduplicator._run(raw_issues)
+
+        report = ReviewReport(target_path=file_path, issues=deduped)
+        report.summary = self.synthesizer.render_markdown(report)
+        self._notify(
+            "Synthesizer Agent",
+            "COMPLETED",
+            f"Instant file audit complete: {report.total_issues} issues found",
+        )
+        return report
+
+
+# Backwards compatibility alias
+CodeReviewCrew = CodeReviewEngine
+
+

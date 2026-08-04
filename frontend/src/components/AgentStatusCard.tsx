@@ -20,8 +20,9 @@ export const AgentStatusCard: React.FC<AgentStatusCardProps> = ({ agents }) => {
           <div className="window-dot window-dot-green" />
         </div>
         <div className="window-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Terminal size={14} color="var(--anthropic-orange)" /> CrewAI Execution Crew
+          <Terminal size={14} color="var(--anthropic-orange)" /> DevWatch Multi-Agent Studio
         </div>
+
         <span style={{ fontSize: '0.7rem', color: 'var(--anthropic-text-muted)', fontFamily: 'Fira Code, monospace' }}>
           4 Active Agents
         </span>

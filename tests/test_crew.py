@@ -3,7 +3,7 @@ from devwatch.agents.planner import PlannerAgent
 from devwatch.agents.security import SecurityAuditorAgent
 from devwatch.agents.quality import QualityAuditorAgent
 from devwatch.agents.synthesizer import ReportSynthesizerAgent
-from devwatch.crew.orchestrator import CodeReviewCrew
+from devwatch.crew.orchestrator import CodeReviewEngine
 from devwatch.models import ReviewReport, ReviewScope, IssueSeverity, CodeIssue
 
 def test_planner_agent_scopes_codebase(tmp_path):
@@ -50,7 +50,7 @@ def test_synthesizer_agent_renders_report():
 def test_code_review_crew_full_pipeline(tmp_path):
     (tmp_path / "vulnerable.py").write_text("SECRET_KEY = 'sk_live_1234567890abcdef'\ntry:\n    pass\nexcept:\n    pass\n")
     
-    crew = CodeReviewCrew()
+    crew = CodeReviewEngine()
     report = crew.run(str(tmp_path))
     
     assert isinstance(report, ReviewReport)

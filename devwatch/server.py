@@ -1,19 +1,21 @@
 import uuid
 import time
-from typing import Dict, Any, List
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Any, List, Optional
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from devwatch.crew.orchestrator import CodeReviewCrew
+from devwatch.crew.orchestrator import CodeReviewEngine
+from devwatch.scanner import CodebaseScanner
 from devwatch.models import ReviewReport, AgentStepUpdate
 
 app = FastAPI(
     title="DevWatch API",
-    description="Multi-Agent Code Review Backend Server",
+    description="Multi-Agent Code Review & VS Code IDE Backend Server",
     version="0.1.0",
 )
 
-# Enable CORS for React frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,17 +24,67 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory store for reports
 REPORTS_DB: Dict[str, Dict[str, Any]] = {}
+executor = ThreadPoolExecutor(max_workers=4)
 
 
 class ReviewRequest(BaseModel):
     target_path: str = "."
 
 
+class SingleFileAuditRequest(BaseModel):
+    file_path: str
+    content: str
+
+
+class WriteFileRequest(BaseModel):
+    root_path: str = "."
+    file_path: str
+    content: str
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "app": "DevWatch API", "version": "0.1.0"}
+
+
+@app.get("/api/fs/tree")
+def get_fs_tree(root: str = Query(".", description="Root directory path")):
+    scanner = CodebaseScanner(root)
+    tree = scanner.get_tree_structure()
+    files = scanner.get_files()
+    return {"root": root, "tree": tree, "files": files}
+
+
+@app.get("/api/fs/read")
+def read_file_content(
+    path: str = Query(..., description="Relative file path"),
+    root: str = Query(".", description="Root directory path"),
+):
+    scanner = CodebaseScanner(root)
+    content = scanner.read_file(path)
+    return {"path": path, "content": content}
+
+
+@app.post("/api/fs/write")
+def write_file_content(request: WriteFileRequest):
+    scanner = CodebaseScanner(request.root_path)
+    success = scanner.write_file(request.file_path, request.content)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to write file")
+    return {"status": "success", "path": request.file_path}
+
+
+@app.post("/api/review/file")
+def trigger_file_audit(request: SingleFileAuditRequest):
+    crew = CodeReviewEngine()
+    try:
+        report = crew.run_file_audit(request.file_path, request.content)
+        report_dict = report.model_dump()
+        report_dict["total_issues"] = report.total_issues
+        return {"status": "completed", "report": report_dict}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"File audit failed: {str(e)}")
 
 
 @app.post("/api/review")
@@ -44,7 +96,7 @@ def trigger_review(request: ReviewRequest):
         update.timestamp = time.time()
         steps.append(update)
 
-    crew = CodeReviewCrew(step_callback=on_step)
+    crew = CodeReviewEngine(step_callback=on_step)
 
     try:
         report: ReviewReport = crew.run(request.target_path)
@@ -82,24 +134,34 @@ def get_report(report_id: str):
 @app.websocket("/ws/review")
 async def websocket_review_endpoint(websocket: WebSocket):
     await websocket.accept()
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
     try:
         data = await websocket.receive_json()
         target_path = data.get("target_path", ".")
 
-        async def send_update(update: AgentStepUpdate):
-            update.timestamp = time.time()
-            await websocket.send_json(update.model_dump())
-
-        # For synchronous execution callback to async websocket
         def sync_step_callback(update: AgentStepUpdate):
             update.timestamp = time.time()
-            # Send sync update json string via websocket if connected
-            import asyncio
+            loop.call_soon_threadsafe(queue.put_nowait, update)
 
-            asyncio.run(websocket.send_json(update.model_dump()))
+        async def stream_queue():
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                await websocket.send_json(item.model_dump())
+                queue.task_done()
 
-        crew = CodeReviewCrew(step_callback=sync_step_callback)
-        report = crew.run(target_path)
+        stream_task = asyncio.create_task(stream_queue())
+
+        def run_crew():
+            crew = CodeReviewEngine(step_callback=sync_step_callback)
+            return crew.run(target_path)
+
+        report = await loop.run_in_executor(executor, run_crew)
+        await queue.put(None)
+        await stream_task
 
         await websocket.send_json(
             {
@@ -113,4 +175,8 @@ async def websocket_review_endpoint(websocket: WebSocket):
     except Exception as e:
         await websocket.send_json({"status": "FAILED", "message": str(e)})
     finally:
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+

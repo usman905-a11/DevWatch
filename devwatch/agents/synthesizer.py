@@ -53,7 +53,8 @@ Return raw markdown text — bullet points and short paragraphs only. No H1/H2 h
 
 
 class ReportSynthesizerAgent:
-    """CrewAI Synthesizer Agent: Deduplicates issues and renders formatted Markdown reports."""
+    """Synthesizer Agent: Deduplicates issues and renders formatted Markdown reports."""
+
 
     def __init__(self, role: str = "Technical Review Editor"):
         self.role = role

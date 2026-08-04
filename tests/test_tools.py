@@ -2,7 +2,6 @@ import os
 import pytest
 from devwatch.scanner import CodebaseScanner
 from devwatch.tools import (
-    CodebaseScannerTool,
     GitDiffTool,
     SecurityPatternTool,
     LogicAnalyzerTool,
@@ -33,23 +32,47 @@ def test_scanner_reads_file(tmp_path):
     content = scanner.read_file("test.py")
     assert content == "def hello(): pass"
 
+def test_scanner_tree_structure(tmp_path):
+    (tmp_path / "main.py").write_text("print('hello')")
+    sub = tmp_path / "src"
+    sub.mkdir()
+    (sub / "app.py").write_text("def run(): pass")
+
+    scanner = CodebaseScanner(str(tmp_path))
+    tree = scanner.get_tree_structure()
+    assert len(tree) >= 2
+    assert any(item["name"] == "main.py" and item["type"] == "file" for item in tree)
+    assert any(item["name"] == "src" and item["type"] == "directory" for item in tree)
+
 def test_security_pattern_tool():
     tool = SecurityPatternTool()
-    vulnerable_code = "SECRET_KEY = 'sk_live_1234567890abcdef1234'\ncursor.execute(f'SELECT * FROM users WHERE id = {user_id}')"
+    vulnerable_code = (
+        "SECRET_KEY = 'sk_live_1234567890abcdef1234'\n"
+        "cursor.execute(f'SELECT * FROM users WHERE id = {user_id}')\n"
+        "eval('import os; os.system(\"rm -rf /\")')\n"
+        "pickle.loads(user_input)\n"
+    )
     issues = tool._run(file_path="config.py", code_content=vulnerable_code)
     
-    assert len(issues) >= 2
+    assert len(issues) >= 4
     assert any(i.severity == IssueSeverity.CRITICAL for i in issues)
-    assert any(i.severity == IssueSeverity.HIGH for i in issues)
+    assert any("Dynamic Code Execution" in i.title for i in issues)
 
 def test_logic_analyzer_tool():
     tool = LogicAnalyzerTool()
-    flawed_code = "try:\n    do_something()\nexcept:\n    pass\nprint('debug statement')\n"
+    flawed_code = (
+        "try:\n    do_something()\nexcept:\n    pass\n"
+        "print('debug statement')\n"
+        "# TODO: fix this technical debt\n"
+        "requests.get('https://example.com')\n"
+    )
     issues = tool._run(file_path="app.py", code_content=flawed_code)
     
-    assert len(issues) >= 2
+    assert len(issues) >= 4
     assert any("Except" in i.title for i in issues)
     assert any("Print" in i.title for i in issues)
+    assert any("TODO" in i.title for i in issues)
+    assert any("Timeout" in i.title for i in issues)
 
 def test_issue_deduplicator_tool():
     tool = IssueDeduplicatorTool()
@@ -64,3 +87,4 @@ def test_issue_deduplicator_tool():
     deduped = tool._run(issues=[issue1, issue2])
     assert len(deduped) == 1
     assert deduped[0].file_path == "app.py"
+

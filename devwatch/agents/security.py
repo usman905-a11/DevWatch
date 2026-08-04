@@ -78,6 +78,7 @@ Return a JSON array of objects. Each object must have these exact keys:
 - "description": 1-2 sentence explanation of the vulnerability and its impact
 - "suggestion": specific, actionable fix (not generic advice — name the secure alternative)
 - "code_snippet": the exact vulnerable line or minimal code block
+- "replacement_code": optional secure replacement code block for automatic IDE quick-fix
 
 Return ONLY the raw JSON array. No markdown fences, no explanatory text, no preamble.
 If no vulnerabilities are found, return an empty array: []
@@ -85,38 +86,44 @@ If no vulnerabilities are found, return an empty array: []
 
 
 class SecurityAuditorAgent:
-    """CrewAI Security Auditor Agent: Audits code for OWASP Top 10 vulnerabilities & secret leaks."""
+    """Security Auditor Agent: Audits code for OWASP Top 10 vulnerabilities & secret leaks."""
+
 
     def __init__(self, role: str = "Cybersecurity Vulnerability Auditor"):
         self.role = role
         self.goal = SYSTEM_PROMPT
         self.tool = SecurityPatternTool()
 
-    def analyze(self, file_path: str, code_content: str) -> List[CodeIssue]:
+    def analyze(
+        self, file_path: str, code_content: str, focus_areas: List[str] = None
+    ) -> List[CodeIssue]:
         issues = self.tool._run(file_path=file_path, code_content=code_content)
 
         if llm.is_llm_available() and code_content.strip():
+            focus_str = ""
+            if focus_areas:
+                focus_str = "Focus Areas for this review pass:\n- " + "\n- ".join(focus_areas) + "\n\n"
+
+            numbered_code = llm.add_line_numbers(code_content)
             prompt = (
                 f"Audit file: '{file_path}'\n"
-                f"Source code:\n```\n{code_content}\n```\n\n"
+                f"{focus_str}"
+                f"Source code (with line numbers):\n```\n{numbered_code}\n```\n\n"
                 "Execute your full vulnerability taxonomy scan and return the JSON array."
             )
             response = llm.call_llm_completion(prompt, system_prompt=SYSTEM_PROMPT)
             if response:
                 try:
-                    cleaned = response.strip()
-                    if cleaned.startswith("```json"):
-                        cleaned = cleaned[7:]
-                    if cleaned.startswith("```"):
-                        cleaned = cleaned[3:]
-                    if cleaned.endswith("```"):
-                        cleaned = cleaned[:-3]
-                    data = json.loads(cleaned.strip())
+                    data = llm.parse_llm_json(response)
                     if isinstance(data, list):
                         for item in data:
                             try:
                                 sev_str = str(item.get("severity", "HIGH")).upper()
-                                severity = IssueSeverity[sev_str] if sev_str in IssueSeverity.__members__ else IssueSeverity.HIGH
+                                severity = (
+                                    IssueSeverity[sev_str]
+                                    if sev_str in IssueSeverity.__members__
+                                    else IssueSeverity.HIGH
+                                )
                                 issues.append(
                                     CodeIssue(
                                         file_path=file_path,
@@ -124,9 +131,12 @@ class SecurityAuditorAgent:
                                         severity=severity,
                                         category=item.get("category", "Security"),
                                         title=item.get("title", "Security Vulnerability"),
-                                        description=item.get("description", "Vulnerability detected by AI auditor."),
+                                        description=item.get(
+                                            "description", "Vulnerability detected by AI auditor."
+                                        ),
                                         suggestion=item.get("suggestion", "Remediate vulnerability."),
                                         code_snippet=item.get("code_snippet"),
+                                        replacement_code=item.get("replacement_code"),
                                     )
                                 )
                             except Exception:
@@ -135,5 +145,6 @@ class SecurityAuditorAgent:
                     pass
 
         return issues
+
 
 

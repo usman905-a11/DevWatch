@@ -94,6 +94,7 @@ Return a JSON array of objects. Each object must have these exact keys:
 - "description": 1-2 sentence explanation of the defect and its production impact
 - "suggestion": specific, actionable fix with code example where helpful
 - "code_snippet": the exact problematic line or minimal code block
+- "replacement_code": optional clean replacement code block for automatic IDE quick-fix
 
 Return ONLY the raw JSON array. No markdown fences, no explanatory text, no preamble.
 If no issues are found, return an empty array: []
@@ -101,38 +102,44 @@ If no issues are found, return an empty array: []
 
 
 class QualityAuditorAgent:
-    """CrewAI Quality Auditor Agent: Detects runtime risks, unhandled exceptions, and anti-patterns."""
+    """Quality Auditor Agent: Detects runtime risks, unhandled exceptions, and anti-patterns."""
+
 
     def __init__(self, role: str = "Principal Code Quality Analyst"):
         self.role = role
         self.goal = SYSTEM_PROMPT
         self.tool = LogicAnalyzerTool()
 
-    def analyze(self, file_path: str, code_content: str) -> List[CodeIssue]:
+    def analyze(
+        self, file_path: str, code_content: str, focus_areas: List[str] = None
+    ) -> List[CodeIssue]:
         issues = self.tool._run(file_path=file_path, code_content=code_content)
 
         if llm.is_llm_available() and code_content.strip():
+            focus_str = ""
+            if focus_areas:
+                focus_str = "Focus Areas for this review pass:\n- " + "\n- ".join(focus_areas) + "\n\n"
+
+            numbered_code = llm.add_line_numbers(code_content)
             prompt = (
                 f"Audit file: '{file_path}'\n"
-                f"Source code:\n```\n{code_content}\n```\n\n"
+                f"{focus_str}"
+                f"Source code (with line numbers):\n```\n{numbered_code}\n```\n\n"
                 "Execute your full defect taxonomy scan and return the JSON array."
             )
             response = llm.call_llm_completion(prompt, system_prompt=SYSTEM_PROMPT)
             if response:
                 try:
-                    cleaned = response.strip()
-                    if cleaned.startswith("```json"):
-                        cleaned = cleaned[7:]
-                    if cleaned.startswith("```"):
-                        cleaned = cleaned[3:]
-                    if cleaned.endswith("```"):
-                        cleaned = cleaned[:-3]
-                    data = json.loads(cleaned.strip())
+                    data = llm.parse_llm_json(response)
                     if isinstance(data, list):
                         for item in data:
                             try:
                                 sev_str = str(item.get("severity", "MEDIUM")).upper()
-                                severity = IssueSeverity[sev_str] if sev_str in IssueSeverity.__members__ else IssueSeverity.MEDIUM
+                                severity = (
+                                    IssueSeverity[sev_str]
+                                    if sev_str in IssueSeverity.__members__
+                                    else IssueSeverity.MEDIUM
+                                )
                                 issues.append(
                                     CodeIssue(
                                         file_path=file_path,
@@ -140,9 +147,12 @@ class QualityAuditorAgent:
                                         severity=severity,
                                         category=item.get("category", "Code Quality"),
                                         title=item.get("title", "Code Quality Flaw"),
-                                        description=item.get("description", "Quality issue detected by AI auditor."),
+                                        description=item.get(
+                                            "description", "Quality issue detected by AI auditor."
+                                        ),
                                         suggestion=item.get("suggestion", "Refactor code."),
                                         code_snippet=item.get("code_snippet"),
+                                        replacement_code=item.get("replacement_code"),
                                     )
                                 )
                             except Exception:
@@ -151,5 +161,6 @@ class QualityAuditorAgent:
                     pass
 
         return issues
+
 
 

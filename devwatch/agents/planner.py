@@ -62,16 +62,27 @@ Return a single JSON object (no markdown fences, no commentary):
 """
 
 
+from devwatch.tools import GitDiffTool
+
+
 class PlannerAgent:
-    """CrewAI Planner Agent: Maps out high-risk files and review focus areas."""
+    """Planner Agent: Maps out high-risk files and review focus areas."""
+
 
     def __init__(self, role: str = "Senior Code Review Architect"):
         self.role = role
         self.goal = SYSTEM_PROMPT
+        self.git_tool = GitDiffTool()
 
     def plan_review(self, target_path: str) -> ReviewScope:
         scanner = CodebaseScanner(target_path)
         all_files = scanner.get_files()
+
+        # Extract git diff context if available
+        diff_context = self.git_tool._run(target_path)
+        diff_summary = ""
+        if diff_context and not diff_context.startswith("Git diff error"):
+            diff_summary = f"\nUncommitted Git Changes:\n```diff\n{diff_context[:1000]}\n```\n"
 
         # Prioritize non-test files for primary review
         priority_files = [f for f in all_files if not f.startswith("tests/")]
@@ -89,26 +100,23 @@ class PlannerAgent:
             prompt = (
                 f"Repository root: '{target_path}'\n"
                 f"Total files discovered: {len(all_files)}\n\n"
-                f"File listing:\n" + "\n".join(all_files[:50]) + "\n\n"
+                f"File listing:\n" + "\n".join(all_files[:50]) + "\n"
+                f"{diff_summary}\n"
                 "Analyse these files using your risk-ranking methodology and return the JSON output."
             )
+
             response = llm.call_llm_completion(prompt, system_prompt=SYSTEM_PROMPT)
             if response:
                 try:
-                    cleaned = response.strip()
-                    if cleaned.startswith("```json"):
-                        cleaned = cleaned[7:]
-                    if cleaned.startswith("```"):
-                        cleaned = cleaned[3:]
-                    if cleaned.endswith("```"):
-                        cleaned = cleaned[:-3]
-                    data = json.loads(cleaned.strip())
-                    if isinstance(data.get("priority_files"), list) and len(data["priority_files"]) > 0:
-                        priority_files = [f for f in data["priority_files"] if f in all_files] or priority_files
-                    if isinstance(data.get("focus_areas"), list) and len(data["focus_areas"]) > 0:
-                        focus_areas = data["focus_areas"]
+                    data = llm.parse_llm_json(response)
+                    if isinstance(data, dict):
+                        if isinstance(data.get("priority_files"), list) and len(data["priority_files"]) > 0:
+                            priority_files = [f for f in data["priority_files"] if f in all_files] or priority_files
+                        if isinstance(data.get("focus_areas"), list) and len(data["focus_areas"]) > 0:
+                            focus_areas = data["focus_areas"]
                 except Exception:
                     pass
+
 
         return ReviewScope(
             target_path=target_path,

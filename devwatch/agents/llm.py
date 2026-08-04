@@ -27,56 +27,57 @@ def get_llm_model_name() -> str:
     return "gpt-4o-mini"
 
 
-def get_crewai_llm():
-    """Instantiate a CrewAI LLM instance if configured, else returns None."""
-    if not is_llm_available():
-        return None
-
-    model_name = get_llm_model_name()
-    try:
-        from crewai import LLM
-        return LLM(model=model_name)
-    except Exception as e:
-        logger.warning(f"Could not initialize CrewAI LLM ({model_name}): {e}")
-        return None
-
-
 def call_llm_completion(prompt: str, system_prompt: str = "You are an expert AI code auditor.") -> Optional[str]:
-    """Call LLM directly via CrewAI LLM or OpenAI/LiteLLM client if available."""
+    """Call LLM completion directly via OpenAI / LiteLLM API client if available."""
     if not is_llm_available():
         return None
 
-    # Try CrewAI LLM completion first
+    model_name = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    api_key = (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("ANTHROPIC_API_KEY")
+        or os.getenv("GROQ_API_KEY")
+    )
+
     try:
-        from crewai import LLM
-        model_name = get_llm_model_name()
-        llm = LLM(model=model_name)
-        response = llm.call(
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
-            ]
+            ],
+            temperature=0.2,
         )
-        if response:
-            return str(response)
-    except Exception as err:
-        logger.warning(f"CrewAI LLM call failed: {err}")
-
-    # Fallback to direct openai client if available
-    if os.getenv("OPENAI_API_KEY"):
-        try:
-            import openai
-            client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-            response = client.chat.completions.create(
-                model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
-            )
+        if response.choices and len(response.choices) > 0:
             return response.choices[0].message.content
-        except Exception as err:
-            logger.warning(f"Direct OpenAI client call failed: {err}")
+    except Exception as err:
+        logger.warning(f"LLM completion call failed: {err}")
 
     return None
+
+
+
+def parse_llm_json(response: str) -> Any:
+    """Clean markdown code fences and parse JSON from LLM response."""
+    if not response:
+        return None
+    cleaned = response.strip()
+    if cleaned.startswith("```json"):
+        cleaned = cleaned[7:]
+    elif cleaned.startswith("```"):
+        cleaned = cleaned[3:]
+    if cleaned.endswith("```"):
+        cleaned = cleaned[:-3]
+    return json.loads(cleaned.strip())
+
+
+def add_line_numbers(code: str) -> str:
+    """Prepend 1-indexed line numbers to code string for exact LLM line targeting."""
+    if not code:
+        return ""
+    lines = code.splitlines()
+    return "\n".join(f"{i:4d} | {line}" for i, line in enumerate(lines, 1))
+
