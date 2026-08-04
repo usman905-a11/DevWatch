@@ -1,56 +1,44 @@
+import asyncio
+from typing import Dict, Any, Optional
+
+from devwatch.agents.base import BaseAgent, AgentMetadata
 from devwatch.models import ReviewReport, IssueSeverity, StructuredSynthesizerResponse
 from devwatch.agents import llm
+from devwatch.prompts.registry import prompt_registry, PromptRegistry
+from devwatch.providers.factory import get_provider
+from devwatch.providers.base import LLMProvider
 
 
-SYSTEM_PROMPT = """You are the Synthesizer in an automated code review pipeline. You receive the deduplicated, verified findings from the Security and Quality Auditors and produce the final report shown to the developer. You do not introduce new findings — every issue in your report must trace back to an item in the input findings list. If you believe something important was missed, note it in a separate coverage_gaps field rather than inventing a finding.
-
-TASK
-1. Group findings by severity, then by file
-2. Write a short executive summary (3–6 sentences): overall risk posture, the single highest-priority issue, and how many findings fall in each severity tier
-3. For each finding, preserve its confidence_score as given — do not restate a 0.5-confidence finding as if it were certain
-4. Where Security and Quality flagged related issues on the same lines, present them together rather than as separate entries
-5. Identify systemic patterns across findings — do issues cluster in one module (localized risk) or spread across the codebase (systemic risk)? Example: "4 of 7 files have unclosed database connections, suggesting missing resource-management conventions"
-
-RISK SCORING — Determine the verdict using these severity weights:
-- CRITICAL findings = deployment blockers (weight: 10×)
-- HIGH findings = must-fix before next sprint (weight: 5×)
-- MEDIUM findings = should-fix, schedule within 2 sprints (weight: 2×)
-- LOW findings = track in backlog (weight: 1×)
-If any CRITICAL findings exist → verdict MUST be "BLOCK deployment"
-If total weighted score > 15 with no CRITICAL → "Deploy with conditions"
-Otherwise → "Safe to deploy"
-
-WRITING STYLE
-- Write for a technical audience (senior engineers), not non-technical stakeholders
-- Be direct and specific — say "Fix X in Y" not "it is recommended that consideration be given to"
-- Use quantitative language: "3 CRITICAL, 5 HIGH issues across 4 files" not "several important issues"
-- Cite file:line references for the top 3 most critical findings in the executive summary
-- Each summary bullet must be self-contained — readable without the detailed findings
-
-DEDUPLICATION
-When multiple findings point to the same root cause (e.g., 5 SQL injection findings all caused by f-string queries), group them as a single systemic issue with count rather than listing each individually.
-
-OUTPUT FORMAT
-Return a JSON object with these exact keys:
-{
-  "verdict": "BLOCK deployment | Deploy with conditions | Safe to deploy",
-  "top_threat": "concise description of the single most dangerous finding with file:line reference",
-  "summary_bullets": ["3-5 self-contained bullet point strings"],
-  "executive_summary": "full executive summary in markdown (3-6 sentences)"
-}
-
-Do not soften or omit a Critical finding to make the report read more positively. Your job is accuracy, not reassurance.
-"""
-
-
-class ReportSynthesizerAgent:
+class ReportSynthesizerAgent(BaseAgent):
     """Synthesizer Agent: Deduplicates issues and renders formatted Markdown reports."""
 
-    def __init__(self, role: str = "Technical Review Editor"):
+    def __init__(
+        self,
+        role: str = "Technical Review Editor",
+        provider: Optional[LLMProvider] = None,
+        prompt_reg: Optional[PromptRegistry] = None,
+    ):
         self.role = role
-        self.goal = SYSTEM_PROMPT
+        self.provider = provider or get_provider()
+        self.prompt_reg = prompt_reg or prompt_registry
 
-    def render_markdown(self, report: ReviewReport) -> str:
+    @property
+    def metadata(self) -> AgentMetadata:
+        return AgentMetadata(
+            agent_id="report_synthesizer",
+            version="1.0.0",
+            purpose="Synthesize executive code review summaries and render formatted Markdown reports",
+            prompt_id="synthesizer:v1",
+            prompt_version="1.0.0",
+            input_schema="ReviewReport",
+            output_schema="str",
+        )
+
+    async def execute(self, context: Dict[str, Any]) -> str:
+        report: ReviewReport = context.get("report")
+        if not report:
+            raise ValueError("ReportSynthesizerAgent requires 'report' parameter in context")
+
         md = []
         md.append("# DevWatch Code Review Report")
         md.append(f"**Target Workspace / File:** `{report.target_path}`\n")
@@ -69,7 +57,8 @@ class ReportSynthesizerAgent:
             md.append("✅ **No severe security or quality issues detected. Codebase is clean!**")
             return "\n".join(md)
 
-        if llm.is_llm_available() and report.issues:
+        if llm.is_llm_available(self.provider) and report.issues:
+
             issues_summary = "\n".join(
                 [
                     f"- [{i.severity.value}] {i.title} in `{i.file_path}:{i.line_number or 'N/A'}` "
@@ -77,6 +66,8 @@ class ReportSynthesizerAgent:
                     for i in report.issues[:20]
                 ]
             )
+            system_prompt = self.prompt_reg.get("synthesizer:v1").template
+
             prompt = (
                 f"Repository: '{report.target_path}'\n"
                 f"Total findings: {report.total_issues} "
@@ -85,11 +76,13 @@ class ReportSynthesizerAgent:
                 f"Findings:\n{issues_summary}\n\n"
                 "Synthesize findings and return JSON output matching the required schema."
             )
-            synth_res = llm.call_llm_structured(
+            synth_res = await llm.acall_llm_structured(
                 prompt,
                 response_model=StructuredSynthesizerResponse,
-                system_prompt=SYSTEM_PROMPT,
+                system_prompt=system_prompt,
+                provider=self.provider,
             )
+
             if synth_res and synth_res.executive_summary:
                 md.append("## AI Risk Verdict & Recommendations\n")
                 md.append(f"**Deployment Verdict:** `{synth_res.verdict}`\n")
@@ -130,6 +123,13 @@ class ReportSynthesizerAgent:
 
         return "\n".join(md)
 
+    def render_markdown(self, report: ReviewReport) -> str:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
+        if loop and loop.is_running():
+            raise RuntimeError("Cannot call synchronous render_markdown() inside active event loop. Use 'await agent.execute(...)'.")
 
-
+        return asyncio.run(self.execute({"report": report}))

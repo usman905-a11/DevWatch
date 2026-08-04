@@ -1,0 +1,43 @@
+{
+  "report_id": "f9b29bf5-5036-44d2-83d3-4671beaaaded",
+  "target_path": "Price-Scout",
+  "status": "completed",
+  "timestamp": 1785854981.2042782,
+  "steps": [
+    {
+      "agent_name": "Planner Agent",
+      "status": "RUNNING",
+      "message": "Mapping risk areas for Price-Scout",
+      "timestamp": 1785854981.2042782
+    },
+    {
+      "agent_name": "Planner Agent",
+      "status": "COMPLETED",
+      "message": "Scope planned: 0 files to analyze",
+      "timestamp": 1785854981.2042782
+    },
+    {
+      "agent_name": "Synthesizer Agent",
+      "status": "RUNNING",
+      "message": "Deduplicating & prioritizing issues",
+      "timestamp": 1785854981.2042782
+    },
+    {
+      "agent_name": "Synthesizer Agent",
+      "status": "COMPLETED",
+      "message": "Report generated: 0 total issues",
+      "timestamp": 1785854981.2042782
+    }
+  ],
+  "report": {
+    "target_path": "Price-Scout",
+    "issues": [],
+    "summary": "# DevWatch Code Review Report\n**Target Workspace / File:** `Price-Scout`\n\n## Executive Summary Metrics\n\n| Metric | Count |\n| :--- | :---: |\n| **Total Findings** | `0` |\n| **Critical** | `0` |\n| **High** | `0` |\n| **Medium** | `0` |\n| **Low / Info** | `0` |\n\n\u2705 **No severe security or quality issues detected. Codebase is clean!**",
+    "total_issues": 0,
+    "critical_count": 0,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 0
+  },
+  "summary_markdown": "# DevWatch Code Review Report\n**Target Workspace / File:** `Price-Scout`\n\n## Executive Summary Metrics\n\n| Metric | Count |\n| :--- | :---: |\n| **Total Findings** | `0` |\n| **Critical** | `0` |\n| **High** | `0` |\n| **Medium** | `0` |\n| **Low / Info** | `0` |\n\n\u2705 **No severe security or quality issues detected. Codebase is clean!**"
+}

@@ -1,0 +1,32 @@
+{
+  "report_id": "52716841-9795-4f59-8229-2f4e0888d2e0",
+  "target_path": "C:\\Users\\HP\\AppData\\Local\\Temp\\pytest-of-HP\\pytest-57\\test_get_report_by_id0",
+  "status": "completed",
+  "timestamp": 1785856615.736003,
+  "steps": [],
+  "report": {
+    "target_path": "test_path",
+    "issues": [
+      {
+        "file_path": "test.py",
+        "line_number": 1,
+        "severity": "CRITICAL",
+        "category": "SECURITY",
+        "title": "Hardcoded API Key",
+        "description": "Found hardcoded secret key",
+        "suggestion": "Use environment variable",
+        "code_snippet": null,
+        "replacement_code": null,
+        "confidence_score": 1.0,
+        "cwe_id": null
+      }
+    ],
+    "summary": "",
+    "total_issues": 1,
+    "critical_count": 1,
+    "high_count": 0,
+    "medium_count": 0,
+    "low_count": 0
+  },
+  "summary_markdown": ""
+}

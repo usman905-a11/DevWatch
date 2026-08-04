@@ -89,9 +89,11 @@ def test_quality_agent_defers_cwe_to_security():
     mock_resp = StructuredQualityResponse(issues=[cwe_issue, quality_issue])
 
     with patch("devwatch.agents.llm.is_llm_available", return_value=True):
-        with patch("devwatch.agents.llm.call_llm_structured", return_value=mock_resp):
+        with patch("devwatch.agents.llm.call_llm_structured", return_value=mock_resp), \
+             patch("devwatch.agents.llm.acall_llm_structured", return_value=mock_resp):
             issues = agent.analyze("test.py", "def foo(): pass")
             # Only non-CWE/non-security quality issue should be returned
             titles = [i.title for i in issues]
             assert "Unclosed File Handle" in titles
             assert "Command Injection" not in titles
+

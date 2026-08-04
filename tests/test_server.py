@@ -1,15 +1,34 @@
 import pytest
+from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from devwatch.server import app
+from devwatch.models import ReviewReport, CodeIssue, IssueSeverity
 
 client = TestClient(app)
+
+mock_report = ReviewReport(
+    target_path="test_path",
+    issues=[
+        CodeIssue(
+            file_path="test.py",
+            line_number=1,
+            title="Hardcoded API Key",
+            description="Found hardcoded secret key",
+            severity=IssueSeverity.CRITICAL,
+            category="SECURITY",
+            suggestion="Use environment variable",
+        )
+    ]
+)
 
 def test_health_check_endpoint():
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
-def test_trigger_review_endpoint(tmp_path):
+@patch("devwatch.server.CodeReviewEngine.arun", new_callable=AsyncMock)
+def test_trigger_review_endpoint(mock_arun, tmp_path):
+    mock_arun.return_value = mock_report
     (tmp_path / "test.py").write_text("SECRET_KEY = 'sk_live_1234567890abcdef'\n")
     
     response = client.post("/api/review", json={"target_path": str(tmp_path)})
@@ -19,14 +38,14 @@ def test_trigger_review_endpoint(tmp_path):
     assert data["status"] == "completed"
     assert data["report"]["total_issues"] >= 1
 
-def test_get_report_by_id(tmp_path):
+@patch("devwatch.server.CodeReviewEngine.arun", new_callable=AsyncMock)
+def test_get_report_by_id(mock_arun, tmp_path):
+    mock_arun.return_value = mock_report
     (tmp_path / "test.py").write_text("SECRET_KEY = 'sk_live_1234567890abcdef'\n")
     
-    # Run review first
     res = client.post("/api/review", json={"target_path": str(tmp_path)})
     report_id = res.json()["report_id"]
     
-    # Fetch report
     res2 = client.get(f"/api/reports/{report_id}")
     assert res2.status_code == 200
     assert res2.json()["report_id"] == report_id

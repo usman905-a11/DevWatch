@@ -1,49 +1,33 @@
 import os
 import json
 import logging
-from typing import Optional, Dict, Any, List
+import time
+import re
+from typing import Optional, Dict, Any, List, Type, TypeVar
+from pydantic import BaseModel, ValidationError
 
 from devwatch.config import Config, ModelTier
+from devwatch.providers.factory import get_provider
+from devwatch.providers.base import LLMRequest, LLMProvider
+from devwatch.providers.exceptions import (
+    ProviderError,
+    ProviderRateLimitError,
+    ProviderQuotaExhaustedError,
+)
+from devwatch.resilience.manager import resilience_manager
 
 logger = logging.getLogger("devwatch.llm")
 
+# Backwards-compatible exception alias for route exception handlers
+OpenRouterRateLimitError = ProviderQuotaExhaustedError
 
-def is_llm_available() -> bool:
-    """Check if any LLM API key is set in environment."""
-    return bool(
-        os.getenv("OPENROUTER_API_KEY")
-        or os.getenv("OPENAI_API_KEY")
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("ANTHROPIC_API_KEY")
-        or os.getenv("GROQ_API_KEY")
-    )
+T = TypeVar("T", bound=BaseModel)
 
 
-def _get_llm_client_kwargs() -> Dict[str, Any]:
-    """Determine client initialization arguments (api_key, base_url, default_headers) for LLM provider."""
-    openrouter_key = os.getenv("OPENROUTER_API_KEY")
-    if openrouter_key:
-        base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        headers = {
-            "HTTP-Referer": os.getenv("OPENROUTER_SITE_URL", "https://github.com/devwatch"),
-            "X-Title": os.getenv("OPENROUTER_SITE_NAME", "DevWatch"),
-        }
-        return {
-            "api_key": openrouter_key,
-            "base_url": base_url,
-            "default_headers": headers,
-        }
-
-    api_key = (
-        os.getenv("OPENAI_API_KEY")
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("ANTHROPIC_API_KEY")
-        or os.getenv("GROQ_API_KEY")
-    )
-    kwargs: Dict[str, Any] = {"api_key": api_key}
-    if os.getenv("OPENAI_BASE_URL"):
-        kwargs["base_url"] = os.getenv("OPENAI_BASE_URL")
-    return kwargs
+def is_llm_available(provider: Optional[LLMProvider] = None) -> bool:
+    """Check if any LLM API key is set in environment or provider is available."""
+    p = provider or get_provider()
+    return p.is_available()
 
 
 def get_llm_model_name(model_tier: ModelTier = ModelTier.HEAVY) -> str:
@@ -57,98 +41,69 @@ def call_llm_completion(
     prompt: str,
     system_prompt: str = "You are an expert AI code auditor.",
     model_tier: ModelTier = ModelTier.HEAVY,
+    job_id: Optional[str] = None,
+    provider: Optional[LLMProvider] = None,
 ) -> Optional[str]:
-    """Call LLM completion directly via OpenAI / LiteLLM / OpenRouter API client if available."""
-    if not is_llm_available():
+    """Call LLM completion via typed provider abstraction."""
+    p = provider or get_provider()
+    if not p.is_available():
         return None
 
     model_name = get_llm_model_name(model_tier)
-    client_kwargs = _get_llm_client_kwargs()
+
+    req = LLMRequest(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        model=model_name,
+        temperature=0.2,
+    )
 
     try:
-        import openai
-        client = openai.OpenAI(**client_kwargs)
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-        )
-        if response.choices and len(response.choices) > 0:
-            return response.choices[0].message.content
-    except Exception as err:
+        response = p.generate_completion_sync(req)
+        return response.content
+    except (ProviderQuotaExhaustedError, ProviderRateLimitError) as err:
+        logger.error(f"Provider Rate/Quota Exceeded: {err}")
+        raise
+    except ProviderError as err:
         logger.warning(f"LLM completion call failed: {err}")
-
-    return None
+        return None
 
 
 async def acall_llm_completion(
     prompt: str,
     system_prompt: str = "You are an expert AI code auditor.",
     model_tier: ModelTier = ModelTier.HEAVY,
+    job_id: Optional[str] = None,
+    provider: Optional[LLMProvider] = None,
 ) -> Optional[str]:
-    """Async wrapper for LLM completion API call."""
-    if not is_llm_available():
+    """Asynchronously call LLM completion via typed provider & resilience manager."""
+    p = provider or get_provider()
+    if not p.is_available():
         return None
 
     model_name = get_llm_model_name(model_tier)
-    client_kwargs = _get_llm_client_kwargs()
+
+    req = LLMRequest(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        model=model_name,
+        temperature=0.2,
+    )
 
     try:
-        import asyncio
-        import openai
-        if hasattr(openai, "AsyncOpenAI"):
-            client = openai.AsyncOpenAI(**client_kwargs)
-            response = await client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
-            )
-            if response.choices and len(response.choices) > 0:
-                return response.choices[0].message.content
-        return await asyncio.to_thread(call_llm_completion, prompt, system_prompt, model_tier)
-    except Exception as err:
-        logger.warning(f"Async LLM completion call failed, falling back to thread: {err}")
-        return await asyncio.to_thread(call_llm_completion, prompt, system_prompt, model_tier)
-
-
-
-
-import time
-from typing import Type, TypeVar
-from pydantic import BaseModel, ValidationError
-
-T = TypeVar("T", bound=BaseModel)
-
-
-import inspect
-
-
-def _safe_call_completion(func, prompt: str, system_prompt: str, model_tier: ModelTier):
-    """Safely call completion function checking if model_tier kwarg is accepted."""
-    try:
-        sig = inspect.signature(func)
-        if "model_tier" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
-            return func(prompt, system_prompt=system_prompt, model_tier=model_tier)
-    except (ValueError, TypeError):
-        pass
-    return func(prompt, system_prompt=system_prompt)
-
-
-async def _asafe_call_completion(func, prompt: str, system_prompt: str, model_tier: ModelTier):
-    """Safely await completion function checking if model_tier kwarg is accepted."""
-    try:
-        sig = inspect.signature(func)
-        if "model_tier" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
-            return await func(prompt, system_prompt=system_prompt, model_tier=model_tier)
-    except (ValueError, TypeError):
-        pass
-    return await func(prompt, system_prompt=system_prompt)
+        response = await resilience_manager.execute_with_resilience(
+            func=p.generate_completion,
+            request=req,
+            job_id=job_id,
+            provider_name=getattr(p, "provider_name", "openrouter"),
+        )
+        return response.content
+    except (ProviderQuotaExhaustedError, ProviderRateLimitError) as err:
+        logger.error(f"Provider Rate/Quota Exceeded: {err}")
+        raise
+    except ProviderError as err:
+        logger.warning(f"Async LLM completion call failed: {err}")
+        return None
 
 
 def call_llm_structured(
@@ -157,9 +112,11 @@ def call_llm_structured(
     system_prompt: str = "You are an expert AI code auditor.",
     max_retries: int = 3,
     model_tier: ModelTier = ModelTier.HEAVY,
+    provider: Optional[LLMProvider] = None,
 ) -> Optional[T]:
     """Call LLM and parse/validate response into Pydantic response_model with self-correction retries."""
-    if not is_llm_available():
+    p = provider or get_provider()
+    if not p.is_available():
         return None
 
     current_prompt = prompt
@@ -172,7 +129,7 @@ def call_llm_structured(
             f"LLM structured call [Attempt {attempt}/{max_retries}] Target Schema: {response_model.__name__} Model: {model_name}"
         )
 
-        response_text = _safe_call_completion(call_llm_completion, current_prompt, system_prompt, model_tier)
+        response_text = call_llm_completion(current_prompt, system_prompt=system_prompt, model_tier=model_tier, provider=p)
         if not response_text:
             logger.warning(f"Attempt {attempt}: Received empty completion from LLM provider")
             continue
@@ -182,7 +139,6 @@ def call_llm_structured(
             if raw_data is None:
                 raise ValueError("JSON parsing returned None or empty string")
 
-            # Handle case where LLM returns a JSON list directly when wrapping object expected
             if isinstance(raw_data, list) and ("issues" in getattr(response_model, "model_fields", {})):
                 validated_obj = response_model.model_validate({"issues": raw_data})
             elif isinstance(raw_data, dict):
@@ -220,9 +176,11 @@ async def acall_llm_structured(
     system_prompt: str = "You are an expert AI code auditor.",
     max_retries: int = 3,
     model_tier: ModelTier = ModelTier.HEAVY,
+    provider: Optional[LLMProvider] = None,
 ) -> Optional[T]:
     """Asynchronously call LLM and parse/validate response into Pydantic model with self-correction retries."""
-    if not is_llm_available():
+    p = provider or get_provider()
+    if not p.is_available():
         return None
 
     current_prompt = prompt
@@ -235,7 +193,7 @@ async def acall_llm_structured(
             f"Async LLM structured call [Attempt {attempt}/{max_retries}] Target Schema: {response_model.__name__} Model: {model_name}"
         )
 
-        response_text = await _asafe_call_completion(acall_llm_completion, current_prompt, system_prompt, model_tier)
+        response_text = await acall_llm_completion(current_prompt, system_prompt=system_prompt, model_tier=model_tier, provider=p)
         if not response_text:
             logger.warning(f"Attempt {attempt}: Received empty completion from LLM provider")
             continue
@@ -277,16 +235,26 @@ async def acall_llm_structured(
 
 
 def parse_llm_json(response: str) -> Any:
-    """Clean markdown code fences and parse JSON from LLM response."""
+    """Clean reasoning tags (<think>...</think>), markdown code fences, and extract valid JSON from LLM response."""
     if not response:
         return None
     cleaned = response.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
+
+    # Strip thinking/chain-of-thought blocks output by reasoning models like DeepSeek R1
+    cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL).strip()
+
+    # Extract JSON inside code blocks if present
+    json_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    if json_match:
+        cleaned = json_match.group(1).strip()
+    else:
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+
     return json.loads(cleaned.strip())
 
 
@@ -296,4 +264,3 @@ def add_line_numbers(code: str) -> str:
         return ""
     lines = code.splitlines()
     return "\n".join(f"{i:4d} | {line}" for i, line in enumerate(lines, 1))
-

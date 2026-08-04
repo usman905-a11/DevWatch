@@ -96,3 +96,19 @@ def test_openrouter_integration(monkeypatch):
     assert kwargs["default_headers"]["X-Title"] == "DevWatch"
 
 
+def test_parse_llm_json_with_think_tags():
+    from devwatch.agents.llm import parse_llm_json
+    raw_response = (
+        "<think>\n"
+        "Let us analyze the code carefully.\n"
+        "I found a vulnerability on line 5.\n"
+        "</think>\n"
+        "```json\n"
+        "{\"status\": \"success\", \"count\": 1}\n"
+        "```"
+    )
+    parsed = parse_llm_json(raw_response)
+    assert parsed == {"status": "success", "count": 1}
+
+
+

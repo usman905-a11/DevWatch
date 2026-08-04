@@ -245,7 +245,7 @@ class LogicAnalyzerTool:
 
 class IssueDeduplicatorTool:
     name: str = "IssueDeduplicatorTool"
-    description: str = "Deduplicates issues by file path, line proximity (+/- 3 lines), and root-cause/CWE ID."
+    description: str = "Deduplicates issues using stable finding identity, evidence fingerprints, and rule IDs while preserving distinct nearby issues."
 
     def _run(self, issues: List[CodeIssue]) -> List[CodeIssue]:
         unique_issues: List[CodeIssue] = []
@@ -259,30 +259,76 @@ class IssueDeduplicatorTool:
         }
 
         for candidate in issues:
+            candidate.ensure_identity()
             duplicate_found = False
+
             for idx, existing in enumerate(unique_issues):
-                if candidate.file_path != existing.file_path:
+                existing.ensure_identity()
+
+                # Grouping rule 1: Exact finding_id match
+                if candidate.finding_id and existing.finding_id and candidate.finding_id == existing.finding_id:
+                    duplicate_found = True
+                    self._merge_issues(unique_issues, idx, candidate, existing, severity_rank)
+                    break
+
+                # Skip comparison if file paths differ
+                cand_path = candidate.file_path.replace("\\", "/").strip("./")
+                exist_path = existing.file_path.replace("\\", "/").strip("./")
+                if cand_path != exist_path:
+                    continue
+
+                # Grouping rule 2: Same normalized file path + same rule/CWE + same evidence fingerprint
+                same_fingerprint = (
+                    candidate.evidence_fingerprint
+                    and existing.evidence_fingerprint
+                    and candidate.evidence_fingerprint == existing.evidence_fingerprint
+                )
+
+                rule_cand = (candidate.rule_id or candidate.cwe_id or "").lower()
+                rule_exist = (existing.rule_id or existing.cwe_id or "").lower()
+
+                # If rule/CWE IDs are explicitly present and differ, they are distinct issues
+                if rule_cand and rule_exist and rule_cand != rule_exist:
                     continue
 
                 line_dist = abs((candidate.line_number or 0) - (existing.line_number or 0))
 
-                # Check exact match or line proximity (+/- 3 lines) with matching CWE or title similarity
-                same_cwe = (candidate.cwe_id and existing.cwe_id and candidate.cwe_id == existing.cwe_id)
-                same_title = candidate.title.lower().strip() == existing.title.lower().strip()
-                close_lines = line_dist <= 3
-
-                if (candidate.line_number == existing.line_number and same_title) or (close_lines and (same_cwe or same_title)):
+                # Exact fingerprint match with same rule OR nearby lines with same fingerprint
+                if same_fingerprint and (rule_cand == rule_exist or line_dist <= 2):
                     duplicate_found = True
-                    # Keep the issue with higher severity rank or higher confidence score
-                    cand_rank = severity_rank.get(candidate.severity, 99)
-                    exist_rank = severity_rank.get(existing.severity, 99)
-                    if cand_rank < exist_rank or (cand_rank == exist_rank and candidate.confidence_score > existing.confidence_score):
-                        unique_issues[idx] = candidate
+                    self._merge_issues(unique_issues, idx, candidate, existing, severity_rank)
                     break
+
 
             if not duplicate_found:
                 unique_issues.append(candidate)
 
-        unique_issues.sort(key=lambda i: severity_rank.get(i.severity, 99))
+        unique_issues.sort(key=lambda i: (severity_rank.get(i.severity, 99), i.file_path, i.line_number or 0))
         return unique_issues
+
+    def _merge_issues(
+        self,
+        unique_issues: List[CodeIssue],
+        target_idx: int,
+        candidate: CodeIssue,
+        existing: CodeIssue,
+        severity_rank: Dict[IssueSeverity, int],
+    ) -> None:
+        cand_rank = severity_rank.get(candidate.severity, 99)
+        exist_rank = severity_rank.get(existing.severity, 99)
+
+        # Merge metadata sources
+        sources = existing.metadata.get("sources", [existing.source_type])
+        if candidate.source_type not in sources:
+            sources.append(candidate.source_type)
+
+        if cand_rank < exist_rank or (cand_rank == exist_rank and candidate.confidence_score > existing.confidence_score):
+            merged = candidate
+            merged.metadata["sources"] = sources
+            merged.confidence_score = max(candidate.confidence_score, existing.confidence_score)
+            unique_issues[target_idx] = merged
+        else:
+            existing.metadata["sources"] = sources
+            existing.confidence_score = max(candidate.confidence_score, existing.confidence_score)
+
 

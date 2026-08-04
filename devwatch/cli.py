@@ -43,10 +43,12 @@ def review(
     ),
 ):
     """Run a multi-agent review on the specified codebase path."""
+    import asyncio
     console.print(f"[bold blue]🔍 Launching DevWatch Multi-Agent Review on:[/bold blue] {path}")
 
     crew = CodeReviewEngine()
-    report = crew.run(path)
+    report = asyncio.run(crew.arun(path))
+
 
     md_content = report.summary
     console.print("\n")

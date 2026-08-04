@@ -1,273 +1,143 @@
-import React, { useState } from 'react';
-import { X, ShieldAlert, CheckCircle2, FileCode, AlertTriangle, Lightbulb } from 'lucide-react';
-import { CodeIssue } from '../types';
+import { useEffect, useRef } from 'react'
+import type { FileNode } from './FileExplorer'
 
-interface CodeEditorProps {
-  openFiles: string[];
-  activeFile: string | null;
-  onSelectTab: (filePath: string) => void;
-  onCloseTab: (filePath: string) => void;
-  fileContent: string | null;
-  issuesForFile: CodeIssue[];
-  selectedIssueLine: number | null;
+interface Props {
+  file: FileNode | null
+  openFiles: FileNode[]
+  onSelectFile: (f: FileNode) => void
+  onCloseFile: (id: string) => void
+  highlightLine: number | null
 }
 
-export const CodeEditor: React.FC<CodeEditorProps> = ({
+const token = (s: string) =>
+  s
+    .split(
+      /(\/\/.*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`|\b(?:import|export|from|const|let|var|return|async|await|function|def|class|if|else|elif|interface|type|new|throw|try|catch|except|finally|true|false|null|undefined|None|True|False)\b|\b\d+\b)/g
+    )
+    .map((p, i) => {
+      const c = p.startsWith('//') || p.startsWith('#')
+        ? 'comment'
+        : /^['"`]/.test(p)
+        ? 'string'
+        : /^(import|export|from|const|let|var|return|async|await|function|def|class|if|else|elif|interface|type|new|throw|try|catch|except|finally|true|false|null|undefined|None|True|False)$/.test(
+            p
+          )
+        ? 'keyword'
+        : /^\d+$/.test(p)
+        ? 'number'
+        : ''
+      return (
+        <span key={i} className={c}>
+          {p}
+        </span>
+      )
+    })
+
+export default function CodeEditor({
+  file,
   openFiles,
-  activeFile,
-  onSelectTab,
-  onCloseTab,
-  fileContent,
-  issuesForFile,
-  selectedIssueLine,
-}) => {
-  if (!activeFile || openFiles.length === 0) {
-    return (
-      <div
-        style={{
-          flex: 1,
-          backgroundColor: 'var(--vscode-bg-editor)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--vscode-text-muted)',
-          userSelect: 'none',
-        }}
-      >
-        <FileCode size={48} color="#3c3c3c" style={{ marginBottom: '16px' }} />
-        <div style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--vscode-text-main)' }}>
-          DevWatch Code Review Editor
-        </div>
-        <div style={{ fontSize: '0.78rem', marginTop: '6px' }}>
-          Select a file from the left Explorer or click "Run Review" to scan codebase.
-        </div>
-      </div>
-    );
-  }
+  onSelectFile,
+  onCloseFile,
+  highlightLine,
+}: Props) {
+  const lineRef = useRef<HTMLDivElement>(null)
 
-  const lines = (fileContent || '// Loading code content or file empty...').split('\n');
+  useEffect(() => {
+    lineRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [highlightLine])
 
-  // Map line numbers to issues
-  const issuesByLine = issuesForFile.reduce((acc, issue) => {
-    if (issue.line_number) {
-      if (!acc[issue.line_number]) acc[issue.line_number] = [];
-      acc[issue.line_number].push(issue);
-    }
-    return acc;
-  }, {} as Record<number, CodeIssue[]>);
+  const lines = (file?.content ?? '').split('\n')
 
   return (
-    <div
-      style={{
-        flex: 1,
-        backgroundColor: 'var(--vscode-bg-editor)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Editor Tab Bar */}
-      <div
-        style={{
-          backgroundColor: 'var(--vscode-bg-activity)',
-          display: 'flex',
-          overflowX: 'auto',
-          borderBottom: '1px solid var(--vscode-border)',
-          userSelect: 'none',
-        }}
-      >
-        {openFiles.map((file) => {
-          const isActive = file === activeFile;
-          const fileIssues = issuesForFile.filter((i) => i.file_path === file);
-
-          return (
-            <div
-              key={file}
-              onClick={() => onSelectTab(file)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 14px',
-                fontSize: '0.78rem',
-                fontFamily: 'JetBrains Mono, monospace',
-                color: isActive ? 'var(--vscode-text-bright)' : 'var(--vscode-text-muted)',
-                backgroundColor: isActive ? 'var(--vscode-bg-editor)' : 'var(--vscode-bg-tab-inactive)',
-                borderRight: '1px solid var(--vscode-border)',
-                borderTop: isActive ? '2px solid var(--vscode-blue)' : '2px solid transparent',
-                cursor: 'pointer',
-                minWidth: '120px',
-                maxWidth: '200px',
+    <main className="editor">
+      <div className="tabs">
+        {openFiles.map((f) => (
+          <div
+            key={f.id}
+            className={`tab ${f.id === file?.id ? 'active' : ''}`}
+            onClick={() => onSelectFile(f)}
+          >
+            <span className="tab-dot" />
+            {f.name}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onCloseFile(f.id)
               }}
             >
-              <FileCode size={14} color={isActive ? '#61afef' : 'var(--vscode-text-muted)'} />
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                {file.split('/').pop()}
-              </span>
-
-              {fileIssues.length > 0 && (
-                <span
-                  style={{
-                    fontSize: '0.65rem',
-                    background: 'var(--severity-critical-text)',
-                    color: '#fff',
-                    borderRadius: '50%',
-                    width: '14px',
-                    height: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 700,
-                  }}
-                >
-                  {fileIssues.length}
-                </span>
-              )}
-
-              <X
-                size={13}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCloseTab(file);
-                }}
-                className="hover-opacity"
-                style={{ opacity: 0.7 }}
-              />
-            </div>
-          );
-        })}
+              ×
+            </button>
+          </div>
+        ))}
       </div>
 
-      {/* Editor Content Area */}
-      <div style={{ flex: 1, overflow: 'auto', position: 'relative', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.85rem' }}>
-        {lines.map((lineText, idx) => {
-          const lineNum = idx + 1;
-          const lineIssues = issuesByLine[lineNum] || [];
-          const hasIssues = lineIssues.length > 0;
-          const isTargetLine = selectedIssueLine === lineNum;
+      {file ? (
+        <>
+          <div className="editor-meta">
+            <span>{file.id}</span>
+            <span>UTF-8 &nbsp;&nbsp; • &nbsp;&nbsp; DevWatch Code Auditor</span>
+          </div>
 
-          // Determine highlight severity class
-          let highlightClass = '';
-          if (hasIssues) {
-            const hasCritical = lineIssues.some((i) => i.severity === 'CRITICAL');
-            const hasHigh = lineIssues.some((i) => i.severity === 'HIGH');
-            highlightClass = hasCritical ? 'line-highlight-critical' : hasHigh ? 'line-highlight-high' : 'line-highlight-medium';
-          }
-
-          return (
-            <React.Fragment key={lineNum}>
+          <div className="code" role="region" aria-label="Code editor">
+            {lines.map((l, i) => (
               <div
-                id={`line-${lineNum}`}
-                style={{
-                  display: 'flex',
-                  alignItems: 'stretch',
-                  minHeight: '22px',
-                  lineHeight: '22px',
-                  backgroundColor: isTargetLine
-                    ? 'rgba(0, 122, 204, 0.25)'
-                    : hasIssues
-                    ? 'rgba(255, 255, 255, 0.02)'
-                    : 'transparent',
-                  transition: 'background 0.15s ease',
-                }}
-                className={highlightClass}
+                ref={highlightLine === i + 1 ? lineRef : undefined}
+                key={i}
+                className={`line ${highlightLine === i + 1 ? 'flagged' : ''}`}
               >
-                {/* Line Number Column */}
-                <div
-                  style={{
-                    width: '48px',
-                    color: hasIssues ? 'var(--severity-critical-text)' : 'var(--vscode-text-muted)',
-                    textAlign: 'right',
-                    paddingRight: '12px',
-                    userSelect: 'none',
-                    backgroundColor: 'var(--vscode-bg-editor)',
-                    borderRight: '1px solid var(--vscode-border)',
-                    fontSize: '0.75rem',
-                    flexShrink: 0,
-                  }}
-                >
-                  {lineNum}
-                </div>
-
-                {/* Code Text */}
-                <div style={{ paddingLeft: '12px', whiteSpace: 'pre', color: 'var(--vscode-text-main)', flex: 1 }}>
-                  {lineText || ' '}
-                </div>
-
-                {/* Inline Diagnostic Warning Pill */}
-                {hasIssues && (
-                  <div style={{ paddingRight: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {lineIssues.map((iss, iIdx) => (
-                      <span
-                        key={iIdx}
-                        title={iss.description}
-                        style={{
-                          fontSize: '0.65rem',
-                          background: iss.category === 'Security' ? 'var(--severity-critical-bg)' : 'var(--severity-medium-bg)',
-                          color: iss.category === 'Security' ? 'var(--severity-critical-text)' : 'var(--severity-medium-text)',
-                          border: `1px solid ${iss.category === 'Security' ? 'var(--severity-critical-border)' : 'var(--severity-medium-border)'}`,
-                          padding: '1px 6px',
-                          borderRadius: '3px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}
-                      >
-                        {iss.category === 'Security' ? <ShieldAlert size={10} /> : <CheckCircle2 size={10} />}
-                        {iss.title}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <span className="line-number">{i + 1}</span>
+                <code>{token(l)}</code>
               </div>
-
-              {/* Expanded Diagnostic Inline Code Decorator Card */}
-              {hasIssues && (
-                <div
-                  style={{
-                    marginLeft: '48px',
-                    backgroundColor: '#1b1d23',
-                    borderLeft: '4px solid var(--severity-critical-text)',
-                    borderBottom: '1px solid var(--vscode-border)',
-                    padding: '8px 16px',
-                    fontSize: '0.78rem',
-                    fontFamily: 'Inter, sans-serif',
-                  }}
-                >
-                  {lineIssues.map((iss, iIdx) => (
-                    <div key={iIdx} style={{ marginBottom: iIdx < lineIssues.length - 1 ? '8px' : '0' }}>
-                      <div style={{ fontWeight: 600, color: 'var(--vscode-text-bright)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className={`severity-badge severity-${iss.severity.toLowerCase()}`}>
-                          {iss.severity}
-                        </span>
-                        <span>{iss.title}</span>
-                      </div>
-                      <div style={{ color: 'var(--vscode-text-muted)', marginTop: '4px', fontSize: '0.75rem' }}>
-                        {iss.description}
-                      </div>
-                      <div
-                        style={{
-                          marginTop: '6px',
-                          color: 'var(--vscode-blue)',
-                          fontSize: '0.72rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}
-                      >
-                        <Lightbulb size={12} />
-                        <strong>Fix Suggestion:</strong> {iss.suggestion}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="empty-editor">
+          <div className="empty-orbit" aria-hidden="true">
+            <svg className="detective-mark" viewBox="0 0 72 72" fill="none">
+              <path
+                d="M18 26.5h36l-3.1-7.1c-.5-1.1-1.6-1.9-2.8-1.9H24c-1.2 0-2.3.8-2.8 1.9L18 26.5Z"
+                fill="currentColor"
+                opacity=".96"
+              />
+              <path d="M15.5 28.5h41" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" />
+              <path
+                d="M25 30.5v5.1c0 7.2 4.6 12.9 11 12.9s11-5.7 11-12.9v-5.1"
+                stroke="currentColor"
+                strokeWidth="2.6"
+                strokeLinecap="round"
+              />
+              <path d="M29.7 38.1h.1M42.2 38.1h.1" stroke="currentColor" strokeWidth="3.3" strokeLinecap="round" />
+              <path d="M31.5 44.2c2.6 1.7 6.4 1.7 9 0" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" />
+              <path
+                d="M19.3 58.5c2.5-6.7 8.5-10.3 16.7-10.3s14.2 3.6 16.7 10.3"
+                stroke="currentColor"
+                strokeWidth="2.8"
+                strokeLinecap="round"
+              />
+              <circle cx="50.5" cy="49.5" r="6.1" stroke="currentColor" strokeWidth="2.4" />
+              <path d="m55 54 5 5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+            </svg>
+          </div>
+          <span className="empty-kicker">Review workspace</span>
+          <h2>
+            Make every change
+            <br />
+            intentional.
+          </h2>
+          <p>Open a source file to inspect it, or run a review to surface the work that matters.</p>
+          <div className="empty-actions">
+            <span>
+              <kbd>⌘</kbd>
+              <kbd>O</kbd> Open folder
+            </span>
+            <span>
+              <kbd>⌘</kbd>
+              <kbd>↵</kbd> Run review
+            </span>
+          </div>
+        </div>
+      )}
+    </main>
+  )
+}
