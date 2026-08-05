@@ -1,5 +1,6 @@
 import os
-from devwatch.scanner import CodebaseScanner
+from devwatch.patcher import RemediationPatcher
+from devwatch.models import RemediationProposal, PatchValidationResult
 
 
 def apply_code_fix(
@@ -8,35 +9,28 @@ def apply_code_fix(
     line_number: int,
     target_snippet: str,
     replacement_code: str,
-) -> bool:
-    """Safely apply atomic line-targeted code replacement within authorized workspace sandbox."""
-    scanner = CodebaseScanner(root_dir)
-    safe_path = scanner._resolve_safe_path(file_path)
+    finding_id: str = "legacy_finding",
+    authorized_by: str = "user",
+) -> PatchValidationResult:
+    """Safely propose and apply atomic code remediation with validation, hash checks, and rollback support."""
+    patcher = RemediationPatcher(root_dir)
 
-    if not safe_path.exists() or safe_path.is_dir():
-        raise FileNotFoundError(f"File not found: '{file_path}'")
+    # 1. Propose fix & compute content hash
+    proposal = patcher.propose_fix(
+        file_path=file_path,
+        finding_id=finding_id,
+        start_line=line_number,
+        end_line=line_number,
+        target_snippet=target_snippet,
+        replacement_code=replacement_code,
+        reason="User requested code fix",
+        author=authorized_by,
+    )
 
-    content = scanner.read_file(file_path)
-    lines = content.splitlines(keepends=True)
+    # 2. Apply proposal with explicit authorization
+    result = patcher.apply_proposal(proposal, authorized_by=authorized_by)
 
-    # Validate target line number range
-    if not (1 <= line_number <= len(lines)):
-        raise ValueError(f"Line number {line_number} is out of range for '{file_path}' (total lines: {len(lines)})")
+    if not result.success:
+        raise ValueError(result.error_message or "Failed to apply remediation patch")
 
-    target_line = lines[line_number - 1]
-    
-    # Target snippet must match target line if provided
-    if target_snippet.strip() and target_snippet.strip() not in target_line.strip():
-        raise ValueError(f"Target snippet does not match code at line {line_number} in '{file_path}'")
-
-    # Preserve leading indentation if replacement doesn't specify its own
-    indent = target_line[: len(target_line) - len(target_line.lstrip())]
-    replacement_lines = [
-        (indent + l if not l.startswith(indent) else l) + "\n"
-        for l in replacement_code.splitlines()
-    ]
-    
-    lines[line_number - 1 : line_number] = replacement_lines
-    new_content = "".join(lines)
-    
-    return scanner.write_file(file_path, new_content)
+    return result

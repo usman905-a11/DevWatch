@@ -39,6 +39,26 @@ class ReviewContext(BaseModel):
     status: ReviewOutcome = ReviewOutcome.COMPLETED
     metrics: Dict[str, Any] = Field(default_factory=dict)
 
+    # Scalability & Cost Telemetry (Phase 11)
+    tokens_by_agent: Dict[str, Dict[str, int]] = Field(default_factory=dict)
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    skipped_files: List[str] = Field(default_factory=list)
+    chunked_inputs: List[Dict[str, Any]] = Field(default_factory=list)
+    cache_hits: int = 0
+
+    def record_tokens(self, agent_id: str, prompt_tokens: int, completion_tokens: int, estimated_cost: float = 0.0) -> None:
+        if agent_id not in self.tokens_by_agent:
+            self.tokens_by_agent[agent_id] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self.tokens_by_agent[agent_id]["prompt_tokens"] += prompt_tokens
+        self.tokens_by_agent[agent_id]["completion_tokens"] += completion_tokens
+        self.tokens_by_agent[agent_id]["total_tokens"] += (prompt_tokens + completion_tokens)
+        self.total_prompt_tokens += prompt_tokens
+        self.total_completion_tokens += completion_tokens
+        self.estimated_cost_usd += estimated_cost
+
+
     def check_cancellation(self) -> None:
         """Check if cancellation was requested and raise CancelledError if True."""
         if self.cancellation_requested:

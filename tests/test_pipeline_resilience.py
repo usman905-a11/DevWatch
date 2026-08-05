@@ -53,11 +53,15 @@ async def test_security_agent_failure_quality_findings_survive(tmp_path):
     )
     working_qual = FakeAgent(agent_id="quality_auditor", canned_output=[quality_issue])
 
+    fake_verifier = FakeAgent(agent_id="verifier_agent", canned_output=None)
+
     pipeline = ReviewPipeline(
         planner=planner,
         security_agent=failing_sec,
         quality_agent=working_qual,
+        verifier=fake_verifier,
     )
+
 
     ctx = ReviewContext(target_path=str(tmp_path))
     report = await pipeline.execute(str(tmp_path), context=ctx)
@@ -91,11 +95,15 @@ async def test_quality_agent_failure_security_findings_survive(tmp_path):
     )
     working_sec = FakeAgent(agent_id="security_auditor", canned_output=[sec_issue])
 
+    fake_verifier = FakeAgent(agent_id="verifier_agent", canned_output=None)
+
     pipeline = ReviewPipeline(
         planner=planner,
         security_agent=working_sec,
         quality_agent=failing_qual,
+        verifier=fake_verifier,
     )
+
 
     ctx = ReviewContext(target_path=str(tmp_path))
     report = await pipeline.execute(str(tmp_path), context=ctx)

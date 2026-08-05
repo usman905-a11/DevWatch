@@ -187,3 +187,42 @@ class AgentStepUpdate(BaseModel):
     status: str  # e.g., "IDLE", "RUNNING", "COMPLETED", "FAILED"
     message: str
     timestamp: Optional[float] = None
+
+
+class ProposalStatus(str, Enum):
+    PROPOSED = "PROPOSED"
+    APPLIED = "APPLIED"
+    REJECTED = "REJECTED"
+    ROLLED_BACK = "ROLLED_BACK"
+    FAILED = "FAILED"
+
+
+class RemediationProposal(BaseModel):
+    proposal_id: str
+    finding_id: str
+    file_path: str
+    expected_content_hash: str
+    start_line: int
+    end_line: int
+    target_snippet: str
+    replacement_code: str
+    reason: str
+    author: str = "agent"
+    authorized_by: Optional[str] = None
+    created_at: float = Field(default_factory=lambda: 1700000000.0)
+    status: ProposalStatus = ProposalStatus.PROPOSED
+    diff_preview: Optional[str] = None
+
+
+class PatchValidationResult(BaseModel):
+    success: bool
+    proposal_id: str
+    diff_preview: str = ""
+    error_message: Optional[str] = None
+    backup_created: bool = False
+    rolled_back: bool = False
+
+    def __bool__(self) -> bool:
+        return self.success
+
+

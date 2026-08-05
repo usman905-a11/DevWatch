@@ -14,8 +14,12 @@ from devwatch.agents.verifier import VerificationAgent
 from devwatch.agents.synthesizer import ReportSynthesizerAgent
 from devwatch.tools import IssueDeduplicatorTool, GitDiffTool, SecurityPatternTool, LogicAnalyzerTool
 from devwatch.tools.static_analyzer import ASTStaticAnalyzerTool
+from devwatch.chunker import SemanticCodeChunker
+from devwatch.cache import IsolatedResponseCache
+
 
 logger = logging.getLogger("devwatch.pipeline.dag")
+
 
 
 class ReviewPipeline:
@@ -41,8 +45,10 @@ class ReviewPipeline:
         self.security_pattern_tool = SecurityPatternTool()
         self.logic_analyzer_tool = LogicAnalyzerTool()
         self.ast_analyzer_tool = ASTStaticAnalyzerTool()
+        self.chunker = SemanticCodeChunker()
+        self.response_cache = IsolatedResponseCache()
         self.step_callback = step_callback
-        self.max_concurrent_files = max_concurrent_files
+        self.max_concurrent_files = min(max_concurrent_files, Config.MAX_CONCURRENT_FILES)
         self._active_tasks: Set[asyncio.Task] = set()
 
     def _notify(self, agent_name: str, status: str, message: str):
@@ -95,11 +101,11 @@ class ReviewPipeline:
         try:
             scope = await self.planner.execute({"target_path": target_path})
             ctx.scope = scope
-            ctx.selected_files = scope.files_to_review
+            ctx.selected_files = scope.files_to_review[:Config.MAX_FILES_PER_REVIEW]
         except Exception as err:
             logger.warning(f"Planner Agent failed: {err}. Falling back to default scope.")
             ctx.record_failure("PLANNING", "PlannerAgent", err)
-            ctx.selected_files = all_files[:20]
+            ctx.selected_files = all_files[:min(20, Config.MAX_FILES_PER_REVIEW)]
             ctx.scope = ReviewScope(
                 target_path=target_path,
                 files_to_review=ctx.selected_files,
@@ -108,7 +114,7 @@ class ReviewPipeline:
 
         self._notify("Planner Agent", "COMPLETED", f"Scope planned: {len(ctx.selected_files)} files")
 
-        # Stage 3: Isolated Parallel Audit (Security & Quality per file)
+        # Stage 3: Isolated Parallel Audit (Security & Quality per file/chunk)
         ctx.check_cancellation()
         semaphore = asyncio.Semaphore(self.max_concurrent_files)
         raw_candidates: List[CodeIssue] = []
@@ -122,6 +128,10 @@ class ReviewPipeline:
                 except Exception as err:
                     logger.error(f"Failed to read file {rel_path}: {err}")
                     ctx.record_failure("FILE_READ", rel_path, err)
+                    ctx.skipped_files.append(rel_path)
+                    return []
+
+                if not code.strip():
                     return []
 
                 # Static analysis (AST, pattern, logic)
@@ -131,36 +141,47 @@ class ReviewPipeline:
                 except Exception as err:
                     ctx.record_failure("STATIC_AST", rel_path, err)
 
-                # Security & Quality Agent Audits executed with return_exceptions=True
-                sec_coro = self.security_agent.execute({
-                    "file_path": rel_path,
-                    "code_content": code,
-                    "focus_areas": ctx.scope.focus_areas if ctx.scope else [],
-                })
-                qual_coro = self.quality_agent.execute({
-                    "file_path": rel_path,
-                    "code_content": code,
-                    "focus_areas": ctx.scope.focus_areas if ctx.scope else [],
-                })
+                # Semantic Code Chunking if file is large (> 200 lines or > 20,000 bytes)
+                chunks = self.chunker.chunk_file(rel_path, code, max_tokens=1500)
+                if len(chunks) > 1:
+                    ctx.chunked_inputs.append({"file_path": rel_path, "num_chunks": len(chunks)})
 
-                results = await asyncio.gather(sec_coro, qual_coro, return_exceptions=True)
+                for chunk in chunks:
+                    # Security & Quality Agent Audits
+                    sec_coro = self.security_agent.execute({
+                        "file_path": rel_path,
+                        "code_content": chunk.content,
+                        "start_line": chunk.start_line,
+                        "end_line": chunk.end_line,
+                        "focus_areas": ctx.scope.focus_areas if ctx.scope else [],
+                    })
+                    qual_coro = self.quality_agent.execute({
+                        "file_path": rel_path,
+                        "code_content": chunk.content,
+                        "start_line": chunk.start_line,
+                        "end_line": chunk.end_line,
+                        "focus_areas": ctx.scope.focus_areas if ctx.scope else [],
+                    })
 
-                sec_res = results[0]
-                qual_res = results[1]
+                    results = await asyncio.gather(sec_coro, qual_coro, return_exceptions=True)
 
-                if isinstance(sec_res, Exception):
-                    logger.warning(f"Security Auditor Agent failed for {rel_path}: {sec_res}")
-                    ctx.record_failure("SECURITY_ANALYSIS", rel_path, sec_res)
-                elif isinstance(sec_res, list):
-                    file_issues.extend(sec_res)
+                    sec_res = results[0]
+                    qual_res = results[1]
 
-                if isinstance(qual_res, Exception):
-                    logger.warning(f"Quality Auditor Agent failed for {rel_path}: {qual_res}")
-                    ctx.record_failure("QUALITY_ANALYSIS", rel_path, qual_res)
-                elif isinstance(qual_res, list):
-                    file_issues.extend(qual_res)
+                    if isinstance(sec_res, Exception):
+                        logger.warning(f"Security Auditor Agent failed for {rel_path}: {sec_res}")
+                        ctx.record_failure("SECURITY_ANALYSIS", rel_path, sec_res)
+                    elif isinstance(sec_res, list):
+                        file_issues.extend(sec_res)
+
+                    if isinstance(qual_res, Exception):
+                        logger.warning(f"Quality Auditor Agent failed for {rel_path}: {qual_res}")
+                        ctx.record_failure("QUALITY_ANALYSIS", rel_path, qual_res)
+                    elif isinstance(qual_res, list):
+                        file_issues.extend(qual_res)
 
                 return file_issues
+
 
         file_tasks = [asyncio.create_task(analyze_single_file(f)) for f in ctx.selected_files]
         for t in file_tasks:

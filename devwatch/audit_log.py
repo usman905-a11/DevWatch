@@ -80,3 +80,31 @@ def log_rate_limit_exceeded(endpoint: str, client_identity: str) -> None:
         severity="WARNING",
         details={"endpoint": endpoint, "client_identity": client_identity},
     )
+
+
+def log_proposal_created(proposal_id: str, finding_id: str, file_path: str, author: str) -> None:
+    _log_event(
+        event_type="PROPOSAL_CREATED",
+        severity="INFO",
+        details={
+            "proposal_id": proposal_id,
+            "finding_id": finding_id,
+            "file_path": file_path,
+            "author": author,
+        },
+    )
+
+
+def log_remediation_event(event_type: str, proposal_id: str, file_path: str, client_identity: str, reason: Optional[str] = None) -> None:
+    _log_event(
+        event_type=event_type,
+        severity="MEDIUM" if "APPLIED" in event_type else "HIGH",
+        details={
+            "proposal_id": proposal_id,
+            "file_path": file_path,
+            "client_identity": client_identity,
+            "reason": reason,
+        },
+    )
+
+

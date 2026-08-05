@@ -11,13 +11,15 @@ from pydantic import BaseModel
 from devwatch.config import Config
 from devwatch.crew.orchestrator import CodeReviewEngine
 from devwatch.scanner import CodebaseScanner
-from devwatch.models import ReviewReport, AgentStepUpdate
+from devwatch.models import ReviewReport, AgentStepUpdate, RemediationProposal
 from devwatch.agents.llm import OpenRouterRateLimitError
 from devwatch.storage import ReportStorage
 from devwatch.auth import verify_api_key, authenticate_ws_connection, verify_report_access
 from devwatch.rate_limiter import rate_limiter
-from devwatch.audit_log import log_review_created, log_fix_applied, log_authz_failure
+from devwatch.audit_log import log_review_created, log_fix_applied, log_authz_failure, log_proposal_created, log_remediation_event
 from devwatch.tools.fix_applier import apply_code_fix
+from devwatch.patcher import RemediationPatcher
+
 
 from contextlib import asynccontextmanager
 
@@ -113,6 +115,24 @@ class ApplyFixRequest(BaseModel):
     line_number: int = 1
     target_snippet: str = ""
     replacement_code: str
+    finding_id: str = "finding_1"
+
+
+class ProposeFixRequest(BaseModel):
+    root_path: str = "."
+    file_path: str
+    finding_id: str = "finding_1"
+    start_line: int = 1
+    end_line: int = 1
+    target_snippet: str = ""
+    replacement_code: str
+    reason: str = "Code remediation proposal"
+
+
+class ApplyProposalRequest(BaseModel):
+    root_path: str = "."
+    proposal: RemediationProposal
+
 
 
 @app.get("/api/health")
@@ -260,31 +280,79 @@ async def trigger_review(request_obj: Request, request: ReviewRequest, client_id
     return report_data
 
 
+@app.post("/api/review/propose-fix", dependencies=[Depends(verify_api_key)])
+def propose_remediation_fix(request_obj: Request, request: ProposeFixRequest, client_identity: str = Depends(verify_api_key)):
+    client_ip = request_obj.client.host if request_obj.client else "unknown"
+    rate_limiter.check_rate_limit(client_ip, Config.RATE_LIMIT_RPM, window_seconds=60, endpoint="/api/review/propose-fix")
+
+    try:
+        patcher = RemediationPatcher(request.root_path)
+        proposal = patcher.propose_fix(
+            file_path=request.file_path,
+            finding_id=request.finding_id,
+            start_line=request.start_line,
+            end_line=request.end_line,
+            target_snippet=request.target_snippet,
+            replacement_code=request.replacement_code,
+            reason=request.reason,
+            author=client_identity,
+        )
+        log_proposal_created(proposal.proposal_id, request.finding_id, request.file_path, client_identity)
+        return {"status": "success", "proposal": proposal.model_dump()}
+    except (ValueError, FileNotFoundError) as err:
+        status_code = 403 if "Access denied" in str(err) or "blocked" in str(err) else 400
+        raise HTTPException(status_code=status_code, detail=str(err))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Failed to propose code fix: {str(err)}")
+
+
+@app.post("/api/review/apply-proposal", dependencies=[Depends(verify_api_key)])
+def apply_remediation_proposal(request_obj: Request, request: ApplyProposalRequest, client_identity: str = Depends(verify_api_key)):
+    client_ip = request_obj.client.host if request_obj.client else "unknown"
+    rate_limiter.check_rate_limit(client_ip, Config.RATE_LIMIT_RPM, window_seconds=60, endpoint="/api/review/apply-proposal")
+
+    try:
+        patcher = RemediationPatcher(request.root_path)
+        result = patcher.apply_proposal(request.proposal, authorized_by=client_identity)
+        if not result.success:
+            raise HTTPException(status_code=400, detail=result.error_message)
+        log_remediation_event("REMEDIATION_APPLIED", request.proposal.proposal_id, request.proposal.file_path, client_identity)
+        return {"status": "success", "result": result.model_dump()}
+    except HTTPException:
+        raise
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Failed to apply proposal: {str(err)}")
+
+
 @app.post("/api/review/apply-fix", dependencies=[Depends(verify_api_key)])
 def apply_quick_fix(request_obj: Request, request: ApplyFixRequest, client_identity: str = Depends(verify_api_key)):
     client_ip = request_obj.client.host if request_obj.client else "unknown"
     rate_limiter.check_rate_limit(client_ip, Config.RATE_LIMIT_RPM, window_seconds=60, endpoint="/api/review/apply-fix")
 
     try:
-        success = apply_code_fix(
+        res = apply_code_fix(
             root_dir=request.root_path,
             file_path=request.file_path,
             line_number=request.line_number,
             target_snippet=request.target_snippet,
             replacement_code=request.replacement_code,
+            finding_id=request.finding_id,
+            authorized_by=client_identity,
         )
         log_fix_applied(request.file_path, request.line_number, client_identity)
         return {
             "status": "success",
             "file_path": request.file_path,
             "line_number": request.line_number,
-            "modified": success,
+            "modified": res.success,
+            "diff_preview": res.diff_preview,
         }
     except (ValueError, FileNotFoundError) as err:
         status_code = 403 if "Access denied" in str(err) or "blocked" in str(err) else 400
         raise HTTPException(status_code=status_code, detail=str(err))
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"Failed to apply code fix: {str(err)}")
+
 
 
 @app.get("/api/reports/{report_id}", dependencies=[Depends(verify_api_key)])

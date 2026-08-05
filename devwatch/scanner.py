@@ -41,6 +41,22 @@ ALLOWED_EXTENSIONS = {
 }
 
 
+IGNORED_PATTERNS = {
+    "*.min.js",
+    "*.min.css",
+    "*.map",
+    "*.lock",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "*.pyc",
+    "*.pyo",
+    "*.so",
+    "*.dll",
+    "*.exe",
+}
+
+
 class CodebaseScanner:
     """Scans repository files and extracts source code context within a strict security sandbox."""
 
@@ -81,6 +97,21 @@ class CodebaseScanner:
             raise ValueError("Invalid workspace root: Directory does not exist")
 
         self.root_dir = candidate_root
+        self.custom_ignores = self._load_custom_ignores()
+
+    def _load_custom_ignores(self) -> Set[str]:
+        patterns = set()
+        for ignore_file_name in (".gitignore", ".devwatchignore"):
+            ig_path = self.root_dir / ignore_file_name
+            if ig_path.exists() and ig_path.is_file():
+                try:
+                    for line in ig_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            patterns.add(line)
+                except Exception:
+                    pass
+        return patterns
 
     def is_blocked_file(self, file_path: Path) -> bool:
         """Check if file_path matches any blocked sensitive filenames or patterns."""
@@ -88,6 +119,19 @@ class CodebaseScanner:
         if name in Config.BLOCKED_FILENAMES:
             return True
         for pattern in Config.BLOCKED_PATTERNS:
+            if fnmatch.fnmatch(name, pattern):
+                return True
+        for custom in self.custom_ignores:
+            if fnmatch.fnmatch(name, custom) or fnmatch.fnmatch(file_path.name, custom):
+                return True
+        return False
+
+    def is_ignored_file(self, file_path: Path) -> bool:
+        """Check if file matches build artifacts, minified, or lock file ignore patterns."""
+        name = file_path.name.lower()
+        if self.is_blocked_file(file_path):
+            return True
+        for pattern in IGNORED_PATTERNS:
             if fnmatch.fnmatch(name, pattern):
                 return True
         return False
@@ -121,6 +165,8 @@ class CodebaseScanner:
     def get_files(self) -> List[str]:
         relative_files = []
         total_size = 0
+        max_files = min(Config.MAX_FILES_PER_REVIEW, Config.MAX_FILE_COUNT)
+        max_repo_bytes = min(Config.MAX_REPO_TOTAL_BYTES, Config.MAX_REPO_SIZE_BYTES)
         
         for root, dirs, files in os.walk(self.root_dir):
             # Enforce max directory depth
@@ -137,23 +183,24 @@ class CodebaseScanner:
                 ext = os.path.splitext(file)[1].lower()
                 if ext in ALLOWED_EXTENSIONS:
                     file_path = Path(root) / file
-                    if self.is_blocked_file(file_path):
+                    if self.is_ignored_file(file_path):
                         continue
+
 
                     try:
                         file_stat = file_path.stat()
-                        if file_stat.st_size > Config.MAX_FILE_SIZE_BYTES:
+                        if file_stat.st_size > Config.MAX_BYTES_PER_FILE:
                             continue
-                        total_size += file_stat.st_size
-                        if total_size > Config.MAX_REPO_SIZE_BYTES:
+                        if total_size + file_stat.st_size > max_repo_bytes:
                             break
+                        total_size += file_stat.st_size
                     except Exception:
                         continue
 
                     rel_path = os.path.relpath(file_path, self.root_dir).replace("\\", "/")
                     relative_files.append(rel_path)
 
-                    if len(relative_files) >= Config.MAX_FILE_COUNT:
+                    if len(relative_files) >= max_files:
                         return sorted(relative_files)
 
         return sorted(relative_files)

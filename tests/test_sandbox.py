@@ -186,7 +186,7 @@ def test_report_storage_sandbox(tmp_path):
 
 def test_fix_applier_sandbox(tmp_path):
     Config.WORKSPACE_BASE_DIR = str(tmp_path)
-    (tmp_path / "app.py").write_text("line 1\nOLD_CODE = True\nline 3\n")
+    (tmp_path / "app.py").write_text("# line 1\nOLD_CODE = True\n# line 3\n")
 
     # Apply valid fix
     success = apply_code_fix(
@@ -196,8 +196,9 @@ def test_fix_applier_sandbox(tmp_path):
         target_snippet="OLD_CODE = True",
         replacement_code="NEW_CODE = True",
     )
-    assert success is True
+    assert bool(success) is True
     assert "NEW_CODE = True" in (tmp_path / "app.py").read_text()
+
 
     # Attempt traversal fix
     with pytest.raises(ValueError) as exc_info:
