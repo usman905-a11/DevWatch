@@ -90,8 +90,10 @@ export function subscribeToReviewStream(
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.status === 'COMPLETED') {
+      if (data.type === 'review_completion' || (data.status === 'COMPLETED' && data.report)) {
         onComplete(data);
+      } else if (data.type === 'review_error' || data.status === 'FAILED') {
+        onError(new Error(data.message || 'Review failed over WebSocket'));
       } else {
         onStep(data);
       }
@@ -105,7 +107,7 @@ export function subscribeToReviewStream(
   };
 
   return () => {
-    if (ws.readyState === WebSocket.OPEN) {
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
       ws.close();
     }
   };

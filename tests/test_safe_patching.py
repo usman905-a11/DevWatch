@@ -125,6 +125,27 @@ def test_invalid_python_syntax_rejected(patcher_env):
     assert "return a + b" in target_file.read_text(encoding="utf-8")
 
 
+def test_english_prose_replacement_code_rejected(patcher_env):
+    target_file = patcher_env / "auth.py"
+    target_file.write_text("def login():\n    db.query(input_str)\n", encoding="utf-8")
+
+    patcher = RemediationPatcher(str(patcher_env))
+    proposal = patcher.propose_fix(
+        file_path="auth.py",
+        finding_id="f_prose",
+        start_line=2,
+        end_line=2,
+        target_snippet="db.query(input_str)",
+        replacement_code="Wrap call in try-except block",
+        reason="English prose instead of code",
+    )
+
+    result = patcher.apply_proposal(proposal, authorized_by="user_123")
+    assert result.success is False
+    assert "Invalid Python syntax" in result.error_message
+    assert "db.query(input_str)" in target_file.read_text(encoding="utf-8")
+
+
 def test_unauthorized_request_rejected(patcher_env):
     target_file = patcher_env / "main.py"
     target_file.write_text("x = 1\n", encoding="utf-8")

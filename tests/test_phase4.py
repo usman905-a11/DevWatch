@@ -3,7 +3,7 @@ from unittest.mock import patch
 from devwatch.models import CodeIssue, IssueSeverity, StructuredVerificationResponse, VerificationItem
 from devwatch.agents.verifier import VerificationAgent
 from devwatch.tools import IssueDeduplicatorTool
-from devwatch.crew.orchestrator import CodeReviewEngine
+from devwatch.pipeline.dag import ReviewPipeline
 
 
 def test_verification_agent_filtering():
@@ -37,7 +37,7 @@ def test_verification_agent_filtering():
     )
 
     with patch("devwatch.agents.llm.is_llm_available", return_value=True):
-        with patch("devwatch.agents.llm.call_llm_structured", return_value=mock_resp):
+        with patch("devwatch.agents.llm.acall_llm_structured", return_value=mock_resp):
             verified = verifier.verify_issues("app.py", "some code", sample_issues)
             assert len(verified) == 1
             assert verified[0].title == "Real SQL Injection"
@@ -92,7 +92,7 @@ async def test_engine_includes_verifier_agent():
     def callback(update):
         updates.append(update.agent_name)
 
-    engine = CodeReviewEngine(step_callback=callback)
-    report = await engine.arun_file_audit("test.py", "x = 1")
+    pipeline = ReviewPipeline(step_callback=callback)
+    report = await pipeline.arun_file_audit("test.py", "x = 1")
     assert "Verification Agent" in updates
     assert report is not None

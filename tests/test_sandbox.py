@@ -5,7 +5,7 @@ from pathlib import Path
 from devwatch.config import Config
 from devwatch.scanner import CodebaseScanner
 from devwatch.storage import ReportStorage
-from devwatch.tools.fix_applier import apply_code_fix
+from devwatch.patcher import RemediationPatcher
 
 
 @pytest.fixture(autouse=True)
@@ -15,7 +15,6 @@ def reset_config_workspace():
     yield
     Config.WORKSPACE_BASE_DIR = orig_base
     Config.MAX_FILE_SIZE_BYTES = orig_max_size
-
 
 
 def test_valid_nested_path_read_and_write(tmp_path):
@@ -183,30 +182,37 @@ def test_report_storage_sandbox(tmp_path):
     assert "Invalid report ID" in str(exc_info.value)
 
 
-
 def test_fix_applier_sandbox(tmp_path):
     Config.WORKSPACE_BASE_DIR = str(tmp_path)
     (tmp_path / "app.py").write_text("# line 1\nOLD_CODE = True\n# line 3\n")
 
-    # Apply valid fix
-    success = apply_code_fix(
-        root_dir=str(tmp_path),
+    patcher = RemediationPatcher(str(tmp_path))
+
+    # Apply valid fix proposal
+    proposal = patcher.propose_fix(
         file_path="app.py",
-        line_number=2,
+        finding_id="f1",
+        start_line=2,
+        end_line=2,
         target_snippet="OLD_CODE = True",
         replacement_code="NEW_CODE = True",
+        reason="Replace OLD_CODE with NEW_CODE",
+        author="test",
     )
-    assert bool(success) is True
+    result = patcher.apply_proposal(proposal, authorized_by="test")
+    assert result.success is True
     assert "NEW_CODE = True" in (tmp_path / "app.py").read_text()
-
 
     # Attempt traversal fix
     with pytest.raises(ValueError) as exc_info:
-        apply_code_fix(
-            root_dir=str(tmp_path),
+        patcher.propose_fix(
             file_path="../outside.py",
-            line_number=1,
+            finding_id="f2",
+            start_line=1,
+            end_line=1,
             target_snippet="a",
             replacement_code="b",
+            reason="Traversal test",
+            author="test",
         )
     assert "Path traversal attempt blocked" in str(exc_info.value)

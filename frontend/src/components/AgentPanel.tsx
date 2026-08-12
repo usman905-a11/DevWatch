@@ -13,6 +13,11 @@ export interface Finding {
   fileName: string
   line: number
   suggestion?: string
+  replacement_code?: string
+  finding_id?: string
+  verification_status?: string
+  cwe_id?: string
+  confidence_score?: number
 }
 
 interface Props {
@@ -44,7 +49,7 @@ function Card({
 
   const handleFixClick = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!onApplyFix) return
+    if (!onApplyFix || !finding.replacement_code) return
     setFixing(true)
     try {
       await onApplyFix(finding)
@@ -52,6 +57,8 @@ function Card({
       setFixing(false)
     }
   }
+
+  const hasReplacementCode = Boolean(finding.replacement_code && finding.replacement_code.trim().length > 0)
 
   return (
     <article className={`finding ${severityMap[finding.severity]}`} onClick={onClick}>
@@ -76,8 +83,14 @@ function Card({
       
       {open && (
         <>
-          <pre>{finding.suggestion || 'Apply recommended refactoring fix.'}</pre>
-          {onApplyFix && (
+          {finding.suggestion && <p style={{ fontSize: '0.85rem', fontStyle: 'italic', marginBottom: '0.5rem' }}>{finding.suggestion}</p>}
+          {hasReplacementCode && (
+            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{finding.replacement_code}</pre>
+          )}
+          {!hasReplacementCode && !finding.suggestion && (
+            <pre>Apply recommended refactoring fix.</pre>
+          )}
+          {onApplyFix && hasReplacementCode && (
             <button className="apply-fix-btn" onClick={handleFixClick} disabled={fixing}>
               {fixing ? 'Applying...' : '⚡ Apply Quick Fix'}
             </button>

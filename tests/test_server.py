@@ -4,7 +4,16 @@ from fastapi.testclient import TestClient
 from devwatch.server import app
 from devwatch.models import ReviewReport, CodeIssue, IssueSeverity
 
+from devwatch.config import Config
+
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def disable_api_key_for_tests(monkeypatch):
+    monkeypatch.setattr(Config, "API_KEY", None)
+    monkeypatch.delenv("DEVWATCH_API_KEY", raising=False)
+
 
 mock_report = ReviewReport(
     target_path="test_path",
@@ -26,9 +35,9 @@ def test_health_check_endpoint():
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
-@patch("devwatch.server.CodeReviewEngine.arun", new_callable=AsyncMock)
-def test_trigger_review_endpoint(mock_arun, tmp_path):
-    mock_arun.return_value = mock_report
+@patch("devwatch.routers.review.ReviewPipeline.execute", new_callable=AsyncMock)
+def test_trigger_review_endpoint(mock_execute, tmp_path):
+    mock_execute.return_value = mock_report
     (tmp_path / "test.py").write_text("SECRET_KEY = 'sk_live_1234567890abcdef'\n")
     
     response = client.post("/api/review", json={"target_path": str(tmp_path)})
@@ -38,9 +47,9 @@ def test_trigger_review_endpoint(mock_arun, tmp_path):
     assert data["status"] == "completed"
     assert data["report"]["total_issues"] >= 1
 
-@patch("devwatch.server.CodeReviewEngine.arun", new_callable=AsyncMock)
-def test_get_report_by_id(mock_arun, tmp_path):
-    mock_arun.return_value = mock_report
+@patch("devwatch.routers.review.ReviewPipeline.execute", new_callable=AsyncMock)
+def test_get_report_by_id(mock_execute, tmp_path):
+    mock_execute.return_value = mock_report
     (tmp_path / "test.py").write_text("SECRET_KEY = 'sk_live_1234567890abcdef'\n")
     
     res = client.post("/api/review", json={"target_path": str(tmp_path)})

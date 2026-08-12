@@ -28,8 +28,10 @@ class ReviewContext(BaseModel):
     scope: Optional[ReviewScope] = None
     selected_files: List[str] = Field(default_factory=list)
     cancellation_requested: bool = False
-    
+    circuit_open: bool = False
+
     static_findings: List[CodeIssue] = Field(default_factory=list)
+
     security_findings: List[CodeIssue] = Field(default_factory=list)
     quality_findings: List[CodeIssue] = Field(default_factory=list)
     verified_findings: List[CodeIssue] = Field(default_factory=list)

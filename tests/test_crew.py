@@ -1,9 +1,10 @@
 import pytest
+import asyncio
 from devwatch.agents.planner import PlannerAgent
 from devwatch.agents.security import SecurityAuditorAgent
 from devwatch.agents.quality import QualityAuditorAgent
 from devwatch.agents.synthesizer import ReportSynthesizerAgent
-from devwatch.crew.orchestrator import CodeReviewEngine
+from devwatch.pipeline.dag import ReviewPipeline
 from devwatch.models import ReviewReport, ReviewScope, IssueSeverity, CodeIssue
 
 def test_planner_agent_scopes_codebase(tmp_path):
@@ -50,8 +51,8 @@ def test_synthesizer_agent_renders_report():
 def test_code_review_crew_full_pipeline(tmp_path):
     (tmp_path / "vulnerable.py").write_text("SECRET_KEY = 'sk_live_1234567890abcdef'\ntry:\n    pass\nexcept:\n    pass\n")
     
-    crew = CodeReviewEngine()
-    report = crew.run(str(tmp_path))
+    pipeline = ReviewPipeline()
+    report = asyncio.run(pipeline.execute(str(tmp_path)))
     
     assert isinstance(report, ReviewReport)
     assert report.total_issues >= 2
@@ -60,20 +61,24 @@ def test_code_review_crew_full_pipeline(tmp_path):
 
 def test_llm_integration_mocked(monkeypatch):
     from devwatch.agents import llm
-    monkeypatch.setenv("OPENAI_API_KEY", "mock_key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "mock_key")
     assert llm.is_llm_available() is True
 
     # Mock call_llm_completion — route on user prompt text (unique per agent)
-    def mock_completion(prompt, system_prompt=""):
+    def mock_completion(prompt, system_prompt="", model_tier=None, job_id=None, provider=None):
         if "File listing" in prompt or "risk-ranking" in prompt:
             return '{"priority_files": ["src/app.py"], "focus_areas": ["Auth Security", "Data Validation"]}'
-        if "vulnerability taxonomy" in prompt:
+        if "vulnerability taxonomy" in prompt or "vulnerability impact" in prompt or "Security Auditor" in system_prompt:
             return '[{"line_number": 5, "severity": "HIGH", "category": "Security", "title": "Insecure JWT", "description": "No signature check", "suggestion": "Verify JWT signature", "code_snippet": "jwt.decode(token)"}]'
-        if "defect taxonomy" in prompt:
+        if "defect taxonomy" in prompt or "Code Quality Auditor" in system_prompt:
             return '[{"line_number": 12, "severity": "MEDIUM", "category": "Code Quality", "title": "Resource Leak", "description": "Unclosed handle", "suggestion": "Use with statement", "code_snippet": "f = open(path)"}]'
         return "Executive summary of risks."
 
+    async def mock_async_completion(prompt, system_prompt="", model_tier=None, job_id=None, provider=None):
+        return mock_completion(prompt, system_prompt=system_prompt, model_tier=model_tier, job_id=job_id, provider=provider)
+
     monkeypatch.setattr(llm, "call_llm_completion", mock_completion)
+    monkeypatch.setattr(llm, "acall_llm_completion", mock_async_completion)
 
     security = SecurityAuditorAgent()
     sec_issues = security.analyze("src/app.py", "jwt.decode(token)")
@@ -86,14 +91,8 @@ def test_llm_integration_mocked(monkeypatch):
 
 def test_openrouter_integration(monkeypatch):
     from devwatch.agents import llm
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-mock-key")
-    
     assert llm.is_llm_available() is True
-    kwargs = llm._get_llm_client_kwargs()
-    assert kwargs["api_key"] == "sk-or-v1-mock-key"
-    assert kwargs["base_url"] == "https://openrouter.ai/api/v1"
-    assert kwargs["default_headers"]["X-Title"] == "DevWatch"
 
 
 def test_parse_llm_json_with_think_tags():

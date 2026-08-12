@@ -267,6 +267,9 @@ class IssueDeduplicatorTool:
 
                 # Grouping rule 1: Exact finding_id match
                 if candidate.finding_id and existing.finding_id and candidate.finding_id == existing.finding_id:
+                    line_dist = abs((candidate.line_number or 0) - (existing.line_number or 0))
+                    if candidate.line_number and existing.line_number and line_dist > 3 and not candidate.code_snippet:
+                        continue
                     duplicate_found = True
                     self._merge_issues(unique_issues, idx, candidate, existing, severity_rank)
                     break
@@ -294,7 +297,7 @@ class IssueDeduplicatorTool:
                 line_dist = abs((candidate.line_number or 0) - (existing.line_number or 0))
 
                 # Exact fingerprint match with same rule OR nearby lines with same fingerprint
-                if same_fingerprint and (rule_cand == rule_exist or line_dist <= 2):
+                if same_fingerprint and (rule_cand == rule_exist or line_dist <= 3) and (line_dist <= 3 or candidate.code_snippet):
                     duplicate_found = True
                     self._merge_issues(unique_issues, idx, candidate, existing, severity_rank)
                     break

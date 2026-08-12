@@ -113,14 +113,15 @@ async def test_context_length_exceeded_exception():
 
 
 def test_provider_configuration_failure(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
 
     adapter = OpenAIProviderAdapter()
     assert adapter.is_available() is False
+
 
     with pytest.raises(ProviderConfigurationError):
         adapter.generate_completion_sync(LLMRequest(prompt="test"))

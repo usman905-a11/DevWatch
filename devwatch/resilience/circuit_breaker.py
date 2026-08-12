@@ -2,7 +2,7 @@ import time
 import logging
 from enum import Enum
 from devwatch.config import Config
-from devwatch.providers.exceptions import ProviderTemporaryError
+from devwatch.providers.exceptions import ProviderTemporaryError, CircuitBreakerOpenError
 
 logger = logging.getLogger("devwatch.resilience.circuit_breaker")
 
@@ -19,19 +19,18 @@ class CircuitBreaker:
     def __init__(
         self,
         provider_name: str = "default",
-        failure_threshold: int = Config.CIRCUIT_BREAKER_FAILURE_THRESHOLD,
-        recovery_timeout: float = Config.CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
+        failure_threshold: int = 15,
+        recovery_timeout: float = 60.0,
     ):
         self.provider_name = provider_name
-        self.failure_threshold = failure_threshold
-        self.recovery_timeout = recovery_timeout
+        self.failure_threshold = failure_threshold or Config.CIRCUIT_BREAKER_FAILURE_THRESHOLD
+        self.recovery_timeout = recovery_timeout or Config.CIRCUIT_BREAKER_RECOVERY_TIMEOUT
         self.state = CircuitState.CLOSED
         self.failure_count = 0
         self.last_state_change = time.time()
         self.half_open_probe_in_flight = False
 
     def allow_request(self) -> bool:
-
         now = time.time()
 
         if self.state == CircuitState.CLOSED:
@@ -46,7 +45,7 @@ class CircuitBreaker:
                 return True
             else:
                 remaining = int(self.recovery_timeout - (now - self.last_state_change))
-                raise ProviderTemporaryError(
+                raise CircuitBreakerOpenError(
                     f"Circuit breaker for provider '{self.provider_name}' is OPEN due to repeated failures. "
                     f"Probe recovery in {remaining}s.",
                     provider=self.provider_name,
@@ -56,12 +55,13 @@ class CircuitBreaker:
             if not self.half_open_probe_in_flight:
                 self.half_open_probe_in_flight = True
                 return True
-            raise ProviderTemporaryError(
+            raise CircuitBreakerOpenError(
                 f"Circuit breaker for provider '{self.provider_name}' is HALF_OPEN and testing probe request.",
                 provider=self.provider_name,
             )
 
         return True
+
 
     def record_success(self) -> None:
         if self.state != CircuitState.CLOSED:

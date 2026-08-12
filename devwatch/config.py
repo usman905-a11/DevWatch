@@ -9,8 +9,9 @@ class ModelTier(Enum):
 
 
 class Config:
-    FAST_MODEL: str = "gpt-4o-mini"
-    HEAVY_MODEL: str = "gpt-4o"
+    FAST_MODEL: str = "llama-3.1-8b-instant"
+    HEAVY_MODEL: str = "llama-3.3-70b-versatile"
+
 
     # Environment & Security Configuration
     ENV: str = os.getenv("DEVWATCH_ENV", "development").lower()
@@ -23,8 +24,8 @@ class Config:
     MAX_CONCURRENT_LLM_CALLS: int = int(os.getenv("DEVWATCH_MAX_CONCURRENT_LLM", "10"))
 
     # Resilience & Circuit Breaker Configuration
-    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = int(os.getenv("DEVWATCH_CB_THRESHOLD", "5"))
-    CIRCUIT_BREAKER_RECOVERY_TIMEOUT: float = float(os.getenv("DEVWATCH_CB_TIMEOUT", "30.0"))
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = int(os.getenv("DEVWATCH_CB_THRESHOLD", "15"))
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT: float = float(os.getenv("DEVWATCH_CB_TIMEOUT", "60.0"))
     MAX_JOB_TOKEN_BUDGET: int = int(os.getenv("DEVWATCH_MAX_JOB_TOKENS", "250000"))
     GLOBAL_REVIEW_TIMEOUT_SECONDS: float = float(os.getenv("DEVWATCH_REVIEW_TIMEOUT", "120.0"))
     PROVIDER_CALL_TIMEOUT_SECONDS: float = float(os.getenv("DEVWATCH_PROVIDER_TIMEOUT", "30.0"))
@@ -37,6 +38,7 @@ class Config:
     MAX_REPO_TOTAL_BYTES: int = int(os.getenv("DEVWATCH_MAX_REPO_TOTAL_BYTES", "10000000"))  # 10 MB
     MAX_FINDINGS_PER_FILE: int = int(os.getenv("DEVWATCH_MAX_FINDINGS_PER_FILE", "50"))
     MAX_FINDINGS_PER_JOB: int = int(os.getenv("DEVWATCH_MAX_FINDINGS_PER_JOB", "500"))
+    MAX_CANDIDATE_FINDINGS: int = int(os.getenv("DEVWATCH_MAX_CANDIDATE_FINDINGS", "1000"))
     MAX_CONCURRENT_FILES: int = int(os.getenv("DEVWATCH_MAX_CONCURRENT_FILES", "5"))
     MAX_TOKENS_PER_JOB: int = int(os.getenv("DEVWATCH_MAX_TOKENS_PER_JOB", "200000"))
     MAX_TOKENS_PER_AGENT: int = int(os.getenv("DEVWATCH_MAX_TOKENS_PER_AGENT", "50000"))

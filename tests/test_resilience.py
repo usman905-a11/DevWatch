@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from devwatch.config import Config
 from devwatch.providers.base import LLMRequest, LLMResponse, LLMUsage
-from devwatch.resilience.circuit_breaker import CircuitBreaker, CircuitState
+from devwatch.resilience.circuit_breaker import CircuitBreaker, CircuitState, CircuitBreakerOpenError
 from devwatch.resilience.manager import ResilienceManager, resilience_manager
 from devwatch.providers.exceptions import (
     ProviderError,
@@ -101,9 +101,10 @@ async def test_circuit_breaker_state_transitions():
     assert cb.state == CircuitState.OPEN
 
     # While OPEN and within recovery timeout, requests are rejected immediately
-    with pytest.raises(ProviderTemporaryError) as exc_info:
+    with pytest.raises(CircuitBreakerOpenError) as exc_info:
         cb.allow_request()
-    assert "is OPEN" in str(exc_info.value)
+    assert "OPEN due to repeated failures" in str(exc_info.value)
+
 
     # Wait for recovery timeout
     await asyncio.sleep(0.12)
@@ -144,13 +145,13 @@ async def test_job_token_budget_exceeded():
 
 @pytest.mark.asyncio
 async def test_global_review_deadline_exceeded(tmp_path):
-    from devwatch.crew.orchestrator import CodeReviewEngine
+    from devwatch.pipeline.dag import ReviewPipeline
     (tmp_path / "app.py").write_text("x = 1")
 
-    engine = CodeReviewEngine()
+    pipeline = ReviewPipeline()
 
     with patch("devwatch.agents.llm.is_llm_available", return_value=False):
         with patch.object(Config, "GLOBAL_REVIEW_TIMEOUT_SECONDS", 0.001):
             with pytest.raises(TimeoutError) as exc_info:
-                await engine.arun(str(tmp_path))
+                await pipeline.execute(str(tmp_path))
             assert "Global review execution deadline" in str(exc_info.value)

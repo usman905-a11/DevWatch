@@ -1,5 +1,6 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+
 from pydantic import BaseModel
 from devwatch.models import (
     CodeIssue,
@@ -36,7 +37,10 @@ def test_code_issue_cwe_and_confidence():
 
 def test_call_llm_structured_success():
     mock_response = '{"name": "test_agent", "count": 42}'
-    with patch("devwatch.agents.llm.is_llm_available", return_value=True):
+    mock_provider = MagicMock()
+    mock_provider.is_available.return_value = True
+
+    with patch("devwatch.agents.llm.get_provider", return_value=mock_provider):
         with patch("devwatch.agents.llm.call_llm_completion", return_value=mock_response):
             res = call_llm_structured("prompt", DummySchema)
             assert res is not None
@@ -54,7 +58,10 @@ def test_call_llm_structured_self_correction_retry():
     def mock_completion(prompt, system_prompt="", **kwargs):
         return calls.pop(0)
 
-    with patch("devwatch.agents.llm.is_llm_available", return_value=True):
+    mock_provider = MagicMock()
+    mock_provider.is_available.return_value = True
+
+    with patch("devwatch.agents.llm.get_provider", return_value=mock_provider):
         with patch("devwatch.agents.llm.call_llm_completion", side_effect=mock_completion) as mock_llm:
             res = call_llm_structured("prompt", DummySchema, max_retries=3)
             assert res is not None

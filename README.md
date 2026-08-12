@@ -47,15 +47,20 @@ DevWatch is a production-grade automated code review platform powered by an orch
 pip install -e .
 ```
 
-### 2. Configure Environment (Optional)
+### 2. Configure Environment
 ```bash
-export OPENAI_API_KEY="your-openai-api-key"
-# OR use OpenRouter:
-export OPENROUTER_API_KEY="your-openrouter-api-key"
-export DEVWATCH_API_KEY="your-server-api-key"        # Optional REST/WS authentication
-export DEVWATCH_FAST_MODEL="gpt-4o-mini"               # Model for Planner & Verifier
-export DEVWATCH_HEAVY_MODEL="gpt-4o"                   # Model for Security & Quality Auditors
+# Configure Groq API Key (get yours at https://console.groq.com/keys)
+export GROQ_API_KEY="your-groq-api-key"
+
+# Target Groq Models (Defaults to llama-3.3-70b-versatile and llama-3.1-8b-instant)
+export LLM_MODEL="llama-3.3-70b-versatile"
+export DEVWATCH_FAST_MODEL="llama-3.1-8b-instant"
+export DEVWATCH_HEAVY_MODEL="llama-3.3-70b-versatile"
+
+# Optional Server Authentication Key
+export DEVWATCH_API_KEY="your-server-api-key"
 ```
+
 
 
 ### 3. Run FastAPI Backend Server

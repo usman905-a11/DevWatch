@@ -5,7 +5,7 @@ import tempfile
 from unittest.mock import patch
 from pydantic import BaseModel
 from devwatch.models import ReviewReport
-from devwatch.crew.orchestrator import CodeReviewEngine
+from devwatch.pipeline.dag import ReviewPipeline
 from devwatch.storage import ReportStorage
 from devwatch.agents.llm import acall_llm_structured
 
@@ -17,20 +17,19 @@ class DummyAsyncSchema(BaseModel):
 
 @pytest.mark.asyncio
 async def test_acall_llm_structured():
-    mock_json = '{"status": "ok", "code": 200}'
-    with patch("devwatch.agents.llm.is_llm_available", return_value=True):
-        with patch("devwatch.agents.llm.acall_llm_completion", return_value=mock_json):
-            res = await acall_llm_structured("prompt", DummyAsyncSchema)
-            assert res is not None
-            assert res.status == "ok"
-            assert res.code == 200
+    from devwatch.providers.fake_provider import FakeLLMProvider
+    fake_provider = FakeLLMProvider(default_content='{"status": "ok", "code": 200}')
+    res = await acall_llm_structured("prompt", DummyAsyncSchema, provider=fake_provider)
+    assert res is not None
+    assert res.status == "ok"
+    assert res.code == 200
 
 
 @pytest.mark.asyncio
 async def test_async_code_review_engine_arun():
-    engine = CodeReviewEngine(max_concurrent_files=2)
+    pipeline = ReviewPipeline(max_concurrent_files=2)
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    report = await engine.arun(current_dir)
+    report = await pipeline.execute(current_dir)
     assert isinstance(report, ReviewReport)
     assert report.target_path == current_dir
 

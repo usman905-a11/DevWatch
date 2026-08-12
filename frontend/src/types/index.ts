@@ -1,13 +1,20 @@
 export type IssueSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
 
 export interface CodeIssue {
+  finding_id?: string;
   file_path: string;
   line_number?: number;
+  start_line?: number;
+  end_line?: number;
   severity: IssueSeverity;
   category: string;
   title: string;
   description: string;
   suggestion: string;
+  replacement_code?: string;
+  verification_status?: string;
+  cwe_id?: string;
+  confidence_score?: number;
   code_snippet?: string;
 }
 

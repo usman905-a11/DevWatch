@@ -41,6 +41,12 @@ class ProviderTemporaryError(ProviderError):
     pass
 
 
+class CircuitBreakerOpenError(ProviderError):
+    """Raised when circuit breaker is OPEN or HALF_OPEN probing, preventing calls to provider."""
+    pass
+
+
+
 class ProviderInvalidResponseError(ProviderError):
     """Raised when provider returns an empty or unparseable response."""
     pass

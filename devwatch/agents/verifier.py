@@ -3,12 +3,13 @@ import asyncio
 from typing import List, Dict, Any, Optional
 
 from devwatch.agents.base import BaseAgent, AgentMetadata
-from devwatch.models import CodeIssue, IssueSeverity, VerificationStatus, StructuredVerificationResponse
+from devwatch.models import CodeIssue, IssueSeverity, VerificationStatus, StructuredVerificationResponse, VerificationItem
 from devwatch.agents import llm
 from devwatch.config import ModelTier
 from devwatch.prompts.registry import prompt_registry, PromptRegistry
 from devwatch.providers.factory import get_provider
 from devwatch.providers.base import LLMProvider
+from devwatch.verification.strategy import DefaultVerificationStrategy
 
 logger = logging.getLogger("devwatch.verifier")
 
@@ -81,56 +82,9 @@ class VerificationAgent(BaseAgent):
         if not resp or not resp.verifications:
             return issues
 
-        # Map verifications by finding_id and fallback issue_title
-        id_map = {}
-        title_map = {}
-
-        for item in resp.verifications:
-            if item.finding_id:
-                id_map[item.finding_id.strip()] = item
-            if item.issue_title:
-                title_map[item.issue_title.lower().strip()] = item
-
-        filtered_issues: List[CodeIssue] = []
-
-        for issue in issues:
-            fid = issue.finding_id
-            v_item = id_map.get(fid) if fid else None
-
-            if not v_item and issue.title:
-                v_item = title_map.get(issue.title.lower().strip())
-
-            if not v_item:
-                filtered_issues.append(issue)
-                continue
-
-            status = v_item.status
-            if isinstance(status, str):
-                try:
-                    status = VerificationStatus(status.upper())
-                except ValueError:
-                    status = VerificationStatus.ACCEPTED if v_item.is_true_positive else VerificationStatus.REJECTED
-
-            issue.verification_rationale = v_item.reasoning
-
-            # Decision Logic:
-            if status == VerificationStatus.REJECTED or not v_item.is_true_positive:
-                logger.info(f"Verification Agent REJECTED false positive [{fid}]: '{issue.title}' in {file_path}")
-                continue
-
-            if status in (VerificationStatus.UNCERTAIN, VerificationStatus.NEEDS_HUMAN_REVIEW) or v_item.confidence < 0.6:
-                if issue.severity in (IssueSeverity.CRITICAL, IssueSeverity.HIGH):
-                    logger.warning(
-                        f"Escalating uncertain high-severity finding [{fid}] '{issue.title}' to NEEDS_HUMAN_REVIEW"
-                    )
-                    issue.verification_status = VerificationStatus.NEEDS_HUMAN_REVIEW
-                    filtered_issues.append(issue)
-                else:
-                    logger.info(f"Dropping low-confidence non-critical finding [{fid}]: '{issue.title}'")
-                    continue
-            else:
-                issue.verification_status = VerificationStatus.ACCEPTED
-                filtered_issues.append(issue)
+        # Use DefaultVerificationStrategy to apply verification decisions
+        strategy = DefaultVerificationStrategy()
+        filtered_issues = strategy.apply(issues, resp.verifications)
 
         return filtered_issues
 

@@ -3,7 +3,7 @@ import typer
 from rich.console import Console
 from rich.markdown import Markdown
 from devwatch import __version__
-from devwatch.crew.orchestrator import CodeReviewEngine
+from devwatch.pipeline.dag import ReviewPipeline
 
 app = typer.Typer(
     name="DevWatch",
@@ -46,8 +46,8 @@ def review(
     import asyncio
     console.print(f"[bold blue]🔍 Launching DevWatch Multi-Agent Review on:[/bold blue] {path}")
 
-    crew = CodeReviewEngine()
-    report = asyncio.run(crew.arun(path))
+    pipeline = ReviewPipeline()
+    report = asyncio.run(pipeline.execute(path))
 
 
     md_content = report.summary

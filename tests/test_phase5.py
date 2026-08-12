@@ -10,8 +10,8 @@ from devwatch.models import StructuredPlannerResponse, CodeIssue, IssueSeverity
 
 def test_model_tier_config_defaults():
     with patch.dict(os.environ, {}, clear=True):
-        assert Config.get_model_for_tier(ModelTier.FAST) == "gpt-4o-mini"
-        assert Config.get_model_for_tier(ModelTier.HEAVY) == "gpt-4o"
+        assert Config.get_model_for_tier(ModelTier.FAST) == "llama-3.1-8b-instant"
+        assert Config.get_model_for_tier(ModelTier.HEAVY) == "llama-3.3-70b-versatile"
 
 
 def test_model_tier_env_override():
@@ -22,8 +22,9 @@ def test_model_tier_env_override():
 
 def test_get_llm_model_name_routing():
     with patch.dict(os.environ, {}, clear=True):
-        assert get_llm_model_name(ModelTier.FAST) == "gpt-4o-mini"
-        assert get_llm_model_name(ModelTier.HEAVY) == "gpt-4o"
+        assert get_llm_model_name(ModelTier.FAST) == "llama-3.1-8b-instant"
+        assert get_llm_model_name(ModelTier.HEAVY) == "llama-3.3-70b-versatile"
+
 
 
 

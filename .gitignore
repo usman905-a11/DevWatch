@@ -2,7 +2,9 @@
 .env
 .env.local
 *.env
+.env.example
 
+.devwatch/reports
 # Python build & bytecode
 __pycache__/
 *.pyc

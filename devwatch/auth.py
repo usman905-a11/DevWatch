@@ -50,7 +50,10 @@ def verify_api_key(
             )
         return f"user:{provided_key[:8]}..."
 
-    # Development Mode
+    # Development Mode: If no key is provided in local requests, allow automatically as dev-user
+    if env != "production" and not provided_key:
+        return "dev-user"
+
     if expected_key:
         if not provided_key or provided_key != expected_key:
             log_auth_failure(endpoint, client_ip, "Invalid API key in development mode")
@@ -61,20 +64,20 @@ def verify_api_key(
             )
         return f"user:{provided_key[:8]}..."
     
-    # Development mode without explicit API key configured
-    logger.warning(f"DEV_AUTH_BYPASS | Endpoint '{endpoint}' accessed without DEVWATCH_API_KEY in development mode")
-    return "dev-user"
+    return provided_key or "dev-user"
 
 
 async def authenticate_ws_connection(websocket: WebSocket) -> str:
     """Validate WebSocket authentication via header or first handshake message."""
-    # Check headers first (avoids putting long-lived secrets in URLs)
     x_api_key = websocket.headers.get("x-api-key")
     auth_header = websocket.headers.get("authorization")
     provided_key = extract_api_key_from_headers(x_api_key, auth_header)
 
     expected_key = Config.API_KEY
     env = Config.ENV
+
+    if env != "production" and not provided_key:
+        return "ws-dev-user"
 
     if env == "production":
         if not expected_key or not provided_key or provided_key != expected_key:
@@ -90,7 +93,7 @@ async def authenticate_ws_connection(websocket: WebSocket) -> str:
             raise HTTPException(status_code=401, detail="Unauthorized WebSocket")
         return f"ws-user:{provided_key[:8]}"
 
-    return "ws-dev-user"
+    return provided_key or "ws-dev-user"
 
 
 def verify_report_access(report_data: dict, caller_identity: str) -> None:

@@ -58,15 +58,8 @@ def call_llm_completion(
         temperature=0.2,
     )
 
-    try:
-        response = p.generate_completion_sync(req)
-        return response.content
-    except (ProviderQuotaExhaustedError, ProviderRateLimitError) as err:
-        logger.error(f"Provider Rate/Quota Exceeded: {err}")
-        raise
-    except ProviderError as err:
-        logger.warning(f"LLM completion call failed: {err}")
-        return None
+    response = p.generate_completion_sync(req)
+    return response.content if response else None
 
 
 async def acall_llm_completion(
@@ -90,20 +83,14 @@ async def acall_llm_completion(
         temperature=0.2,
     )
 
-    try:
-        response = await resilience_manager.execute_with_resilience(
-            func=p.generate_completion,
-            request=req,
-            job_id=job_id,
-            provider_name=getattr(p, "provider_name", "openrouter"),
-        )
-        return response.content
-    except (ProviderQuotaExhaustedError, ProviderRateLimitError) as err:
-        logger.error(f"Provider Rate/Quota Exceeded: {err}")
-        raise
-    except ProviderError as err:
-        logger.warning(f"Async LLM completion call failed: {err}")
-        return None
+    response = await resilience_manager.execute_with_resilience(
+        func=p.generate_completion,
+        request=req,
+        job_id=job_id,
+        provider_name=getattr(p, "provider_name", "groq"),
+    )
+    return response.content if response else None
+
 
 
 def call_llm_structured(

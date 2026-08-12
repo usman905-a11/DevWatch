@@ -9,6 +9,7 @@ from devwatch.providers.base import LLMRequest, LLMResponse
 from devwatch.resilience.circuit_breaker import CircuitBreaker
 from devwatch.providers.exceptions import (
     ProviderError,
+    CircuitBreakerOpenError,
     ProviderAuthenticationError,
     ProviderAuthorizationError,
     ProviderRateLimitError,
@@ -24,7 +25,8 @@ from devwatch.providers.exceptions import (
 
 logger = logging.getLogger("devwatch.resilience.manager")
 
-NON_RETRYABLE_EXCEPTIONS: Set[Type[ProviderError]] = {
+NON_RETRYABLE_EXCEPTIONS: Set[Type[BaseException]] = {
+    CircuitBreakerOpenError,
     ProviderQuotaExhaustedError,
     ProviderAuthenticationError,
     ProviderAuthorizationError,
@@ -32,7 +34,9 @@ NON_RETRYABLE_EXCEPTIONS: Set[Type[ProviderError]] = {
     ProviderContextLengthError,
     ProviderContentPolicyError,
     ProviderConfigurationError,
+    asyncio.CancelledError,
 }
+
 
 
 class ResilienceManager:
@@ -70,9 +74,9 @@ class ResilienceManager:
         job_id: Optional[str] = None,
         provider_name: str = "openrouter",
         max_retries: int = 3,
-        base_backoff: float = 0.1,
-        max_backoff: float = 5.0,
-        jitter: float = 0.1,
+        base_backoff: float = 2.5,
+        max_backoff: float = 15.0,
+        jitter: float = 3.0,
     ) -> LLMResponse:
         """Execute LLM call with concurrency semaphores, circuit breaking, token budgeting, and bounded backoff."""
         cb = self.get_circuit_breaker(provider_name)
@@ -106,9 +110,9 @@ class ResilienceManager:
                         logger.error(f"Resilience execution exhausted all {max_retries} retry attempts for {provider_name}.")
                         raise err
 
-                    # Calculate backoff delay with jitter
-                    backoff = min(max_backoff, base_backoff * (2 ** (attempt - 1)))
-                    delay = backoff + random.uniform(0, jitter)
+                    # Calculate backoff delay with exponential scaling and random jitter (2.5^attempt + jitter)
+                    raw_delay = (base_backoff ** attempt) + random.uniform(1.0, max(1.0, jitter))
+                    delay = min(max_backoff, raw_delay)
 
                     logger.warning(
                         f"Resilience retry [{attempt}/{max_retries}] on transient error ({type(err).__name__}). Backing off for {delay:.2f}s..."

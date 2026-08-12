@@ -2,7 +2,8 @@ import re
 import hashlib
 from enum import Enum
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
 
 
 class IssueSeverity(str, Enum):
@@ -95,12 +96,25 @@ class CodeIssue(BaseModel):
             )
         return self.finding_id
 
+    @field_validator("severity", mode="before")
+    @classmethod
+    def validate_severity(cls, v: Any) -> IssueSeverity:
+        if isinstance(v, str):
+            val = v.upper().strip()
+            try:
+                return IssueSeverity(val)
+            except ValueError:
+                return IssueSeverity.MEDIUM
+        return v
+
+
 
 # Alias for canonical domain model
 CanonicalFinding = CodeIssue
 
 
 class StructuredCodeIssue(BaseModel):
+
     line_number: Optional[int] = None
     start_line: Optional[int] = None
     end_line: Optional[int] = None
@@ -115,6 +129,18 @@ class StructuredCodeIssue(BaseModel):
     confidence_score: float = Field(default=0.9, ge=0.0, le=1.0)
     cwe_id: Optional[str] = None
     symbol_name: Optional[str] = None
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def validate_severity(cls, v: Any) -> IssueSeverity:
+        if isinstance(v, str):
+            val = v.upper().strip()
+            try:
+                return IssueSeverity(val)
+            except ValueError:
+                return IssueSeverity.MEDIUM
+        return v
+
 
 
 class StructuredSecurityResponse(BaseModel):
@@ -221,6 +247,15 @@ class PatchValidationResult(BaseModel):
     error_message: Optional[str] = None
     backup_created: bool = False
     rolled_back: bool = False
+
+    def __bool__(self) -> bool:
+        return self.success
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, bool):
+            return self.success == other
+        return super().__eq__(other)
+
 
     def __bool__(self) -> bool:
         return self.success

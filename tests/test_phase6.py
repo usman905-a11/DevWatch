@@ -3,7 +3,8 @@ import shutil
 import tempfile
 import pytest
 from fastapi.testclient import TestClient
-from devwatch.tools.fix_applier import apply_code_fix
+from devwatch.config import Config
+from devwatch.patcher import RemediationPatcher
 from devwatch.server import app
 
 client = TestClient(app)
@@ -17,14 +18,21 @@ def test_apply_code_fix_function():
         with open(sample_file, "w", encoding="utf-8") as f:
             f.write(vulnerable_code)
 
-        result = apply_code_fix(
-            root_dir=temp_dir,
+        patcher = RemediationPatcher(temp_dir)
+        proposal = patcher.propose_fix(
             file_path="vulnerable.py",
-            line_number=1,
+            finding_id="f1",
+            start_line=1,
+            end_line=1,
             target_snippet="query = f'SELECT * FROM users WHERE name={name}'",
             replacement_code="query = 'SELECT * FROM users WHERE name=%s'",
+            reason="Fix SQL injection",
+            author="test",
         )
-        assert result is True
+        result = patcher.apply_proposal(proposal, authorized_by="test")
+        assert result.success is True
+
+
 
         with open(sample_file, "r", encoding="utf-8") as f:
             updated_content = f.read()
@@ -34,7 +42,9 @@ def test_apply_code_fix_function():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def test_apply_fix_api_endpoint():
+def test_apply_fix_api_endpoint(monkeypatch):
+    monkeypatch.setattr(Config, "API_KEY", None)
+    monkeypatch.delenv("DEVWATCH_API_KEY", raising=False)
     temp_dir = tempfile.mkdtemp()
     try:
         sample_file = os.path.join(temp_dir, "app.py")
@@ -62,7 +72,9 @@ def test_apply_fix_api_endpoint():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def test_websocket_streaming_updates():
+def test_websocket_streaming_updates(monkeypatch):
+    monkeypatch.setattr(Config, "API_KEY", None)
+    monkeypatch.delenv("DEVWATCH_API_KEY", raising=False)
     with client.websocket_connect("/ws/review") as websocket:
         websocket.send_json({"target_path": "."})
         received_types = []
@@ -77,3 +89,5 @@ def test_websocket_streaming_updates():
             except Exception:
                 break
         assert len(received_types) > 0
+
+

@@ -56,24 +56,24 @@ def test_agent_registry_operations():
 
 @pytest.mark.asyncio
 async def test_fake_agent_substitution_in_orchestrator(tmp_path):
-    from devwatch.crew.orchestrator import CodeReviewEngine
-    from devwatch.providers.factory import set_provider
+    from devwatch.pipeline.dag import ReviewPipeline
+    from devwatch.models import ReviewScope
     (tmp_path / "main.py").write_text("print('hello')")
 
     fake_planner = FakeAgent(
         agent_id="planner_agent",
-        canned_output=type("ReviewScope", (), {"target_path": str(tmp_path), "files_to_review": ["main.py"], "focus_areas": ["General"]})()
+        canned_output=ReviewScope(target_path=str(tmp_path), files_to_review=["main.py"], focus_areas=["General"])
     )
     fake_sec = FakeAgent(agent_id="security_auditor", canned_output=[])
     fake_qual = FakeAgent(agent_id="quality_auditor", canned_output=[])
 
-    engine = CodeReviewEngine(
+    pipeline = ReviewPipeline(
         planner=fake_planner,
         security_agent=fake_sec,
         quality_agent=fake_qual,
     )
 
-    report = await engine.arun(str(tmp_path))
+    report = await pipeline.execute(str(tmp_path))
     assert report is not None
     assert len(fake_sec.executed_contexts) >= 1
     assert len(fake_qual.executed_contexts) >= 1
