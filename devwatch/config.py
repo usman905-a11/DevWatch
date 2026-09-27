@@ -43,6 +43,19 @@ class Config:
     MAX_TOKENS_PER_JOB: int = int(os.getenv("DEVWATCH_MAX_TOKENS_PER_JOB", "200000"))
     MAX_TOKENS_PER_AGENT: int = int(os.getenv("DEVWATCH_MAX_TOKENS_PER_AGENT", "50000"))
 
+    # LangGraph review execution
+    REVIEW_COMMANDS_ENABLED: bool = os.getenv("DEVWATCH_RUN_COMMANDS", "true").lower() == "true"
+    REVIEW_COMMAND_TIMEOUT_SECONDS: float = float(os.getenv("DEVWATCH_COMMAND_TIMEOUT", "120"))
+    REVIEW_COMMAND_MAX_OUTPUT_BYTES: int = int(os.getenv("DEVWATCH_COMMAND_MAX_OUTPUT", "200000"))
+    VERIFICATION_CONFIDENCE_THRESHOLD: float = float(os.getenv("DEVWATCH_VERIFICATION_THRESHOLD", "0.8"))
+    CHECKPOINT_DB_PATH: str = os.getenv(
+        "DEVWATCH_CHECKPOINT_DB", os.path.join(".devwatch", "checkpoints.sqlite")
+    )
+    REVIEW_RUNS_DIR: str = os.getenv(
+        "DEVWATCH_RUNS_DIR", os.path.join(".devwatch", "runs")
+    )
+    REVIEW_ARTIFACT_RETENTION_DAYS: int = int(os.getenv("DEVWATCH_ARTIFACT_RETENTION_DAYS", "7"))
+
     # Workspace Sandbox Configuration
     WORKSPACE_BASE_DIR: str = os.path.abspath(os.getenv("DEVWATCH_WORKSPACE_DIR", os.getcwd()))
     MAX_FILE_SIZE_BYTES: int = int(os.getenv("DEVWATCH_MAX_FILE_SIZE_BYTES", 5 * 1024 * 1024))  # 5 MB

@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 from devwatch.config import Config
-from devwatch.models import CodeIssue, IssueSeverity, ReviewScope
+from devwatch.models import CodeIssue, IssueSeverity, ReviewScope, VerificationStatus
 from devwatch.pipeline.context import ReviewContext, ReviewOutcome
 from devwatch.pipeline.dag import ReviewPipeline
 from devwatch.agents.fake_agent import FakeAgent
@@ -53,7 +53,18 @@ async def test_security_agent_failure_quality_findings_survive(tmp_path):
     )
     working_qual = FakeAgent(agent_id="quality_auditor", canned_output=[quality_issue])
 
-    fake_verifier = FakeAgent(agent_id="verifier_agent", canned_output=None)
+    fake_verifier = FakeAgent(agent_id="verifier_agent")
+    fake_verifier.execute = AsyncMock(
+        side_effect=lambda context: [
+            issue.model_copy(
+                update={
+                    "verification_status": VerificationStatus.ACCEPTED,
+                    "verification_confidence": 0.95,
+                }
+            )
+            for issue in context["issues"]
+        ]
+    )
 
     pipeline = ReviewPipeline(
         planner=planner,
@@ -95,7 +106,18 @@ async def test_quality_agent_failure_security_findings_survive(tmp_path):
     )
     working_sec = FakeAgent(agent_id="security_auditor", canned_output=[sec_issue])
 
-    fake_verifier = FakeAgent(agent_id="verifier_agent", canned_output=None)
+    fake_verifier = FakeAgent(agent_id="verifier_agent")
+    fake_verifier.execute = AsyncMock(
+        side_effect=lambda context: [
+            issue.model_copy(
+                update={
+                    "verification_status": VerificationStatus.ACCEPTED,
+                    "verification_confidence": 0.95,
+                }
+            )
+            for issue in context["issues"]
+        ]
+    )
 
     pipeline = ReviewPipeline(
         planner=planner,
@@ -116,7 +138,7 @@ async def test_quality_agent_failure_security_findings_survive(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_verifier_failure_candidate_findings_survive(tmp_path):
+async def test_verifier_failure_suppresses_llm_only_candidates(tmp_path):
     (tmp_path / "server.py").write_text("x = 1")
 
     planner = FakeAgent(
@@ -150,11 +172,12 @@ async def test_verifier_failure_candidate_findings_survive(tmp_path):
 
     assert report is not None
     assert ctx.status == ReviewOutcome.PARTIALLY_COMPLETED
-    assert any(i.title == "Candidate Vulnerability" for i in report.issues)
+    assert not any(i.title == "Candidate Vulnerability" for i in report.issues)
+    assert report.metrics["suppressed_findings"] >= 1
 
 
 @pytest.mark.asyncio
-async def test_synthesizer_failure_deterministic_fallback_rendered(tmp_path):
+async def test_legacy_synthesizer_is_not_called_by_deterministic_renderer(tmp_path):
     (tmp_path / "app.py").write_text("x = 1")
 
     planner = FakeAgent(
@@ -170,9 +193,9 @@ async def test_synthesizer_failure_deterministic_fallback_rendered(tmp_path):
     report = await pipeline.execute(str(tmp_path), context=ctx)
 
     assert report is not None
-    assert ctx.status == ReviewOutcome.PARTIALLY_COMPLETED
+    assert ctx.status == ReviewOutcome.COMPLETED
     assert "DevWatch Code Review Report" in report.summary
-    assert "Deterministic Deployment Verdict" in report.summary
+    failing_synth.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio

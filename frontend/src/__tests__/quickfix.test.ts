@@ -1,8 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mapIssuesToFindings } from '../App'
 import { CodeIssue } from '../types'
 
-describe('Tier 0: Quick-fix data flow and replacement_code preservation', () => {
+describe('Report-only finding data flow', () => {
   it('mapIssuesToFindings correctly preserves replacement_code and backend fields', () => {
     const rawBackendIssues: CodeIssue[] = [
       {

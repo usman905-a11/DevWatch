@@ -1,5 +1,4 @@
 import os
-import json
 import pytest
 from typing import List, Dict, Any
 from devwatch.agents.security import SecurityAuditorAgent
@@ -185,10 +184,6 @@ def test_eval_baseline_suite():
         "benchmark_samples_count": len(BENCHMARK_SAMPLES),
         "results_detail": results_detail,
     }
-
-    out_path = os.path.join(os.path.dirname(__file__), "eval_baseline_results.json")
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(baseline_metrics, f, indent=2)
 
     assert recall >= 0.85, f"Baseline recall must be at least 85% (got {recall * 100:.1f}%)"
     assert precision >= 0.80, f"Baseline precision must be at least 80% (got {precision * 100:.1f}%)"

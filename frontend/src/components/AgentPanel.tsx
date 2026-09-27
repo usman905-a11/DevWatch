@@ -24,7 +24,6 @@ interface Props {
   analysisRunning: boolean
   analysisComplete: boolean
   onFindingClick: (f: Finding) => void
-  onApplyFix?: (f: Finding) => void
   findings: Finding[]
 }
 
@@ -38,25 +37,11 @@ const severityMap: Record<Severity, string> = {
 function Card({
   finding,
   onClick,
-  onApplyFix,
 }: {
   finding: Finding
   onClick: () => void
-  onApplyFix?: (f: Finding) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [fixing, setFixing] = useState(false)
-
-  const handleFixClick = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!onApplyFix || !finding.replacement_code) return
-    setFixing(true)
-    try {
-      await onApplyFix(finding)
-    } finally {
-      setFixing(false)
-    }
-  }
 
   const hasReplacementCode = Boolean(finding.replacement_code && finding.replacement_code.trim().length > 0)
 
@@ -90,11 +75,6 @@ function Card({
           {!hasReplacementCode && !finding.suggestion && (
             <pre>Apply recommended refactoring fix.</pre>
           )}
-          {onApplyFix && hasReplacementCode && (
-            <button className="apply-fix-btn" onClick={handleFixClick} disabled={fixing}>
-              {fixing ? 'Applying...' : '⚡ Apply Quick Fix'}
-            </button>
-          )}
         </>
       )}
     </article>
@@ -105,7 +85,6 @@ export default function AgentPanel({
   analysisRunning,
   analysisComplete,
   onFindingClick,
-  onApplyFix,
   findings = [],
 }: Props) {
   return (
@@ -144,7 +123,7 @@ export default function AgentPanel({
 
         {analysisComplete &&
           findings.map((f) => (
-            <Card key={f.id} finding={f} onClick={() => onFindingClick(f)} onApplyFix={onApplyFix} />
+            <Card key={f.id} finding={f} onClick={() => onFindingClick(f)} />
           ))}
       </div>
 

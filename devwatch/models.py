@@ -70,6 +70,10 @@ class CodeIssue(BaseModel):
     source_type: str = "agent"
     agent_id: Optional[str] = None
     agent_version: Optional[str] = None
+    evidence: List[Dict[str, Any]] = Field(default_factory=list)
+    specialist: Optional[str] = None
+    verification_confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    reproduction: Optional[Dict[str, Any]] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def model_post_init(self, __context: Any) -> None:
@@ -185,6 +189,8 @@ class ReviewScope(BaseModel):
 class ReviewReport(BaseModel):
     target_path: str
     issues: List[CodeIssue] = Field(default_factory=list)
+    manual_review_candidates: List[CodeIssue] = Field(default_factory=list)
+    metrics: Dict[str, Any] = Field(default_factory=dict)
     summary: str = ""
 
     @property
@@ -213,6 +219,11 @@ class AgentStepUpdate(BaseModel):
     status: str  # e.g., "IDLE", "RUNNING", "COMPLETED", "FAILED"
     message: str
     timestamp: Optional[float] = None
+    elapsed_ms: Optional[float] = None
+    specialist: Optional[str] = None
+    tool_results: List[Dict[str, Any]] = Field(default_factory=list)
+    token_usage: Dict[str, int] = Field(default_factory=dict)
+    suppressed_finding_count: Optional[int] = None
 
 
 class ProposalStatus(str, Enum):

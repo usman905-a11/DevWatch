@@ -16,6 +16,10 @@ export interface CodeIssue {
   cwe_id?: string;
   confidence_score?: number;
   code_snippet?: string;
+  evidence?: Array<Record<string, unknown>>;
+  specialist?: string;
+  verification_confidence?: number;
+  reproduction?: string;
 }
 
 export interface ReviewReport {
@@ -28,6 +32,8 @@ export interface ReviewReport {
   medium_count: number;
   low_count: number;
   files_to_review?: string[];
+  manual_review_candidates?: CodeIssue[];
+  metrics?: Record<string, unknown>;
 }
 
 export interface AgentStepUpdate {
@@ -35,6 +41,11 @@ export interface AgentStepUpdate {
   status: 'IDLE' | 'RUNNING' | 'COMPLETED' | 'FAILED';
   message: string;
   timestamp?: number;
+  elapsed_ms?: number;
+  specialist?: string;
+  tool_results?: Array<Record<string, unknown>>;
+  token_usage?: Record<string, number>;
+  suppressed_finding_count?: number;
 }
 
 export interface ReviewResponse {

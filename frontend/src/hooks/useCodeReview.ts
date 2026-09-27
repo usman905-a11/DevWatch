@@ -1,9 +1,7 @@
 import { useState, useCallback, useRef, MutableRefObject } from 'react'
 import {
   fetchFileContent,
-  runCodeReview,
   runUploadedFilesReview,
-  applyQuickFix,
   subscribeToReviewStream,
 } from '../services/api'
 import { FileNode } from '../components/FileExplorer'
@@ -171,7 +169,6 @@ export function mapIssuesToFindings(issues: CodeIssue[]): Finding[] {
  * Exposes methods:
  * - handleSelectFile, handleCloseFile
  * - handleRunAnalysis (with WebSocket subscription)
- * - handleApplyFix (apply quick fixes to files)
  * - handleFindingClick (navigate to finding location)
  * - handleOpenFolder, handleFolderInputChange (load folders from user's device)
  *
@@ -317,24 +314,6 @@ export function useCodeReview() {
     [targetPath, handleSelectFile]
   )
 
-  const handleApplyFix = useCallback(
-    async (finding: Finding) => {
-      if (!finding.replacement_code || finding.replacement_code.trim() === '') return
-      try {
-        await applyQuickFix(finding.fileId, finding.line, '', finding.replacement_code, targetPath || '.')
-        alert(`Successfully applied fix to ${finding.fileName}:${finding.line}`)
-        const res = await fetchFileContent(finding.fileId, targetPath || '.')
-        setSelectedFile((prev) => (prev ? { ...prev, content: res.content } : null))
-        setOpenFiles((prev) =>
-          prev.map((f) => (f.id === finding.fileId ? { ...f, content: res.content } : f))
-        )
-      } catch (err: any) {
-        alert(`Quick fix failed: ${err.message}`)
-      }
-    },
-    [targetPath]
-  )
-
   // Native OS file/folder picker trigger
   const handleOpenFolder = useCallback(() => {
     folderInputRef.current?.click()
@@ -403,7 +382,6 @@ export function useCodeReview() {
     handleCloseFile,
     handleRunAnalysis,
     handleFindingClick,
-    handleApplyFix,
     handleOpenFolder,
     handleFolderInputChange,
     setHighlightLine,

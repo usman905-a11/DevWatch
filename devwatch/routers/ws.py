@@ -17,6 +17,8 @@ async def websocket_review_endpoint(websocket: WebSocket):
     await websocket.accept()
 
     queue: asyncio.Queue = asyncio.Queue()
+    pipeline_task = None
+    stream_task = None
 
     try:
         data = await websocket.receive_json()
@@ -40,7 +42,16 @@ async def websocket_review_endpoint(websocket: WebSocket):
 
         CodebaseScanner(target_path)
         pipeline = ReviewPipeline(step_callback=sync_step_callback)
-        report = await pipeline.execute(target_path)
+        pipeline_task = asyncio.create_task(pipeline.execute(target_path))
+        done, _ = await asyncio.wait(
+            {pipeline_task, stream_task}, return_when=asyncio.FIRST_COMPLETED
+        )
+        if stream_task in done and not pipeline_task.done():
+            pipeline.cancel_active_tasks()
+            pipeline_task.cancel()
+            await asyncio.gather(pipeline_task, return_exceptions=True)
+            stream_task.result()
+        report = await pipeline_task
         await queue.put(None)
         await stream_task
 
@@ -55,11 +66,23 @@ async def websocket_review_endpoint(websocket: WebSocket):
             }
         )
     except WebSocketDisconnect:
-        pass
+        if pipeline_task and not pipeline_task.done():
+            pipeline_task.cancel()
+            await asyncio.gather(pipeline_task, return_exceptions=True)
     except Exception as e:
-        status_code = 403 if "Access denied" in str(e) or "blocked" in str(e) else 400
-        await websocket.send_json({"type": "review_error", "status": "FAILED", "message": str(e)})
+        try:
+            await websocket.send_json(
+                {"type": "review_error", "status": "FAILED", "message": str(e)}
+            )
+        except (RuntimeError, WebSocketDisconnect):
+            pass
     finally:
+        for task in (pipeline_task, stream_task):
+            if task and not task.done():
+                task.cancel()
+        pending = [task for task in (pipeline_task, stream_task) if task]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
         try:
             await websocket.close()
         except Exception:

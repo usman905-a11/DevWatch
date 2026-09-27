@@ -38,18 +38,6 @@ export async function fetchFileContent(filePath: string, rootPath: string = '.')
   return response.json();
 }
 
-export async function saveFileContent(filePath: string, content: string, rootPath: string = '.'): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE_URL}/fs/write`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ root_path: rootPath, file_path: filePath, content }),
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to save file: ${filePath}`);
-  }
-  return response.json();
-}
-
 export async function auditSingleFile(filePath: string, content: string): Promise<ReviewResponse> {
   const response = await fetch(`${API_BASE_URL}/review/file`, {
     method: 'POST',
@@ -112,30 +100,4 @@ export function subscribeToReviewStream(
     }
   };
 }
-
-export async function applyQuickFix(
-  filePath: string,
-  lineNumber: number = 1,
-  targetSnippet: string = '',
-  replacementCode: string = '',
-  rootPath: string = '.'
-): Promise<{ status: string; file_path: string; line_number: number; modified: boolean }> {
-  const response = await fetch(`${API_BASE_URL}/review/apply-fix`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      root_path: rootPath,
-      file_path: filePath,
-      line_number: lineNumber,
-      target_snippet: targetSnippet,
-      replacement_code: replacementCode,
-    }),
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: 'Quick fix failed' }));
-    throw new Error(errorData.detail || 'Failed to apply quick fix');
-  }
-  return response.json();
-}
-
 

@@ -9,6 +9,7 @@ from devwatch.models import ReviewReport, AgentStepUpdate, RemediationProposal
 from devwatch.auth import verify_api_key, verify_report_access
 from devwatch.storage import ReportStorage
 from devwatch.operations import ReviewOperations
+from devwatch.pipeline.dag import ReviewPipeline  # Backward-compatible patch seam.
 
 review_router = APIRouter(prefix="/api", tags=["review"])
 report_storage = ReportStorage()
@@ -161,27 +162,11 @@ def propose_remediation_fix(
     request: ProposeFixRequest,
     client_identity: str = Depends(verify_api_key),
 ):
-    """Propose a remediation fix (creates a proposal; does not apply)."""
-    client_ip = request_obj.client.host if request_obj.client else "unknown"
-    try:
-        proposal = review_ops.propose_remediation_fix(
-            root_path=request.root_path,
-            file_path=request.file_path,
-            finding_id=request.finding_id,
-            start_line=request.start_line,
-            end_line=request.end_line,
-            target_snippet=request.target_snippet,
-            replacement_code=request.replacement_code,
-            reason=request.reason,
-            client_identity=client_identity,
-            client_ip=client_ip,
-        )
-        return {"status": "success", "proposal": proposal.model_dump()}
-    except (ValueError, FileNotFoundError) as err:
-        status_code = 403 if "Access denied" in str(err) or "blocked" in str(err) else 400
-        raise HTTPException(status_code=status_code, detail=str(err))
-    except Exception as err:
-        raise HTTPException(status_code=500, detail=f"Failed to propose code fix: {str(err)}")
+    """Retained for discovery while DevWatch operates in report-only mode."""
+    raise HTTPException(
+        status_code=410,
+        detail="DevWatch is report-only; remediation proposal endpoints are disabled.",
+    )
 
 
 @review_router.post("/review/apply-proposal", dependencies=[Depends(verify_api_key)])
@@ -190,20 +175,11 @@ def apply_remediation_proposal(
     request: ApplyProposalRequest,
     client_identity: str = Depends(verify_api_key),
 ):
-    """Apply a previously-proposed remediation fix."""
-    client_ip = request_obj.client.host if request_obj.client else "unknown"
-    try:
-        result = review_ops.apply_remediation_proposal(
-            root_path=request.root_path,
-            proposal=request.proposal,
-            client_identity=client_identity,
-            client_ip=client_ip,
-        )
-        return result
-    except HTTPException:
-        raise
-    except Exception as err:
-        raise HTTPException(status_code=500, detail=f"Failed to apply proposal: {str(err)}")
+    """Retained for discovery while DevWatch operates in report-only mode."""
+    raise HTTPException(
+        status_code=410,
+        detail="DevWatch is report-only; remediation application endpoints are disabled.",
+    )
 
 
 @review_router.post("/review/apply-fix", dependencies=[Depends(verify_api_key)])
@@ -212,25 +188,11 @@ async def apply_quick_fix(
     request: ApplyFixRequest,
     client_identity: str = Depends(verify_api_key),
 ):
-    """Apply a quick fix to a file (no approval step)."""
-    client_ip = request_obj.client.host if request_obj.client else "unknown"
-    try:
-        result = await review_ops.apply_quick_fix(
-            root_path=request.root_path,
-            file_path=request.file_path,
-            finding_id=request.finding_id,
-            target_snippet=request.target_snippet,
-            replacement_code=request.replacement_code,
-            line_number=request.line_number,
-            client_identity=client_identity,
-            client_ip=client_ip,
-        )
-        return result
-    except (ValueError, FileNotFoundError) as err:
-        status_code = 403 if "Access denied" in str(err) or "blocked" in str(err) else 400
-        raise HTTPException(status_code=status_code, detail=str(err))
-    except Exception as err:
-        raise HTTPException(status_code=500, detail=f"Failed to apply code fix: {str(err)}")
+    """Retained for discovery while DevWatch operates in report-only mode."""
+    raise HTTPException(
+        status_code=410,
+        detail="DevWatch is report-only; quick-fix endpoints are disabled.",
+    )
 
 
 @review_router.get("/reports/{report_id}", dependencies=[Depends(verify_api_key)])

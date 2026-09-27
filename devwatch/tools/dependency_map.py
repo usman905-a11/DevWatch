@@ -30,8 +30,16 @@ class DependencyMapper:
                         else:
                             dependencies["external_imports"].append(mod_name)
                 elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        mod_name = node.module
+                    if node.module or node.level:
+                        mod_name = node.module or ""
+                        if node.level:
+                            package_parts = rel_path.replace("\\", "/").split("/")[:-1]
+                            ascend = node.level - 1
+                            if ascend >= len(package_parts):
+                                continue
+                            mod_name = ".".join(
+                                [*package_parts[: len(package_parts) - ascend], mod_name]
+                            ).rstrip(".")
                         imported_symbols = [alias.name for alias in node.names]
                         symbols_str = f"{mod_name} ({', '.join(imported_symbols)})"
                         if self._is_internal_module(mod_name):

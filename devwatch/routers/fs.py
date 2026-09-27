@@ -50,15 +50,8 @@ def read_file_content(
 
 @fs_router.post("/write", dependencies=[Depends(verify_api_key)])
 def write_file_content(request_obj: Request, request: WriteFileRequest):
-    client_ip = request_obj.client.host if request_obj.client else "unknown"
-    rate_limiter.check_rate_limit(client_ip, Config.RATE_LIMIT_RPM, window_seconds=60, endpoint="/api/fs/write")
-
-    try:
-        scanner = CodebaseScanner(request.root_path)
-        success = scanner.write_file(request.file_path, request.content)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to write file")
-        return {"status": "success", "path": request.file_path}
-    except ValueError as e:
-        status_code = 403 if "Access denied" in str(e) or "blocked" in str(e) else 400
-        raise HTTPException(status_code=status_code, detail=str(e))
+    """Retained for discovery while DevWatch operates in report-only mode."""
+    raise HTTPException(
+        status_code=410,
+        detail="DevWatch is report-only; filesystem mutation is disabled.",
+    )

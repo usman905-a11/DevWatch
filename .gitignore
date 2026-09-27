@@ -5,6 +5,8 @@
 .env.example
 
 .devwatch/reports
+.devwatch/runs/
+.devwatch/checkpoints.sqlite*
 # Python build & bytecode
 __pycache__/
 *.pyc

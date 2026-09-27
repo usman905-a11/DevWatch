@@ -20,7 +20,6 @@ export function App() {
     handleCloseFile,
     handleRunAnalysis,
     handleFindingClick,
-    handleApplyFix,
     handleOpenFolder,
     handleFolderInputChange,
     setHighlightLine,
@@ -76,7 +75,6 @@ export function App() {
           analysisRunning={analysisRunning}
           analysisComplete={analysisComplete}
           onFindingClick={handleFindingClick}
-          onApplyFix={handleApplyFix}
           findings={findings}
         />
       </div>

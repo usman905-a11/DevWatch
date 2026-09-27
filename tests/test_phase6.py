@@ -42,7 +42,7 @@ def test_apply_code_fix_function():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def test_apply_fix_api_endpoint(monkeypatch):
+def test_apply_fix_api_endpoint_is_gone_and_does_not_modify_file(monkeypatch):
     monkeypatch.setattr(Config, "API_KEY", None)
     monkeypatch.delenv("DEVWATCH_API_KEY", raising=False)
     temp_dir = tempfile.mkdtemp()
@@ -59,15 +59,14 @@ def test_apply_fix_api_endpoint(monkeypatch):
             "replacement_code": "parse_user_input(user_input)",
         }
         response = client.post("/api/review/apply-fix", json=payload)
-        assert response.status_code == 200
+        assert response.status_code == 410
         data = response.json()
-        assert data["status"] == "success"
-        assert data["modified"] is True
+        assert "report-only" in data["detail"]
 
         with open(sample_file, "r", encoding="utf-8") as f:
             content = f.read()
-        assert "parse_user_input" in content
-        assert "eval(" not in content
+        assert "parse_user_input" not in content
+        assert "eval(" in content
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
