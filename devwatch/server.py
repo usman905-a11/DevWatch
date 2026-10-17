@@ -12,13 +12,12 @@ from pydantic import BaseModel
 from devwatch.config import Config
 from devwatch.pipeline.dag import ReviewPipeline
 from devwatch.scanner import CodebaseScanner
-from devwatch.models import ReviewReport, AgentStepUpdate, RemediationProposal
+from devwatch.models import ReviewReport, AgentStepUpdate
 from devwatch.agents.llm import OpenRouterRateLimitError
 from devwatch.storage import ReportStorage
 from devwatch.auth import verify_api_key, authenticate_ws_connection, verify_report_access
 from devwatch.rate_limiter import rate_limiter
-from devwatch.audit_log import log_review_created, log_fix_applied, log_authz_failure, log_proposal_created, log_remediation_event
-from devwatch.patcher import RemediationPatcher
+from devwatch.audit_log import log_review_created, log_authz_failure
 
 
 from contextlib import asynccontextmanager

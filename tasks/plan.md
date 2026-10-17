@@ -42,7 +42,7 @@ M1 → M2 → M3 → M4 → M5. The main risks are unsafe command execution, sou
 
 ## Current checkpoint
 
-M1 and M2 are complete. M3 is the next phase and must wait for a new user prompt. `AGENTS.md` is untracked user work and must remain untouched. No commit, push, deployment, or external publication is part of these milestones.
+M1 through M5 are complete. The staged refactor is finished; no further phase starts automatically. Preserve unrelated user work. No commit, push, deployment, or external publication is part of these milestones.
 
 ## Codebase audit (2026-09-27)
 
@@ -50,15 +50,15 @@ M1 and M2 are complete. M3 is the next phase and must wait for a new user prompt
 |---|---|---|
 | M1 | Complete | Public/internal models, engine methods, dependency ranges plus `constraints.txt`, and 20 versioned mixed evaluation cases exist. Focused checks: 13 passed; `pip check` clean. The final precision/recall target still belongs to M5. |
 | M2 | Complete | Distinct current-source hunks, Python absolute/relative and frontend script imports/dependents/tests, scanner exclusions, full bounded command snapshots, bounded UTF-8 output, executable/path controls, secret stripping, timeout process-tree termination, and recursion control were verified. Focused gate: 44 passed, 2 skipped. |
-| M3 | Implemented in part, unaccepted | Graph routing, strict gate, and SQLite checkpoints exist. Resume without repeated side effects, cancellation, stream metadata, deterministic parallel merge, and SQLite worker cleanup need explicit evidence. A warnings-as-errors full run exposed an event-loop-closed SQLite worker warning. |
-| M4 | Implemented in part, unaccepted | Compatibility pipeline and `410` routes exist; transport and frontend tests pass. Confirm WebSocket disconnect cleanup, report storage parity, and visible manual-review candidates before closing. |
-| M5 | Pending | Legacy removal, documentation, resource cleanup, budget checks, integrated evaluation threshold, and final acceptance remain. |
+| M3 | Complete | Assigned specialist routing, bounded deterministic reducers, source-snippet-free checkpoints, strict source verification, partial reports, SQLite resume, progress metadata, and cancellation passed focused tests (36 passed with warnings as errors). Full backend suite: 189 passed, 2 skipped. |
+| M4 | Complete | CLI/REST/WebSocket compatibility, shared report lookup, auth and rate limits, quiet disconnect cleanup, discoverable report-only `410` mutation routes, progress, and manual-review candidates verified. Focused backend: 54 passed with warnings as errors. Frontend: 10 passed; TypeScript/build passed. |
+| M5 | Complete | Removed patcher operations, the scanner write method, mutation request models, and mutation audit helpers; documented report-only operation, command containment, and artifact/checkpoint/report lifecycle. The full backend suite passed (194 passed, 3 skipped), frontend tests passed (10) and TypeScript/build passed. The real 20-case changed-repository offline gate scored 100% precision and 80% recall (8 TP, 0 FP, 2 FN). The 5,050-file timing gate passed in the full suite; an isolated run after concurrent line counts took 13.13 seconds. Limits and cleanup checks passed. Live-model accuracy remains unmeasured; the real symlink test skipped on this Windows host, while boundary simulation tests passed. |
 
-Initial audit commands: `python -m pytest -q` produced 157 passed, 1 skipped, and 1 subprocess decoding warning; `npm test -- --run` produced 3 passed; `npm run build` succeeded. After M2, `python -m pytest -q` produced 171 passed and 2 skipped. A separate warnings-as-errors run exposed an intermittent SQLite worker warning assigned to M3.
+Initial audit commands: `python -m pytest -q` produced 157 passed, 1 skipped, and 1 subprocess decoding warning; `npm test -- --run` produced 3 passed; `npm run build` succeeded. After M2, `python -m pytest -q` produced 171 passed and 2 skipped. A separate earlier warnings-as-errors run exposed an intermittent SQLite worker warning; the M3 focused warnings-as-errors run now passes.
 
 ## Remaining execution order and stop rule
 
 1. **M2 evidence collection: complete.** Changed-line mapping, bounded context, disposable snapshots, and runner controls passed the focused gate. **Stopped.**
-2. **M3 graph workflow: next prompt.** Close resume, cancellation, streaming, deterministic merge, SQLite cleanup, and partial-failure gaps. Verify fake-provider and checkpoint tests. **Stop.**
-3. **M4 interface migration:** prove legacy transport/storage/auth/rate-limit parity, WebSocket cleanup, manual-candidate UI, and report-only routes. Verify backend and frontend checks. **Stop.**
-4. **M5 removal and acceptance:** remove obsolete paths after parity, document lifecycle and containment, run full checks and integrated evaluation at the specified thresholds. **Stop.**
+2. **M3 graph workflow: complete.** Resume, cancellation, streaming, deterministic merge, SQLite cleanup, and partial-failure cases passed focused checks. **Stopped.**
+3. **M4 interface migration: complete.** Legacy transport/storage/auth/rate-limit parity, WebSocket cleanup, manual-candidate UI, and report-only routes passed focused backend and frontend gates. **Stopped.**
+4. **M5 removal and acceptance: complete.** Obsolete mutation paths were removed; lifecycle and containment are documented; full checks and integrated offline evaluation passed. **Stopped.**

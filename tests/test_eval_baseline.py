@@ -202,6 +202,3 @@ def test_path_traversal_sandboxing():
 
     with pytest.raises(ValueError, match="Path traversal attempt blocked"):
         scanner.read_file("../../outside.py")
-
-    with pytest.raises(ValueError, match="Path traversal attempt blocked"):
-        scanner.write_file("../../../malicious.sh", "echo hacked")

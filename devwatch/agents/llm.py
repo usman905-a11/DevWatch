@@ -3,6 +3,8 @@ import json
 import logging
 import time
 import re
+import contextvars
+from contextlib import contextmanager
 from typing import Optional, Dict, Any, List, Type, TypeVar
 from pydantic import BaseModel, ValidationError
 
@@ -22,6 +24,33 @@ logger = logging.getLogger("devwatch.llm")
 OpenRouterRateLimitError = ProviderQuotaExhaustedError
 
 T = TypeVar("T", bound=BaseModel)
+_current_job: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("devwatch_llm_job", default=None)
+_current_usage: contextvars.ContextVar[Optional[Dict[str, int]]] = contextvars.ContextVar("devwatch_llm_usage", default=None)
+
+
+@contextmanager
+def usage_tracking():
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    token = _current_usage.set(usage)
+    try:
+        yield usage
+    finally:
+        _current_usage.reset(token)
+
+
+def set_current_job(job_id: str) -> contextvars.Token:
+    return _current_job.set(job_id)
+
+
+def reset_current_job(token: contextvars.Token) -> None:
+    _current_job.reset(token)
+
+
+def _record_usage(response: Any) -> None:
+    current = _current_usage.get()
+    if current is not None and response is not None and response.usage is not None:
+        for name in current:
+            current[name] += getattr(response.usage, name, 0) or 0
 
 
 def is_llm_available(provider: Optional[LLMProvider] = None) -> bool:
@@ -59,6 +88,7 @@ def call_llm_completion(
     )
 
     response = p.generate_completion_sync(req)
+    _record_usage(response)
     return response.content if response else None
 
 
@@ -86,9 +116,10 @@ async def acall_llm_completion(
     response = await resilience_manager.execute_with_resilience(
         func=p.generate_completion,
         request=req,
-        job_id=job_id,
+        job_id=job_id or _current_job.get(),
         provider_name=getattr(p, "provider_name", "groq"),
     )
+    _record_usage(response)
     return response.content if response else None
 
 

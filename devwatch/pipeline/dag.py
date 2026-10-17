@@ -8,7 +8,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from devwatch.agents.base import AgentMetadata, BaseAgent
 from devwatch.agents.synthesizer import ReportSynthesizerAgent
 from devwatch.config import Config
-from devwatch.models import AgentStepUpdate, CodeIssue, IssueSeverity, ReviewReport, ReviewScope
+from devwatch.models import AgentStepUpdate, CodeIssue, IssueSeverity, ReviewReport, ReviewScope, generate_evidence_fingerprint
 from devwatch.pipeline.context import ReviewContext, ReviewOutcome
 from devwatch.providers.factory import get_provider
 from devwatch.review.agents import RiskPlannerAgent, RoleReviewAgent, StrictVerifierAgent
@@ -130,6 +130,14 @@ class _LegacySpecialistAdapter(BaseAgent):
             )
             for result in results:
                 for finding in result or []:
+                    if not finding.code_snippet:
+                        content = dict(batch).get(finding.file_path, "")
+                        line = finding.line_number or finding.start_line
+                        lines = content.splitlines()
+                        if line and 1 <= line <= len(lines):
+                            finding.code_snippet = lines[line - 1]
+                            finding.evidence_fingerprint = generate_evidence_fingerprint(finding.code_snippet)
+                            finding.finding_id = None
                     finding.ensure_identity()
                     identity = finding.finding_id or repr(finding.model_dump())
                     if identity in seen_findings:

@@ -5,7 +5,6 @@ from pathlib import Path
 from devwatch.config import Config
 from devwatch.scanner import CodebaseScanner
 from devwatch.storage import ReportStorage
-from devwatch.patcher import RemediationPatcher
 
 
 @pytest.fixture(autouse=True)
@@ -17,19 +16,14 @@ def reset_config_workspace():
     Config.MAX_FILE_SIZE_BYTES = orig_max_size
 
 
-def test_valid_nested_path_read_and_write(tmp_path):
-    # Set workspace base to tmp_path
+def test_valid_nested_path_read(tmp_path):
     Config.WORKSPACE_BASE_DIR = str(tmp_path)
+    source = tmp_path / "src" / "modules" / "auth.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("def login(): return True", encoding="utf-8")
     scanner = CodebaseScanner(str(tmp_path))
 
-    # Write nested file
-    rel_file = "src/modules/auth.py"
-    success = scanner.write_file(rel_file, "def login(): return True")
-    assert success is True
-
-    # Read back nested file
-    content = scanner.read_file(rel_file)
-    assert content == "def login(): return True"
+    assert scanner.read_file("src/modules/auth.py") == "def login(): return True"
 
 
 def test_linux_traversal_blocked(tmp_path):
@@ -180,39 +174,3 @@ def test_report_storage_sandbox(tmp_path):
     with pytest.raises(ValueError) as exc_info:
         storage._get_file_path("../../etc/passwd")
     assert "Invalid report ID" in str(exc_info.value)
-
-
-def test_fix_applier_sandbox(tmp_path):
-    Config.WORKSPACE_BASE_DIR = str(tmp_path)
-    (tmp_path / "app.py").write_text("# line 1\nOLD_CODE = True\n# line 3\n")
-
-    patcher = RemediationPatcher(str(tmp_path))
-
-    # Apply valid fix proposal
-    proposal = patcher.propose_fix(
-        file_path="app.py",
-        finding_id="f1",
-        start_line=2,
-        end_line=2,
-        target_snippet="OLD_CODE = True",
-        replacement_code="NEW_CODE = True",
-        reason="Replace OLD_CODE with NEW_CODE",
-        author="test",
-    )
-    result = patcher.apply_proposal(proposal, authorized_by="test")
-    assert result.success is True
-    assert "NEW_CODE = True" in (tmp_path / "app.py").read_text()
-
-    # Attempt traversal fix
-    with pytest.raises(ValueError) as exc_info:
-        patcher.propose_fix(
-            file_path="../outside.py",
-            finding_id="f2",
-            start_line=1,
-            end_line=1,
-            target_snippet="a",
-            replacement_code="b",
-            reason="Traversal test",
-            author="test",
-        )
-    assert "Path traversal attempt blocked" in str(exc_info.value)

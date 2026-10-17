@@ -1,4 +1,5 @@
 import ast
+from pathlib import Path
 import re
 from typing import List, Optional
 from devwatch.models import CodeIssue, IssueSeverity
@@ -17,7 +18,7 @@ class ASTStaticAnalyzerTool:
 
         # Regex fallback patterns for non-Python or general scanning
         secret_pattern = re.compile(
-            r".*(SECRET|PASSWORD|TOKEN|API_KEY|AWS_KEY|PRIVATE_KEY).*\s*=\s*['\"][A-Za-z0-9_\-]{8,}['\"]",
+            r".*(SECRET|PASSWORD|TOKEN|API_KEY|AWS_KEY|PRIVATE_KEY).*\s*=\s*['\"](?P<value>[A-Za-z0-9_\-]{8,})['\"]",
             re.IGNORECASE,
         )
         sql_pattern = re.compile(
@@ -25,8 +26,20 @@ class ASTStaticAnalyzerTool:
             re.IGNORECASE,
         )
 
+        is_test_file = (
+            file_path.replace("\\", "/").lower().startswith("tests/")
+            or Path(file_path).name.lower().startswith("test_")
+        )
         for idx, line in enumerate(lines, 1):
-            if secret_pattern.search(line):
+            secret_match = secret_pattern.search(line)
+            placeholder = (
+                secret_match is not None
+                and is_test_file
+                and secret_match.group("value").lower().startswith(
+                    ("testonly", "dummy", "example", "fake")
+                )
+            )
+            if secret_match and not placeholder:
                 issues.append(
                     CodeIssue(
                         file_path=file_path,

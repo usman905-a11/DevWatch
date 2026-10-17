@@ -47,6 +47,56 @@ def test_git_change_collector_includes_staged_unstaged_and_untracked(tmp_path):
     assert (by_file["staged.py"].start_line, by_file["staged.py"].end_line) == (1, 1)
 
 
+
+
+def test_change_collector_rejects_untracked_path_outside_root(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("private\n", encoding="utf-8")
+    _git(repo, "init", "-q")
+    collector = GitChangeCollector()
+    original_run = collector._run
+
+    def fake_run(root, *args):
+        if args and args[0] == "ls-files":
+            return "../outside.py\0"
+        return original_run(root, *args)
+
+    monkeypatch.setattr(collector, "_run", fake_run)
+    assert collector.collect(repo) == []
+
+
+def test_scanner_skips_symlink_file(tmp_path, monkeypatch):
+    from devwatch.scanner import CodebaseScanner
+
+    candidate = tmp_path / "link.py"
+    candidate.write_text("private\n", encoding="utf-8")
+    original_is_symlink = Path.is_symlink
+
+    def is_symlink(path):
+        return path.name == "link.py" or original_is_symlink(path)
+
+    monkeypatch.setattr(Path, "is_symlink", is_symlink)
+    assert CodebaseScanner(str(tmp_path)).get_files() == []
+
+
+def test_untracked_symlink_cannot_read_source_outside_repository(tmp_path):
+    from devwatch.scanner import CodebaseScanner
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("SECRET_KEY = 'externalrealvalue123'\n", encoding="utf-8")
+    _git(repo, "init", "-q")
+    try:
+        (repo / "link.py").symlink_to(outside)
+    except (OSError, NotImplementedError):
+        pytest.skip("file symlinks are unavailable")
+
+    assert CodebaseScanner(str(repo)).get_files() == []
+    assert GitChangeCollector().collect(repo) == []
+
 def test_git_change_collector_returns_empty_for_clean_repository(tmp_path):
     """A clean repository must not silently become an expensive full scan."""
     _git(tmp_path, "init", "-q")

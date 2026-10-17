@@ -1,4 +1,4 @@
-import { ReviewResponse, AgentStepUpdate } from '../types';
+import { ReviewResponse, AgentStepUpdate, ReviewReport } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 const WS_BASE_URL = 'ws://localhost:8000/ws/review';
@@ -66,10 +66,17 @@ export async function runUploadedFilesReview(files: Array<{ file_path: string; c
 export function subscribeToReviewStream(
   targetPath: string,
   onStep: (step: AgentStepUpdate) => void,
-  onComplete: (reportData: any) => void,
-  onError: (err: any) => void
+  onComplete: (reportData: { type: string; report: ReviewReport; report_id?: string }) => void,
+  onError: (err: Error) => void
 ): () => void {
   const ws = new WebSocket(WS_BASE_URL);
+  let settled = false;
+
+  const fail = (error: Error) => {
+    if (settled) return;
+    settled = true;
+    onError(error);
+  };
 
   ws.onopen = () => {
     ws.send(JSON.stringify({ target_path: targetPath }));
@@ -80,21 +87,22 @@ export function subscribeToReviewStream(
       const data = JSON.parse(event.data);
       if (data.type === 'review_completion' || (data.status === 'COMPLETED' && data.report)) {
         onComplete(data);
-      } else if (data.type === 'review_error' || data.status === 'FAILED') {
-        onError(new Error(data.message || 'Review failed over WebSocket'));
-      } else {
+        settled = true;
+      } else if (data.type === 'review_error') {
+        fail(new Error(data.message || 'Review failed over WebSocket'));
+      } else if (data.type === 'agent_update') {
         onStep(data);
       }
-    } catch (e) {
-      onError(e);
+    } catch (error) {
+      fail(error instanceof Error ? error : new Error('Invalid review message'));
     }
   };
 
-  ws.onerror = (error) => {
-    onError(error);
-  };
+  ws.onerror = () => fail(new Error('Review connection failed'));
+  ws.onclose = () => fail(new Error('Review connection closed before completion'));
 
   return () => {
+    settled = true;
     if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
       ws.close();
     }

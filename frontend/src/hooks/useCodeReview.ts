@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, MutableRefObject } from 'react'
+import { useState, useCallback, useEffect, useRef, MutableRefObject } from 'react'
 import {
   fetchFileContent,
   runUploadedFilesReview,
@@ -6,12 +6,21 @@ import {
 } from '../services/api'
 import { FileNode } from '../components/FileExplorer'
 import { AgentId, Finding, Severity } from '../components/AgentPanel'
-import { CodeIssue } from '../types'
+import { AgentStepUpdate, CodeIssue, ReviewReport } from '../types'
 
 // Helper: Extract file extension from filename
 function extOf(name: string): string | undefined {
   const parts = name.split('.')
   return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : undefined
+}
+
+function findFile(nodes: FileNode[], id: string): FileNode | undefined {
+  for (const node of nodes) {
+    if (node.type === 'file' && node.id === id) return node
+    const nested = node.children && findFile(node.children, id)
+    if (nested) return nested
+  }
+  return undefined
 }
 
 /**
@@ -158,6 +167,21 @@ export function mapIssuesToFindings(issues: CodeIssue[]): Finding[] {
   })
 }
 
+export function mapReviewReport(report: ReviewReport) {
+  return {
+    findings: mapIssuesToFindings(report.issues || []),
+    manualReviewCandidates: mapIssuesToFindings(report.manual_review_candidates || []),
+    partial: report.metrics?.partial === true,
+  }
+}
+
+export function appendProgressStep(
+  steps: AgentStepUpdate[],
+  step: AgentStepUpdate
+): AgentStepUpdate[] {
+  return [...steps, step].slice(-20)
+}
+
 /**
  * useCodeReview — custom hook encapsulating code review state and business logic.
  *
@@ -186,9 +210,25 @@ export function useCodeReview() {
   const [analysisComplete, setAnalysisComplete] = useState(false)
   const [highlightLine, setHighlightLine] = useState<number | null>(null)
   const [findings, setFindings] = useState<Finding[]>([])
+  const [manualReviewCandidates, setManualReviewCandidates] = useState<Finding[]>([])
+  const [progressSteps, setProgressSteps] = useState<AgentStepUpdate[]>([])
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [partial, setPartial] = useState(false)
   const [folderLoading, setFolderLoading] = useState(false)
 
   const folderInputRef = useRef<HTMLInputElement>(null)
+  const streamCleanupRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => () => streamCleanupRef.current?.(), [])
+
+  const applyReport = useCallback((report: ReviewReport) => {
+    const view = mapReviewReport(report)
+    setFindings(view.findings)
+    setManualReviewCandidates(view.manualReviewCandidates)
+    setPartial(view.partial)
+    setAnalysisComplete(true)
+    setAnalysisRunning(false)
+  }, [])
 
   // Select file and fetch content if needed
   const handleSelectFile = useCallback(
@@ -234,76 +274,76 @@ export function useCodeReview() {
 
   const handleRunAnalysis = useCallback(async () => {
     if (analysisRunning) return
+    streamCleanupRef.current?.()
+    streamCleanupRef.current = null
     setAnalysisComplete(false)
     setAnalysisRunning(true)
+    setFindings([])
+    setManualReviewCandidates([])
+    setProgressSteps([])
+    setReviewError(null)
+    setPartial(false)
+
+    const failReview = (error: Error) => {
+      setReviewError(error.message)
+      setAnalysisRunning(false)
+      setAnalysisComplete(false)
+      streamCleanupRef.current?.()
+      streamCleanupRef.current = null
+    }
 
     try {
       const collectFiles = (nodes: FileNode[]): Array<{ file_path: string; content: string }> => {
-        let acc: Array<{ file_path: string; content: string }> = []
-        for (const n of nodes) {
-          if (n.type === 'file' && n.content !== undefined && n.content.trim() !== '') {
-            acc.push({ file_path: n.id, content: n.content })
-          } else if (n.type === 'folder' && n.children) {
-            acc.push(...collectFiles(n.children))
+        const collected: Array<{ file_path: string; content: string }> = []
+        for (const node of nodes) {
+          if (node.type === 'file' && node.content?.trim()) {
+            collected.push({ file_path: node.id, content: node.content })
+          } else if (node.type === 'folder' && node.children) {
+            collected.push(...collectFiles(node.children))
           }
         }
-        return acc
+        return collected
       }
 
       const uploadedFiles = collectFiles(tree)
-
       if (uploadedFiles.length > 0) {
-        const res = await runUploadedFilesReview(uploadedFiles)
-        const mapped = mapIssuesToFindings(res.report?.issues || [])
-        setFindings(mapped)
-        setAnalysisComplete(true)
-        setAnalysisRunning(false)
+        setProgressSteps([{
+          agent_name: 'Review',
+          status: 'RUNNING',
+          message: 'Reviewing uploaded files',
+        }])
+        const response = await runUploadedFilesReview(uploadedFiles)
+        applyReport(response.report)
       } else {
-        subscribeToReviewStream(
+        streamCleanupRef.current = subscribeToReviewStream(
           targetPath || '.',
-          (_step) => {
-            // Live step updates received
-          },
+          (step) => setProgressSteps((previous) => appendProgressStep(previous, step)),
           (data) => {
-            const mapped = mapIssuesToFindings(data.report?.issues || [])
-            setFindings(mapped)
-            setAnalysisComplete(true)
-            setAnalysisRunning(false)
+            applyReport(data.report)
+            streamCleanupRef.current?.()
+            streamCleanupRef.current = null
           },
-          (err) => {
-            console.error('Code review failed:', err)
-            if (err.message && (err.message.includes('429') || err.message.includes('Rate limit') || err.message.includes('free-models-per-day'))) {
-              alert(
-                '⚠️ OpenRouter Free Tier Limit Reached (50/50 requests used today)\n\n' +
-                'Your OpenRouter account has reached its daily limit of 50 free AI model requests.\n\n' +
-                'How to unlock unlimited audits:\n' +
-                '1. Add $5-$10 credits on https://openrouter.ai/keys (this instantly upgrades your daily limit from 50 to 1,000 requests/day).\n' +
-                '2. Or wait for the daily OpenRouter quota reset.'
-              )
-            } else {
-              alert(`Review failed: ${err.message}`)
-            }
-            setAnalysisRunning(false)
-          }
+          failReview,
         )
       }
-    } catch (err: any) {
-      console.error('Code review failed:', err)
-      alert(`Review failed: ${err.message}`)
-      setAnalysisRunning(false)
+    } catch (error) {
+      failReview(error instanceof Error ? error : new Error('Review failed'))
     }
-  }, [analysisRunning, tree, targetPath])
+  }, [analysisRunning, tree, targetPath, applyReport])
 
   const handleFindingClick = useCallback(
     async (finding: Finding) => {
       try {
-        const res = await fetchFileContent(finding.fileId, targetPath || '.')
+        const localFile = findFile(tree, finding.fileId)
+        const content = localFile?.content ?? (
+          await fetchFileContent(finding.fileId, targetPath || '.')
+        ).content
         const targetNode: FileNode = {
           id: finding.fileId,
           name: finding.fileName,
           type: 'file',
           ext: extOf(finding.fileName),
-          content: res.content,
+          content,
         }
         await handleSelectFile(targetNode)
         setTimeout(() => setHighlightLine(finding.line), 50)
@@ -311,7 +351,7 @@ export function useCodeReview() {
         console.error('Failed to open file for finding:', err)
       }
     },
-    [targetPath, handleSelectFile]
+    [targetPath, tree, handleSelectFile]
   )
 
   // Native OS file/folder picker trigger
@@ -324,6 +364,8 @@ export function useCodeReview() {
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files
       if (!files || files.length === 0) return
+      streamCleanupRef.current?.()
+      streamCleanupRef.current = null
       setFolderLoading(true)
       try {
         const { tree: newTree, name } = await buildTreeFromFileList(files)
@@ -335,6 +377,11 @@ export function useCodeReview() {
         setHighlightLine(null)
         setAnalysisComplete(false)
         setAnalysisRunning(false)
+        setFindings([])
+        setManualReviewCandidates([])
+        setProgressSteps([])
+        setReviewError(null)
+        setPartial(false)
 
         // Find first file in tree to open in editor
         const findFirstFile = (nodes: FileNode[]): FileNode | null => {
@@ -373,6 +420,10 @@ export function useCodeReview() {
     analysisRunning,
     analysisComplete,
     findings,
+    manualReviewCandidates,
+    progressSteps,
+    reviewError,
+    partial,
     folderLoading,
     highlightLine,
     activeAgent,

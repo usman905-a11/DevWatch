@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 
 from devwatch.config import Config
-from devwatch.models import ReviewReport, AgentStepUpdate, RemediationProposal
+from devwatch.models import ReviewReport, AgentStepUpdate
 from devwatch.auth import verify_api_key, verify_report_access
 from devwatch.storage import ReportStorage
 from devwatch.operations import ReviewOperations
@@ -14,6 +14,30 @@ from devwatch.pipeline.dag import ReviewPipeline  # Backward-compatible patch se
 review_router = APIRouter(prefix="/api", tags=["review"])
 report_storage = ReportStorage()
 review_ops = ReviewOperations()
+
+
+def create_report_record(
+    report_id: str, report: ReviewReport, target_path: str,
+    owner: str, steps: List[AgentStepUpdate],
+) -> dict:
+    report_dict = report.model_dump()
+    report_dict.update(
+        total_issues=report.total_issues,
+        critical_count=report.critical_count,
+        high_count=report.high_count,
+        medium_count=report.medium_count,
+        low_count=report.low_count,
+    )
+    return {
+        "report_id": report_id,
+        "owner": owner,
+        "target_path": target_path,
+        "status": "completed",
+        "timestamp": time.time(),
+        "steps": [step.model_dump() for step in steps],
+        "report": report_dict,
+        "summary_markdown": report.summary,
+    }
 
 
 class ReviewRequest(BaseModel):
@@ -28,30 +52,6 @@ class SingleFileAuditRequest(BaseModel):
 class MultiFileAuditRequest(BaseModel):
     files: List[SingleFileAuditRequest]
 
-
-class ApplyFixRequest(BaseModel):
-    root_path: str = "."
-    file_path: str
-    line_number: int = 1
-    target_snippet: str = ""
-    replacement_code: str
-    finding_id: str = "finding_1"
-
-
-class ProposeFixRequest(BaseModel):
-    root_path: str = "."
-    file_path: str
-    finding_id: str = "finding_1"
-    start_line: int = 1
-    end_line: int = 1
-    target_snippet: str = ""
-    replacement_code: str
-    reason: str = "Code remediation proposal"
-
-
-class ApplyProposalRequest(BaseModel):
-    root_path: str = "."
-    proposal: RemediationProposal
 
 
 @review_router.post("/review/files", dependencies=[Depends(verify_api_key)])
@@ -126,26 +126,11 @@ async def trigger_review(
             step_callback=on_step,
         )
 
-        # Prepare report data
-        report_dict = report.model_dump()
-        report_dict["total_issues"] = report.total_issues
-        report_dict["critical_count"] = report.critical_count
-        report_dict["high_count"] = report.high_count
-        report_dict["medium_count"] = report.medium_count
-        report_dict["low_count"] = report.low_count
-
-        report_data = {
-            "report_id": report_id,
-            "owner": client_identity,
-            "target_path": request.target_path,
-            "status": "completed",
-            "timestamp": time.time(),
-            "steps": [s.model_dump() for s in steps],
-            "report": report_dict,
-            "summary_markdown": report.summary,
-        }
-
-        report_storage.save_report(report_id, report_data)
+        report_data = create_report_record(
+            report_id, report, request.target_path, client_identity, steps
+        )
+        if not report_storage.save_report(report_id, report_data):
+            raise RuntimeError("Report could not be saved")
         return report_data
     except ValueError as e:
         status_code = 403 if "Access denied" in str(e) or "blocked" in str(e) else 400
@@ -159,7 +144,6 @@ async def trigger_review(
 @review_router.post("/review/propose-fix", dependencies=[Depends(verify_api_key)])
 def propose_remediation_fix(
     request_obj: Request,
-    request: ProposeFixRequest,
     client_identity: str = Depends(verify_api_key),
 ):
     """Retained for discovery while DevWatch operates in report-only mode."""
@@ -172,7 +156,6 @@ def propose_remediation_fix(
 @review_router.post("/review/apply-proposal", dependencies=[Depends(verify_api_key)])
 def apply_remediation_proposal(
     request_obj: Request,
-    request: ApplyProposalRequest,
     client_identity: str = Depends(verify_api_key),
 ):
     """Retained for discovery while DevWatch operates in report-only mode."""
@@ -185,7 +168,6 @@ def apply_remediation_proposal(
 @review_router.post("/review/apply-fix", dependencies=[Depends(verify_api_key)])
 async def apply_quick_fix(
     request_obj: Request,
-    request: ApplyFixRequest,
     client_identity: str = Depends(verify_api_key),
 ):
     """Retained for discovery while DevWatch operates in report-only mode."""

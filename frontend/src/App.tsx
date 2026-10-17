@@ -14,6 +14,10 @@ export function App() {
     analysisRunning,
     analysisComplete,
     findings,
+    manualReviewCandidates,
+    progressSteps,
+    reviewError,
+    partial,
     folderLoading,
     highlightLine,
     handleSelectFile,
@@ -76,6 +80,10 @@ export function App() {
           analysisComplete={analysisComplete}
           onFindingClick={handleFindingClick}
           findings={findings}
+          manualReviewCandidates={manualReviewCandidates}
+          progressSteps={progressSteps}
+          reviewError={reviewError}
+          partial={partial}
         />
       </div>
 
@@ -87,9 +95,13 @@ export function App() {
         <span>⌘K&nbsp; Command palette</span>
         <span className="status-spacer" />
         <span>
-          {analysisComplete
-            ? `${findings.length} review signals`
-            : 'Review workspace ready'}
+          {analysisRunning
+            ? 'Review in progress'
+            : reviewError
+              ? 'Review failed'
+              : analysisComplete
+                ? `${findings.length} confirmed / ${manualReviewCandidates.length} manual`
+                : 'Review workspace ready'}
         </span>
         <span>Ln {highlightLine ?? 1}, Col 1</span>
         <span>Spaces: 2</span>

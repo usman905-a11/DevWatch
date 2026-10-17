@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
-from pydantic import BaseModel
 
 from devwatch.config import Config
 from devwatch.scanner import CodebaseScanner
@@ -8,11 +7,6 @@ from devwatch.rate_limiter import rate_limiter
 
 fs_router = APIRouter(prefix="/api/fs", tags=["filesystem"])
 
-
-class WriteFileRequest(BaseModel):
-    root_path: str = "."
-    file_path: str
-    content: str
 
 
 @fs_router.get("/tree", dependencies=[Depends(verify_api_key)])
@@ -49,7 +43,7 @@ def read_file_content(
 
 
 @fs_router.post("/write", dependencies=[Depends(verify_api_key)])
-def write_file_content(request_obj: Request, request: WriteFileRequest):
+def write_file_content(request_obj: Request, client_identity: str = Depends(verify_api_key)):
     """Retained for discovery while DevWatch operates in report-only mode."""
     raise HTTPException(
         status_code=410,

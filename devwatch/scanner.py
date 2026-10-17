@@ -183,7 +183,7 @@ class CodebaseScanner:
                 ext = os.path.splitext(file)[1].lower()
                 if ext in ALLOWED_EXTENSIONS:
                     file_path = Path(root) / file
-                    if self.is_ignored_file(file_path):
+                    if file_path.is_symlink() or self.is_ignored_file(file_path):
                         continue
 
 
@@ -224,21 +224,6 @@ class CodebaseScanner:
     def get_codebase_context(self) -> Dict[str, str]:
         files = self.get_files()
         return {f: self.read_file(f) for f in files}
-
-    def write_file(self, rel_path: str, content: str) -> bool:
-        safe_path = self._resolve_safe_path(rel_path)
-        
-        ext = safe_path.suffix.lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            raise ValueError(f"Access denied: File extension '{ext}' is not permitted")
-
-        if len(content.encode("utf-8")) > Config.MAX_FILE_SIZE_BYTES:
-            raise ValueError(f"Content size exceeds maximum file limit of {Config.MAX_FILE_SIZE_BYTES} bytes")
-
-        os.makedirs(safe_path.parent, exist_ok=True)
-        with open(safe_path, "w", encoding="utf-8") as f:
-            f.write(content)
-        return True
 
     def get_tree_structure(self) -> List[Dict]:
         """Returns recursive nested tree nodes for IDE file explorer components."""

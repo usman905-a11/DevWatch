@@ -90,9 +90,9 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 **Description:** Wire typed state, reducers, planner, relevant specialist `Send` branches, and bounded concurrency.
 
 **Acceptance criteria:**
-- [ ] Only assigned specialists execute.
-- [ ] Parallel candidates/failures merge deterministically within budgets.
-- [ ] Source contents are absent from checkpoints.
+- [x] Only assigned specialists execute.
+- [x] Parallel candidates/failures merge deterministically within budgets.
+- [x] Source contents are absent from checkpoints.
 
 **Verification:** `pytest tests/test_langgraph_review_engine.py tests/test_review_agents.py -q`.
 
@@ -103,9 +103,9 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 **Description:** Deduplicate candidates, verify in file batches, apply the strict gate, and render reports deterministically.
 
 **Acceptance criteria:**
-- [ ] Confirmed findings have valid location/hash, `ACCEPTED`, and confidence ≥ 0.8.
-- [ ] Uncertain high-risk candidates are separate; unavailable verification suppresses LLM-only candidates.
-- [ ] Planner/specialist/verifier failures produce partial reports with retained conclusive tool evidence.
+- [x] Confirmed findings have valid location/hash, `ACCEPTED`, and confidence ≥ 0.8.
+- [x] Uncertain high-risk candidates are separate; unavailable verification suppresses LLM-only candidates.
+- [x] Planner/specialist/verifier failures produce partial reports with retained conclusive tool evidence.
 
 **Verification:** `pytest tests/test_langgraph_review_engine.py tests/test_pipeline_resilience.py -q`.
 
@@ -116,9 +116,9 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 **Description:** Persist graph checkpoints, stream node/custom events, and support cancellation without repeating completed side effects.
 
 **Acceptance criteria:**
-- [ ] A resumed job reuses completed checkpointed stages.
-- [ ] Progress includes node/specialist, elapsed time, tool evidence, token usage, and suppressed counts.
-- [ ] Cancellation closes tasks and resources.
+- [x] A resumed job reuses completed checkpointed stages.
+- [x] Progress includes node/specialist, elapsed time, tool evidence, token usage, and suppressed counts.
+- [x] Cancellation closes tasks and resources.
 
 **Verification:** Targeted checkpoint, streaming, and cancellation tests.
 
@@ -126,7 +126,7 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 
 ### M3 checkpoint
 
-- [ ] Focused graph tests pass; report completion and wait for M4 approval.
+- [x] Focused graph tests pass (36 passed with warnings as errors); full backend suite passes (189 passed, 2 skipped) on 2026-09-27. Report completion and wait for the user's next-phase prompt.
 
 ## M4 — Interface migration and report-only product
 
@@ -135,9 +135,9 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 **Description:** Delegate `ReviewPipeline` through the engine and preserve CLI, REST, report storage, auth, rate limits, and WebSocket shapes.
 
 **Acceptance criteria:**
-- [ ] Existing review commands/endpoints and report lookup remain functional.
-- [ ] WebSocket progress/completion and disconnect cleanup work.
-- [ ] No second report database is introduced.
+- [x] Existing review commands/endpoints and report lookup remain functional.
+- [x] WebSocket progress/completion and disconnect cleanup work.
+- [x] No second report database is introduced.
 
 **Verification:** Focused CLI, server, auth, storage, and WebSocket tests.
 
@@ -148,9 +148,9 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 **Description:** Remove quick-fix controls, show report progress/manual candidates, and retire mutation routes with `410 Gone`.
 
 **Acceptance criteria:**
-- [ ] Mutation routes remain discoverable and never change files.
-- [ ] Frontend has no mutation action and displays review status.
-- [ ] Frontend tests, type-check, and build pass.
+- [x] Mutation routes remain discoverable and never change files.
+- [x] Frontend has no mutation action and displays review status.
+- [x] Frontend tests, type-check, and build pass.
 
 **Verification:** `pytest tests/test_phase6.py -q`, `npm test`, `npm run build` in `frontend`.
 
@@ -158,7 +158,7 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 
 ### M4 checkpoint
 
-- [ ] Transport and frontend checks pass; report completion and wait for M5 approval.
+- [x] Transport and frontend gates passed on 2026-09-28: 54 focused backend tests with warnings as errors, 10 frontend tests, and TypeScript/build. Stop until the user requests M5.
 
 ## M5 — Removal, hardening, and final acceptance
 
@@ -167,9 +167,9 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 **Description:** Remove unused custom orchestration and mutation internals after parity, then document config, containment limits, and retention.
 
 **Acceptance criteria:**
-- [ ] No active route or engine path can mutate reviewed code.
-- [ ] README/config examples describe the new workflow and limits.
-- [ ] Generated artifacts and checkpoints have clear lifecycle rules.
+- [x] No active route or engine path can mutate reviewed code.
+- [x] README/config examples describe the new workflow and limits.
+- [x] Generated artifacts and checkpoints have clear lifecycle rules.
 
 **Verification:** Search active call sites, run focused compatibility tests, inspect diff.
 
@@ -180,9 +180,9 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 **Description:** Evaluate precision, recall, resource budgets, cleanup, and complete backend/frontend parity.
 
 **Acceptance criteria:**
-- [ ] ≥20 cases, precision ≥90%, recall ≥70%.
-- [ ] File/token/command/concurrency budgets hold.
-- [ ] Backend tests, frontend tests/type-check/build pass with no unexplained regressions.
+- [x] ≥20 cases, precision ≥90%, recall ≥70%.
+- [x] File/token/command/concurrency budgets hold.
+- [x] Backend tests, frontend tests/type-check/build pass with no unexplained regressions.
 
 **Verification:** Full `pytest -q`; evaluation command; `npm test` and `npm run build` in `frontend`.
 
@@ -190,4 +190,4 @@ Complete one milestone, report its verification, and wait for the user's go-ahea
 
 ### M5 checkpoint
 
-- [ ] Final report lists evidence, remaining limitations, and changed files.
+- [x] Final gate passed on 2026-09-28: 194 backend tests passed, 3 skipped; 10 frontend tests and TypeScript/build passed; 20-case integrated offline precision 100%, recall 80%; 5,050-file benchmark passed in 13.13 seconds after the collector fix. Report limitations and changed files to the user.

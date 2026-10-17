@@ -14,6 +14,7 @@ from langgraph.config import get_stream_writer
 from langgraph.types import Send
 
 from devwatch.agents.base import BaseAgent
+from devwatch.agents import llm
 from devwatch.config import Config
 from devwatch.models import (
     AgentStepUpdate,
@@ -27,7 +28,7 @@ from devwatch.review.models import ChangedRegion, ReviewTask, SpecialistRole, To
 from devwatch.review.evidence import ContextSelector, GitChangeCollector
 from devwatch.review.reporting import render_report
 from devwatch.review.runner import RestrictedCommandRunner, WorkspaceSnapshotter, detect_commands
-from devwatch.review.state import ReviewState, SpecialistState
+from devwatch.review.state import ReviewState, SpecialistState, candidate_sort_key
 from devwatch.scanner import CodebaseScanner
 from devwatch.tools.static_analyzer import ASTStaticAnalyzerTool
 from devwatch.tools import IssueDeduplicatorTool
@@ -55,6 +56,7 @@ class ReviewEngine:
         self.verifier = verifier
         self.verification_threshold = verification_threshold
         self.run_commands = run_commands
+        self._llm_semaphore = asyncio.Semaphore(max(1, Config.MAX_CONCURRENT_LLM_CALLS))
         self.change_collector = GitChangeCollector()
         self.snapshotter = WorkspaceSnapshotter(
             runs_dir or Path(Config.WORKSPACE_BASE_DIR) / ".devwatch" / "runs"
@@ -75,14 +77,15 @@ class ReviewEngine:
         self.graph = self._build_graph(checkpointer or InMemorySaver()) if not self.checkpoint_path else None
 
     async def review_repository(
-        self, target_path: str, progress_sink: Optional[ProgressSink] = None
+        self, target_path: str, progress_sink: Optional[ProgressSink] = None,
+        *, job_id: Optional[str] = None,
     ) -> ReviewReport:
         root = Path(target_path).resolve()
         scanner = CodebaseScanner(str(root))
         available_files = scanner.get_files()
         source_artifacts: Dict[str, str] = {}
         snapshot = None
-        job_id = f"job_{uuid.uuid4().hex[:12]}"
+        job_id = job_id or f"job_{uuid.uuid4().hex[:12]}"
         materialize_snapshot = self._requires_expanded_snapshot(root, available_files)
         manifest_files = self._manifest_files(root, available_files)
         try:
@@ -173,20 +176,23 @@ class ReviewEngine:
         file_path: str,
         content: str,
         progress_sink: Optional[ProgressSink] = None,
+        *, job_id: Optional[str] = None,
     ) -> ReviewReport:
         return await self.review_files(
-            [{"file_path": file_path, "content": content}], progress_sink=progress_sink
+            [{"file_path": file_path, "content": content}], progress_sink=progress_sink,
+            job_id=job_id,
         )
 
     async def review_files(
         self,
         files: Iterable[Dict[str, str]],
         progress_sink: Optional[ProgressSink] = None,
+        *, job_id: Optional[str] = None,
     ) -> ReviewReport:
         artifacts = {
             item.get("file_path", "file.txt"): item.get("content", "") for item in files
         }
-        job_id = f"job_{uuid.uuid4().hex[:12]}"
+        job_id = job_id or f"job_{uuid.uuid4().hex[:12]}"
         snapshot = await asyncio.to_thread(
             self.snapshotter.create_from_files, artifacts, job_id
         )
@@ -213,6 +219,37 @@ class ReviewEngine:
             runtime_artifacts=artifacts,
         )
 
+    async def resume_job(
+        self, job_id: str, progress_sink: Optional[ProgressSink] = None
+    ) -> ReviewReport:
+        """Resume the last durable graph checkpoint for a previously started job."""
+        if not job_id or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for char in job_id):
+            raise ValueError("job_id contains invalid characters")
+        if not self.checkpoint_path or not self.checkpoint_path.is_file():
+            raise ValueError("a durable checkpoint is required to resume a job")
+        config = {"configurable": {"thread_id": job_id}}
+        token = self._progress_sink.set(progress_sink)
+        started_token = self._started_at.set(time.perf_counter())
+        job_token = llm.set_current_job(job_id)
+        try:
+            async with AsyncSqliteSaver.from_conn_string(str(self.checkpoint_path)) as saver:
+                await saver.setup()
+                graph = self._build_graph(saver)
+                checkpoint = await graph.aget_state(config)
+                state = checkpoint.values
+                if not state or state.get("job_id") != job_id:
+                    raise ValueError(f"no checkpoint exists for {job_id}")
+                artifact = Path(state["artifact_path"]).resolve()
+                if artifact.parent != self.snapshotter.runs_dir or not artifact.is_dir():
+                    raise ValueError("run artifacts are unavailable for this job")
+                if state.get("report"):
+                    return state["report"]
+                return await self._stream_graph(graph, None, config)
+        finally:
+            llm.reset_current_job(job_token)
+            self._started_at.reset(started_token)
+            self._progress_sink.reset(token)
+
     async def _invoke(
         self,
         job_id: str,
@@ -229,6 +266,7 @@ class ReviewEngine:
         token = self._progress_sink.set(progress_sink)
         artifact_token = self._artifact_cache.set(runtime_artifacts or {})
         started_token = self._started_at.set(time.perf_counter())
+        job_token = llm.set_current_job(job_id)
         try:
             graph_input = {
                     "job_id": job_id,
@@ -238,7 +276,10 @@ class ReviewEngine:
                     "artifact_hashes": artifact_hashes,
                     "changed_regions": changed_regions,
                     "tool_evidence": tool_evidence,
-                    "candidate_findings": initial_candidates or [],
+                    "candidate_findings": [
+                        issue.model_copy(update={"code_snippet": None})
+                        for issue in (initial_candidates or [])
+                    ],
                     "failures": [],
                 }
             graph_config = {"configurable": {"thread_id": job_id}}
@@ -246,14 +287,41 @@ class ReviewEngine:
                 self.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
                 async with AsyncSqliteSaver.from_conn_string(str(self.checkpoint_path)) as saver:
                     await saver.setup()
-                    result = await self._build_graph(saver).ainvoke(graph_input, graph_config)
+                    return await self._stream_graph(self._build_graph(saver), graph_input, graph_config)
             else:
-                result = await self.graph.ainvoke(graph_input, graph_config)
-            return result["report"]
+                return await self._stream_graph(self.graph, graph_input, graph_config)
         finally:
+            llm.reset_current_job(job_token)
             self._started_at.reset(started_token)
             self._artifact_cache.reset(artifact_token)
             self._progress_sink.reset(token)
+
+    async def _stream_graph(self, graph: Any, graph_input: Any, config: Dict[str, Any]) -> ReviewReport:
+        if self._progress_sink.get() is None:
+            result = await graph.ainvoke(graph_input, config)
+            return result["report"]
+        async for event in graph.astream(
+            graph_input, config, stream_mode=["updates", "custom"], version="v2",
+            durability="sync",
+        ):
+            sink = self._progress_sink.get()
+            if sink is None:
+                continue
+            if event["type"] == "custom" and event["data"].get("type") == "agent_update":
+                sink(AgentStepUpdate.model_validate(event["data"]))
+            elif event["type"] == "updates":
+                for node, update in event["data"].items():
+                    if node == "__interrupt__":
+                        continue
+                    tool_results = []
+                    if node == "plan_review" and graph_input:
+                        tool_results = [item.model_dump(mode="json") for item in graph_input.get("tool_evidence", [])]
+                    self._notify(node, "COMPLETED", f"{node} completed", tool_results=tool_results)
+        checkpoint = await graph.aget_state(config)
+        report = checkpoint.values.get("report")
+        if report is None:
+            raise RuntimeError("review graph stopped before rendering a report")
+        return report
 
     def _build_graph(self, checkpointer: Any):
         builder = StateGraph(ReviewState)
@@ -274,27 +342,55 @@ class ReviewEngine:
 
     async def _plan_review(self, state: ReviewState) -> Dict[str, Any]:
         self._notify("Planner Agent", "RUNNING", "Routing changed code to specialists")
+        usage: Dict[str, int] = {}
         try:
-            tasks = await self.planner.execute(
-                {
-                    "target_path": state["target_path"],
-                    "files": [region.file_path for region in state.get("changed_regions", [])],
-                    "changed_regions": state.get("changed_regions", []),
-                    "tool_evidence": state.get("tool_evidence", []),
-                    "candidate_findings": state.get("candidate_findings", []),
-                }
-            )
+            with llm.usage_tracking() as usage:
+                async with self._llm_semaphore:
+                    tasks = await self.planner.execute(
+                        {
+                            "target_path": state["target_path"],
+                            "files": [region.file_path for region in state.get("changed_regions", [])],
+                            "changed_regions": state.get("changed_regions", []),
+                            "tool_evidence": state.get("tool_evidence", []),
+                            "candidate_findings": state.get("candidate_findings", []),
+                        }
+                    )
             validated = [task if isinstance(task, ReviewTask) else ReviewTask.model_validate(task) for task in tasks]
             target_files = {region.file_path for region in state.get("changed_regions", [])}
             context_files = [
                 path for path in state.get("artifact_files", []) if path not in target_files
             ]
+            by_role: Dict[SpecialistRole, ReviewTask] = {}
             for task in validated:
-                task.context_files = list(dict.fromkeys(task.context_files + context_files))
-            self._notify("Planner Agent", "COMPLETED", f"Created {len(validated)} specialist tasks")
-            return {"review_tasks": validated}
+                assigned = sorted(set(task.files) & target_files)
+                if not assigned:
+                    continue
+                if task.specialist in by_role:
+                    prior = by_role[task.specialist]
+                    prior.files = sorted(set(prior.files) | set(assigned))
+                else:
+                    by_role[task.specialist] = task.model_copy(
+                        deep=True,
+                        update={
+                            "files": assigned,
+                            "context_files": sorted(set(task.context_files) & set(context_files)),
+                            "focus": task.focus[:500],
+                        },
+                    )
+            normalized = []
+            for role in SpecialistRole:
+                task = by_role.get(role)
+                if task:
+                    task.context_files = sorted(set(task.context_files) | set(context_files))
+                    task.changed_regions = [
+                        region for region in state.get("changed_regions", [])
+                        if region.file_path in task.files
+                    ]
+                    normalized.append(task)
+            self._notify("Planner Agent", "COMPLETED", f"Created {len(normalized)} specialist tasks", token_usage=usage)
+            return {"review_tasks": normalized}
         except Exception as error:
-            self._notify("Planner Agent", "FAILED", str(error))
+            self._notify("Planner Agent", "FAILED", str(error), token_usage=usage)
             return {"review_tasks": [], "failures": [self._failure("PLANNING", "planner", error)]}
 
     def _dispatch_tasks(self, state: ReviewState):
@@ -323,37 +419,53 @@ class ReviewEngine:
             error = ValueError(f"no specialist registered for {task.specialist.value}")
             return {"failures": [self._failure("SPECIALIST", task.specialist.value, error)]}
         self._notify(task.specialist.value, "RUNNING", task.focus)
+        usage: Dict[str, int] = {}
         try:
-            result = await agent.execute(
-                {
-                    "task": task,
-                    "files": {
-                        path: self._read_artifact(state["artifact_path"], path)
-                        for path in task.files
-                    },
-                    "context_files": {
-                        path: self._read_artifact(state["artifact_path"], path)
-                        for path in task.context_files
-                    },
-                    "tool_evidence": state.get("tool_evidence", []),
-                }
-            )
+            with llm.usage_tracking() as usage:
+                async with self._llm_semaphore:
+                    result = await agent.execute(
+                        {
+                            "task": task,
+                            "files": {
+                                path: self._read_artifact(state["artifact_path"], path)
+                                for path in task.files
+                            },
+                            "context_files": {
+                                path: self._read_artifact(state["artifact_path"], path)
+                                for path in task.context_files
+                            },
+                            "tool_evidence": state.get("tool_evidence", []),
+                        }
+                    )
             findings = [
-                issue if isinstance(issue, CodeIssue) else CodeIssue.model_validate(issue)
+                (issue if isinstance(issue, CodeIssue) else CodeIssue.model_validate(issue)).model_copy(deep=True)
                 for issue in (result or [])
             ]
+            findings = [
+                finding for finding in findings
+                if finding.file_path in task.files
+                and (
+                    not finding.code_snippet
+                    or finding.evidence_fingerprint == generate_evidence_fingerprint(finding.code_snippet)
+                )
+            ]
             for finding in findings:
+                finding.source_type = "agent"
+                finding.evidence = []
+                finding.code_snippet = None
                 finding.specialist = finding.specialist or task.specialist.value
                 finding.agent_id = finding.agent_id or task.specialist.value
                 finding.ensure_identity()
-            self._notify(task.specialist.value, "COMPLETED", f"Produced {len(findings)} candidates")
+            self._notify(task.specialist.value, "COMPLETED", f"Produced {len(findings)} candidates", token_usage=usage)
             return {"candidate_findings": findings}
         except Exception as error:
-            self._notify(task.specialist.value, "FAILED", str(error))
+            self._notify(task.specialist.value, "FAILED", str(error), token_usage=usage)
             return {"failures": [self._failure("SPECIALIST", task.specialist.value, error)]}
 
     def _deduplicate(self, state: ReviewState) -> Dict[str, Any]:
-        candidates = state.get("candidate_findings", [])[: Config.MAX_CANDIDATE_FINDINGS]
+        candidates = sorted(
+            state.get("candidate_findings", []), key=candidate_sort_key,
+        )[: Config.MAX_CANDIDATE_FINDINGS]
         return {"deduped_findings": self.deduplicator._run(candidates)}
 
     async def _verify(self, state: ReviewState) -> Dict[str, Any]:
@@ -379,31 +491,43 @@ class ReviewEngine:
         grouped: Dict[str, List[CodeIssue]] = defaultdict(list)
         for issue in candidates_to_verify:
             grouped[issue.file_path].append(issue)
-        try:
-            for file_path, issues in grouped.items():
-                result = await self.verifier.execute(
-                    {
-                        "file_path": file_path,
-                        "code_content": self._read_artifact(
-                            state["artifact_path"], file_path
-                        ),
-                        "issues": issues,
-                    }
-                )
+        failures = []
+        for file_path in sorted(grouped):
+            issues = grouped[file_path]
+            usage: Dict[str, int] = {}
+            try:
+                with llm.usage_tracking() as usage:
+                    async with self._llm_semaphore:
+                        result = await self.verifier.execute(
+                            {
+                                "file_path": file_path,
+                                "code_content": self._read_artifact(
+                                    state["artifact_path"], file_path
+                                ),
+                                "issues": issues,
+                            }
+                        )
                 if not isinstance(result, list):
                     raise TypeError("verifier must return a list of findings")
-                verified.extend(
-                    issue if isinstance(issue, CodeIssue) else CodeIssue.model_validate(issue)
-                    for issue in result
-                )
-            self._notify("Verification Agent", "COMPLETED", f"Verified {len(verified)} candidates")
-            return {"verified_findings": verified}
-        except Exception as error:
-            self._notify("Verification Agent", "FAILED", str(error))
-            return {
-                "verified_findings": deterministic,
-                "failures": [self._failure("VERIFICATION", "verifier", error)],
-            }
+                originals = {issue.finding_id: issue for issue in issues}
+                seen_decisions = set()
+                for item in result:
+                    decision = item if isinstance(item, CodeIssue) else CodeIssue.model_validate(item)
+                    original = originals.get(decision.finding_id)
+                    if original is not None and decision.finding_id not in seen_decisions:
+                        seen_decisions.add(decision.finding_id)
+                        verified.append(original.model_copy(update={
+                            "verification_status": decision.verification_status,
+                            "verification_confidence": decision.verification_confidence,
+                            "verification_rationale": decision.verification_rationale,
+                        }))
+            except Exception as error:
+                failures.append(self._failure("VERIFICATION", file_path, error))
+                self._notify("Verification Agent", "FAILED", f"{file_path}: {error}", token_usage=usage)
+            else:
+                self._notify("Verification Agent", "COMPLETED", f"Verified {file_path}", token_usage=usage)
+        self._notify("Verification Agent", "COMPLETED", f"Verified {len(verified)} candidates")
+        return {"verified_findings": verified, "failures": failures}
 
     def _strict_gate(self, state: ReviewState) -> Dict[str, Any]:
         confirmed: List[CodeIssue] = []
@@ -458,11 +582,23 @@ class ReviewEngine:
             content = self._read_artifact(artifact_path, issue.file_path)
         except (OSError, ValueError):
             return False
-        line = issue.line_number or issue.start_line
-        if line is None or line < 1 or line > max(1, len(content.splitlines())):
+        lines = content.splitlines()
+        start = issue.start_line or issue.line_number
+        end = issue.end_line or issue.line_number
+        if not start or not end or start < 1 or end < start or end > len(lines):
             return False
-        expected = generate_evidence_fingerprint(issue.code_snippet or issue.title)
-        return issue.evidence_fingerprint == expected
+        if issue.line_number is not None and not start <= issue.line_number <= end:
+            return False
+        source = "\n".join(lines[start - 1:end])
+        source_hash = generate_evidence_fingerprint(source)
+        if issue.source_type == "static":
+            return any(
+                item.get("source") == "ASTStaticAnalyzerTool"
+                and item.get("conclusive") is True
+                and item.get("source_hash") == source_hash
+                for item in issue.evidence
+            )
+        return issue.source_type == "agent" and issue.evidence_fingerprint == source_hash
 
     def _read_artifact(self, artifact_path: str, file_path: str) -> str:
         cached = self._artifact_cache.get().get(file_path)
@@ -524,8 +660,10 @@ class ReviewEngine:
 
     @staticmethod
     def _is_conclusive_tool_finding(issue: CodeIssue) -> bool:
-        return issue.source_type in {"ast", "static", "tool"} and any(
-            bool(item.get("conclusive")) for item in issue.evidence
+        return issue.source_type == "static" and any(
+            item.get("source") == "ASTStaticAnalyzerTool"
+            and item.get("conclusive") is True
+            for item in issue.evidence
         )
 
     @staticmethod
@@ -543,6 +681,8 @@ class ReviewEngine:
         status: str,
         message: str,
         suppressed_finding_count: Optional[int] = None,
+        tool_results: Optional[List[Dict[str, Any]]] = None,
+        token_usage: Optional[Dict[str, int]] = None,
     ) -> None:
         started_at = self._started_at.get()
         update = AgentStepUpdate(
@@ -553,15 +693,16 @@ class ReviewEngine:
             elapsed_ms=(time.perf_counter() - started_at) * 1000 if started_at else None,
             specialist=agent_name if agent_name in {role.value for role in SpecialistRole} else None,
             suppressed_finding_count=suppressed_finding_count,
+            tool_results=tool_results or [],
+            token_usage=token_usage or {},
         )
         sink = self._progress_sink.get()
-        if sink:
-            sink(update)
         try:
             writer = get_stream_writer()
             writer({"type": "agent_update", **update.model_dump()})
         except RuntimeError:
-            pass
+            if sink:
+                sink(update)
 
     async def _static_findings(
         self, artifacts: Dict[str, str], target_files: List[str]
@@ -584,9 +725,12 @@ class ReviewEngine:
 
         findings: List[CodeIssue] = []
         for issue in await asyncio.to_thread(analyze_all):
-            conclusive = (
-                issue.confidence_score >= 1.0 or issue.title in conclusive_titles
-            )
+            conclusive = issue.title in conclusive_titles
+            source_lines = artifacts[issue.file_path].splitlines()
+            source_range = "\n".join(source_lines[
+                (issue.start_line or issue.line_number or 1) - 1:
+                (issue.end_line or issue.line_number or 1)
+            ])
             issue.source_type = "static"
             issue.specialist = issue.specialist or "deterministic_static_analysis"
             issue.evidence = [
@@ -594,6 +738,7 @@ class ReviewEngine:
                     "source": "ASTStaticAnalyzerTool",
                     "summary": issue.title,
                     "conclusive": conclusive,
+                    "source_hash": generate_evidence_fingerprint(source_range),
                 }
             ]
             if conclusive:

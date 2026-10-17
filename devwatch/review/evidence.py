@@ -1,4 +1,6 @@
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 import posixpath
 import subprocess
 from pathlib import Path
@@ -40,13 +42,28 @@ class GitChangeCollector:
         untracked = self._run(
             root, "ls-files", "--others", "--exclude-standard", "-z"
         )
+        untracked_files = []
         for rel_path in filter(None, untracked.split("\0")):
             normalized = rel_path.replace("\\", "/")
-            path = (root / normalized).resolve()
-            if path.suffix.lower() not in ALLOWED_EXTENSIONS or not path.is_file():
+            candidate = root / normalized
+            if candidate.is_symlink():
                 continue
-            line_count = max(1, len(path.read_text(encoding="utf-8", errors="ignore").splitlines()))
-            ranges[normalized] = [(1, line_count)]
+            path = candidate.resolve()
+            if not path.is_relative_to(root):
+                continue
+            if path.suffix.lower() in ALLOWED_EXTENSIONS and path.is_file():
+                untracked_files.append((normalized, path))
+        if untracked_files:
+            worker_count = min(32, max(4, (os.cpu_count() or 4) + 4))
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                line_counts = executor.map(
+                    lambda item: max(
+                        1, len(item[1].read_text(encoding="utf-8", errors="ignore").splitlines())
+                    ),
+                    untracked_files,
+                )
+                for (normalized, _), line_count in zip(untracked_files, line_counts):
+                    ranges[normalized] = [(1, line_count)]
 
         return [
             ChangedRegion(file_path=path, start_line=start, end_line=end)

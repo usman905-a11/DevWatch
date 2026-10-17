@@ -1,7 +1,7 @@
 import logging
 import json
 import time
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 audit_logger = logging.getLogger("devwatch.audit")
 audit_logger.setLevel(logging.INFO)
@@ -62,17 +62,6 @@ def log_review_cancelled(report_id: str, client_identity: str, reason: str) -> N
     )
 
 
-def log_fix_applied(file_path: str, line_number: int, client_identity: str) -> None:
-    _log_event(
-        event_type="FIX_APPLIED",
-        severity="MEDIUM",
-        details={
-            "file_path": file_path,
-            "line_number": line_number,
-            "client_identity": client_identity,
-        },
-    )
-
 
 def log_rate_limit_exceeded(endpoint: str, client_identity: str) -> None:
     _log_event(
@@ -80,31 +69,3 @@ def log_rate_limit_exceeded(endpoint: str, client_identity: str) -> None:
         severity="WARNING",
         details={"endpoint": endpoint, "client_identity": client_identity},
     )
-
-
-def log_proposal_created(proposal_id: str, finding_id: str, file_path: str, author: str) -> None:
-    _log_event(
-        event_type="PROPOSAL_CREATED",
-        severity="INFO",
-        details={
-            "proposal_id": proposal_id,
-            "finding_id": finding_id,
-            "file_path": file_path,
-            "author": author,
-        },
-    )
-
-
-def log_remediation_event(event_type: str, proposal_id: str, file_path: str, client_identity: str, reason: Optional[str] = None) -> None:
-    _log_event(
-        event_type=event_type,
-        severity="MEDIUM" if "APPLIED" in event_type else "HIGH",
-        details={
-            "proposal_id": proposal_id,
-            "file_path": file_path,
-            "client_identity": client_identity,
-            "reason": reason,
-        },
-    )
-
-
