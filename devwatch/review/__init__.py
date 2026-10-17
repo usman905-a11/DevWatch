@@ -1,23 +1,4 @@
-"""LangGraph-backed code review domain."""
+"""Canonical seven-agent review contracts."""
+from devwatch.review.contracts import AgentId, ReportDraft, ReviewTask
 
-from devwatch.review.models import (
-    ChangedRegion,
-    CommandSpec,
-    RepositorySnapshot,
-    ReviewMetrics,
-    ReviewTask,
-    SpecialistRole,
-    ToolEvidence,
-    VerificationDecision,
-)
-
-__all__ = [
-    "ChangedRegion",
-    "CommandSpec",
-    "RepositorySnapshot",
-    "ReviewMetrics",
-    "ReviewTask",
-    "SpecialistRole",
-    "ToolEvidence",
-    "VerificationDecision",
-]
+__all__ = ["AgentId", "ReportDraft", "ReviewTask"]

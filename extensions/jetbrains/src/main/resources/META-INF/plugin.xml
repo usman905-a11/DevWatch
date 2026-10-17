@@ -1,0 +1,10 @@
+<idea-plugin>
+  <id>local.devwatch</id>
+  <name>DevWatch</name>
+  <vendor>DevWatch local</vendor>
+  <description>Durable seven-agent review jobs, replay, immutable source and deterministic report exports.</description>
+  <depends>com.intellij.modules.platform</depends>
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="DevWatch" anchor="right" factoryClass="local.devwatch.ReviewToolWindow" />
+  </extensions>
+</idea-plugin>

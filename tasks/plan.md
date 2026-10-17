@@ -1,64 +1,167 @@
-# DevWatch LangGraph refactor: milestone plan
+# DevWatch seven-agent remediation: active implementation plan
 
-## Goal
+## Current request: Milestone 8 — Observability & Streaming (2026-10-17)
 
-Replace the custom review orchestrator with a local, diff-first LangGraph workflow. Preserve the existing review interfaces, require strict evidence before confirming LLM findings, and make the product report-only.
+Continue the attached local plan after completed reliability M7. Stop after M8;
+storage cleanup M9 and the historical IDE/infrastructure sequence remain out of scope.
+Use existing durable events, SSE/WebSocket replay, CLI and opt-in metadata export.
+No new agents, telemetry services, dependencies, live provider calls or publication.
 
-This document is the staged execution of the supplied refactor plan. Some later-stage code already exists in the shared worktree. Preserve it; implementation presence or a green general test run does not close an acceptance criterion. Complete exactly one remaining milestone per user prompt, then stop until the user explicitly asks to continue.
+Questions the timeline must answer:
+1. Which agent/task/iteration made each model/tool call, and how did it finish?
+2. Which evidence was retrieved, delivered and acknowledged, and which candidates
+   were created, quarantined or verified?
+3. What caused retries/stops and when did final acceptance/rendering complete?
+4. Can local replay and optional exported metadata reconstruct the same execution
+   without prompts, source, tool arguments/results or raw exception messages?
 
-## Architecture decisions
+Ordered slices (each requires a failing behavioral test then a focused green gate):
+1. Extend event metadata additively with bounded phase/iteration/attempt, correlation,
+   outcome, count, verdict and sanitized stop/finish classifications. Instrument real
+   model dispatch/completion and retries; no invented calls when budget admission fails.
+2. Instrument actual agent lifecycle, evidence lifecycle, candidate publication /
+   quarantine, verification and finalization. Fix misleading generic success events.
+3. Preserve ownership/cursor streaming and metadata-only export; keep full job/task
+   correlation local, export only random execution/call IDs and allowlisted runtime
+   classifications, and add a local `events --follow` CLI observer.
+4. Refresh generated browser contracts/fixtures, verify transport parity and consumer
+   tests/build, run the backend suite, review the incremental diff and write M8 report.
 
-- `ReviewEngine` owns review execution. `ReviewPipeline` is a compatibility facade until parity is proven.
-- LangGraph state holds typed metadata, artifact paths and hashes, tasks, findings, and failures. Source contents live under `.devwatch/runs/{job_id}`.
-- Repository reviews target Git changes; uploaded and single-file reviews bypass Git. Static tools and tests are deterministic.
-- One planner routes work to four specialist roles. A verifier decides which candidates pass the strict gate. Report rendering is deterministic.
-- Commands use an exact, predefined argv allowlist in a disposable snapshot. The runner is containment, not a security boundary.
+Follow current Python/asyncio/Pydantic conventions; tests use injected providers and
+temporary real stores. New focused tests: `tests/test_m8_observability.py`.
+Commands: `.venv/Scripts/python.exe -m pytest tests/test_m8_observability.py -q`,
+`.venv/Scripts/python.exe -m pytest -q`,
+`.venv/Scripts/python.exe scripts/export_review_contracts.py --check`,
+`npm test` and `npm run build` from `frontend/`.
+Keep old persisted events readable, existing fields intact and export opt-in.
 
-## Milestones and acceptance gates
+## Current request: Milestone 7 — Reliability & Recovery (2026-10-17)
 
-### M1 — Contracts and evaluation foundation
+The attached local-side-project plan supersedes the older remaining-milestone
+sequence below. Complete this milestone only, then stop. Its M7 is reliability,
+not the historical IDE-client M7. No commits, deployment, new agents or services.
 
-Define the public and internal models, package dependencies, engine interface, and a versioned offline suite with at least 20 clean and buggy cases. Existing CLI/REST/WebSocket payloads must remain compatible. Focused contract and evaluation tests pass. Stop for approval.
+Acceptance: recoverable tool errors permit a bounded next action with sanitized
+structured feedback; malformed output and provider failures remain bounded;
+iteration/token/tool exhaustion preserves partial data; deadlines and explicit
+cancellation drain work; specialist failure preserves sibling results; explicit
+resume preserves accounting and completed work without stale cancellation status.
+Keep intermediate recovery metadata bounded and do not store model reasoning.
 
-### M2 — Evidence collection
+Implementation order:
+1. Establish existing recovery test baseline; reproduce gaps in tool feedback,
+   context deadlines, specialist isolation and resumed coverage.
+2. Fix each reproduced gap through a failing regression then a focused green gate.
+3. Run the backend suite, inspect the incremental changes, and record the M7
+   acceptance matrix, files, tests, results and limitations in a separate report.
 
-Collect staged, unstaged, and untracked changed regions; select directly related dependency/test context; create disposable snapshots; and run only bounded configured commands. Clean Git trees return an explanatory empty report. Focused Git, artifact, runner, and workspace-integrity tests pass. Stop for approval.
+Use existing Python/asyncio/Pydantic/LangGraph conventions, injected providers,
+real temporary stores and immutable test repositories. Runtime source lives in
+`devwatch/review/`; regressions live in `tests/test_m7_reliability.py`.
+Focused command: `.venv/Scripts/python.exe -m pytest tests/test_m7_reliability.py -q`.
+Full command: `.venv/Scripts/python.exe -m pytest -q`.
+Preserve shared edits, permissions, evidence gates and cumulative limits. Add no
+dependencies or public transport changes. Milestones 8–13 remain out of scope.
 
-### M3 — LangGraph review workflow
+## Audit reliability fixes (2026-10-15)
 
-Run planner, relevant specialists via `Send`, deduplication, file-based verification, strict gate, and deterministic report. Add reducers, SQLite checkpoints, custom progress events, cancellation, and partial-failure behavior. Fake-provider tests prove routing, merge determinism, suppression, and resume. Stop for approval.
+The attached six-fix request is the acceptance specification. Preserve all seven
+identities, LangGraph, distributed execution and existing responsibilities.
+Execute inline, without commits or deployment, in these dependency-ordered slices:
 
-### M4 — Interface migration and report-only product
+1. Runtime tool schemas/catalogue: exercise every role and reject malformed calls.
+2. Evidence paging and separate processing/delivery/inspection receipts: test large
+   artifacts, bounded retrieval, scope, provenance and persistence.
+3. Verification gate: reject uninspected confirmations; allow scoped verifier reads.
+4. Independent candidate validation/quarantine: preserve valid siblings and coverage.
+5. Consistency validation, one repair and deterministic partial recovery: preserve
+   verified claims through malformed synthesis, missing IDs and immutable changes.
+6. Whole-prompt admission, candidate admission, staged verification, output budgets
+   and explicit finish reasons: test small/medium/large and truncation paths.
+7. Full pipeline integration, backend regressions, schema/build checks and review.
 
-Delegate legacy pipeline calls to the engine. Preserve CLI, REST, report storage, auth, rate limits, and WebSocket events. Expose progress and manual-review candidates in the frontend. Mutation endpoints return `410 Gone`, and quick-fix controls are removed. Transport and frontend tests/build pass. Stop for approval.
+Telemetry questions: was evidence processed, delivered or acknowledged; were
+candidates quarantined; did verification/synthesis stop or recover? Keep payloads
+in owned artifacts/checkpoints and emit metadata through existing events.
 
-### M5 — Removal, hardening, and final acceptance
+The binding design is [seven-agent-design.md](seven-agent-design.md).
+The previous completed refactor/frontend records are preserved under [history/](history/)
+and do not define the architecture being built.
 
-Remove obsolete orchestration and mutation internals after parity. Document configuration, containment limits, and retention. Verify cleanup and budgets. Run the full backend/frontend/type/build suites and the 20-case evaluation; require confirmed-finding precision at least 90% and recall at least 70%. Stop and present final results.
+Migration: implement new → test → migrate → cut over → remove legacy → regression test.
 
-## Dependencies and risks
+Track executable slices in [todo.md](todo.md) and evidence/rulings in [progress.md](progress.md).
+The service is not cut over until the graph, durability, permissions, reporting and
+consumer migration pass their gates. No commit, push or deployment is authorized.
 
-M1 → M2 → M3 → M4 → M5. The main risks are unsafe command execution, source text leaking into checkpoints, false-positive confirmed findings, and legacy transport regressions. Each milestone's focused tests guard those risks before the next begins.
+## Completed two-milestone execution: M0 and M1
 
-## Current checkpoint
+The user requested two complete milestones. These are the earliest unchecked
+milestones; existing verified slices remain intact. The seven-agent design does
+not change. Later intelligence, full consumer parity and legacy-removal gates are
+not folded into these foundation milestones.
 
-M1 through M5 are complete. The staged refactor is finished; no further phase starts automatically. Preserve unrelated user work. No commit, push, deployment, or external publication is part of these milestones.
+1. M0 tooling: install the declared runtime/test extra in a clean Python 3.11
+   environment, record the resolved dependency closure, build/install the package
+   outside the checkout and verify contracts plus full regression. Verify the
+   generated frontend transport schemas. Inventory unavailable later adapters.
+2. M1 crash recovery: hold an OS-managed per-job execution lock alongside an
+   atomic Job Store lease. A dead process releases its lock; another manager
+   interrupts the orphan, preserves budgets/checkpoints and requires explicit
+   resume. A live process is never displaced based on wall-clock expiry alone.
+   Test actual killed subprocesses, queued restart and concurrent managers.
+3. M1 accounting/control: persist heartbeat elapsed time without overwriting
+   agent accounting; reconcile unknown crash duration conservatively. Observe
+   cancellation from another manager and drain work before releasing the lock.
+   Verify original intents, counters, unresolved reservations and ownership.
+4. M1 integrated gate: test service restart/replay, immutable snapshot and private
+   checkpoint continuity through recovery, then run all backend and frontend
+   regression/build gates. One fresh combined review follows the two milestones;
+   reproduce and fix required findings in one pass before marking M0/M1 complete.
 
-## Codebase audit (2026-09-27)
+Local SQLite/runtime files require a local filesystem with reliable process locks.
+Locks are Job Store execution coordination, not a sixth store or a new AI role.
+No lease state is added to the public transport schema. Distributed/network-file
+recovery belongs to the optional storage-adapter milestone.
 
-| Milestone | Status | Evidence and remaining work |
-|---|---|---|
-| M1 | Complete | Public/internal models, engine methods, dependency ranges plus `constraints.txt`, and 20 versioned mixed evaluation cases exist. Focused checks: 13 passed; `pip check` clean. The final precision/recall target still belongs to M5. |
-| M2 | Complete | Distinct current-source hunks, Python absolute/relative and frontend script imports/dependents/tests, scanner exclusions, full bounded command snapshots, bounded UTF-8 output, executable/path controls, secret stripping, timeout process-tree termination, and recursion control were verified. Focused gate: 44 passed, 2 skipped. |
-| M3 | Complete | Assigned specialist routing, bounded deterministic reducers, source-snippet-free checkpoints, strict source verification, partial reports, SQLite resume, progress metadata, and cancellation passed focused tests (36 passed with warnings as errors). Full backend suite: 189 passed, 2 skipped. |
-| M4 | Complete | CLI/REST/WebSocket compatibility, shared report lookup, auth and rate limits, quiet disconnect cleanup, discoverable report-only `410` mutation routes, progress, and manual-review candidates verified. Focused backend: 54 passed with warnings as errors. Frontend: 10 passed; TypeScript/build passed. |
-| M5 | Complete | Removed patcher operations, the scanner write method, mutation request models, and mutation audit helpers; documented report-only operation, command containment, and artifact/checkpoint/report lifecycle. The full backend suite passed (194 passed, 3 skipped), frontend tests passed (10) and TypeScript/build passed. The real 20-case changed-repository offline gate scored 100% precision and 80% recall (8 TP, 0 FP, 2 FN). The 5,050-file timing gate passed in the full suite; an isolated run after concurrent line counts took 13.13 seconds. Limits and cleanup checks passed. Live-model accuracy remains unmeasured; the real symlink test skipped on this Windows host, while boundary simulation tests passed. |
+## Remaining milestone execution (2026-10-14)
 
-Initial audit commands: `python -m pytest -q` produced 157 passed, 1 skipped, and 1 subprocess decoding warning; `npm test -- --run` produced 3 passed; `npm run build` succeeded. After M2, `python -m pytest -q` produced 171 passed and 2 skipped. A separate earlier warnings-as-errors run exposed an intermittent SQLite worker warning; the M3 focused warnings-as-errors run now passes.
+The user now authorizes completing all unchecked milestones. Existing tested
+foundation, service, CLI, UI and PDF work stays intact. Implement inline in this
+order, testing each slice; one fresh final combined review follows the migration.
 
-## Remaining execution order and stop rule
+1. M2: real Python/JS/TS AST/symbol/import/call intelligence with versioned cache;
+   role-specific graph/search/config/static-analysis tools; immutable Git metadata;
+   explicitly approved exact commands and measurement/DB adapters in disposable
+   scratch, with clean environment, bounded output, deadline and process drain.
+   Gate: parser/graph/scoping/cache tests plus real trusted command lifecycle tests.
+2. M3: connect the complete tool runtime to iterative graph execution, include
+   tool admission and unknown-operation recovery in cumulative budgets, and add
+   opt-in metadata-only observability. Gate: all seven roles, action iterations,
+   rejection, tool/provider failure, cancellation/resume and follow-up integration.
+3. M4: finish client parity and runtime metadata/export/reconnect checks, including
+   earlier minor UI/watch/report recovery notes. Gate: owned service/CLI/frontend
+   tests, generated schema freshness and real browser flow.
+4. M5: migrate remaining public entry points to the canonical service, archive
+   incompatible historical runtime artifacts, remove obsolete engines/agents,
+   routers/schemas/config/dependencies/tests after porting useful behaviors.
+   Gate: import/reference inventory, built package and full regression.
+5. M6: version at least 60 mixed clean/defective cases and evaluate canonical
+   outcomes against independent labels. Confirmed precision >=90%, recall >=70%.
+   Keep deterministic fixtures and live-model measurements explicitly separate;
+   never manufacture live quality from scripted provider output. Gate: evaluator,
+   budgets/resource tests, full backend/frontend/build and dependency checks.
+6. M7: VS Code and JetBrains clients of the same durable job contract; capture,
+   original submission intent, reconnect/status, explicit cancel/resume, report
+   groups/exports and immutable source navigation. Gate: client protocol tests,
+   extension/plugin build/package and available IDE/runtime validation.
+7. M8: disabled-by-default integration and PostgreSQL/Redis adapters with bounded
+   typed I/O, explicit credentials and metadata-only LangSmith. Gate: adapter
+   contract/integration tests and configuration docs. External publication or
+   messaging and deployment are not authorized; live-account checks require a
+   configured environment and are reported separately from adapter implementation.
 
-1. **M2 evidence collection: complete.** Changed-line mapping, bounded context, disposable snapshots, and runner controls passed the focused gate. **Stopped.**
-2. **M3 graph workflow: complete.** Resume, cancellation, streaming, deterministic merge, SQLite cleanup, and partial-failure cases passed focused checks. **Stopped.**
-3. **M4 interface migration: complete.** Legacy transport/storage/auth/rate-limit parity, WebSocket cleanup, manual-candidate UI, and report-only routes passed focused backend and frontend gates. **Stopped.**
-4. **M5 removal and acceptance: complete.** Obsolete mutation paths were removed; lifecycle and containment are documented; full checks and integrated offline evaluation passed. **Stopped.**
+Reproducible dependency records follow actual installed/tested packages. Legacy
+removal follows implement -> test -> migrate -> cut over -> remove -> regression;
+no permanent compatibility engine or extra AI identity is permitted. The final
+review must assess complete milestone claims, not count files or unchecked boxes.

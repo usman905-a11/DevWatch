@@ -10,7 +10,6 @@ from devwatch.providers.base import (
     LLMRequest,
     LLMResponse,
     LLMUsage,
-    ProviderCapabilities,
 )
 from devwatch.providers.exceptions import (
     ProviderError,
@@ -31,17 +30,19 @@ logger = logging.getLogger("devwatch.providers.openai")
 
 
 class OpenAIProviderAdapter(LLMProvider):
-    """Adapter wrapping Groq / OpenAI compatible API with typed error translation, metric tracking, and connection throttling."""
+    """Adapter for Gemini and other OpenAI-compatible chat APIs."""
 
     def __init__(
         self,
-        provider_name: str = "groq",
-        max_concurrency: int = 2,
+        provider_name: str = "gemini",
+        max_concurrency: int = 3,
         request_delay: float = 0.5,
     ):
         self.provider_name = provider_name
-        self.max_concurrency = int(os.getenv("DEVWATCH_MAX_CONCURRENT_LLM", str(max_concurrency)))
-        self.request_delay = float(os.getenv("DEVWATCH_LLM_REQUEST_DELAY", str(request_delay)))
+        self.max_concurrency = max_concurrency
+        if not 1 <= max_concurrency <= 3:
+            raise ValueError("Provider concurrency must be between one and three")
+        self.request_delay = request_delay
         self._semaphore: Optional[asyncio.Semaphore] = None
 
     @property
@@ -51,14 +52,12 @@ class OpenAIProviderAdapter(LLMProvider):
         return self._semaphore
 
     def is_available(self) -> bool:
+        if self.provider_name == "gemini":
+            return bool(os.getenv("GEMINI_API_KEY"))
         return bool(
-            os.getenv("GROQ_API_KEY")
-            or os.getenv("OPENROUTER_API_KEY")
+            os.getenv("OPENROUTER_API_KEY")
             or os.getenv("OPENAI_API_KEY")
         )
-
-    def get_capabilities(self) -> ProviderCapabilities:
-        return ProviderCapabilities(supports_streaming=True, supports_structured=True, max_context_tokens=32768)
 
     def _get_httpx_async_client(self) -> httpx.AsyncClient:
         # SSL verification toggle: DEVWATCH_SSL_VERIFY (default True unless set to false/0)
@@ -72,14 +71,15 @@ class OpenAIProviderAdapter(LLMProvider):
         )
 
     def _get_client_config(self) -> Dict[str, Any]:
-        # Groq API support (OpenAI-compatible)
-        groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key:
-            base_url = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+        if self.provider_name == "gemini":
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise ProviderConfigurationError("GEMINI_API_KEY is required for Gemini models.")
             return {
-                "api_key": groq_key,
-                "base_url": base_url,
+                "api_key": api_key,
+                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
                 "http_client": self._get_httpx_async_client(),
+                "max_retries": 0,
             }
 
         openrouter_key = os.getenv("OPENROUTER_API_KEY")
@@ -93,15 +93,17 @@ class OpenAIProviderAdapter(LLMProvider):
                 "api_key": openrouter_key,
                 "base_url": base_url,
                 "default_headers": headers,
+                "max_retries": 0,
                 "http_client": self._get_httpx_async_client(),
             }
 
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise ProviderConfigurationError("No valid Groq (GROQ_API_KEY) or LLM provider API key found in environment.")
+            raise ProviderConfigurationError("No valid LLM provider API key found in environment.")
 
         kwargs: Dict[str, Any] = {
             "api_key": api_key,
+            "max_retries": 0,
             "http_client": self._get_httpx_async_client(),
         }
         if os.getenv("OPENAI_BASE_URL"):
@@ -158,87 +160,49 @@ class OpenAIProviderAdapter(LLMProvider):
 
         return ProviderError(f"LLM Provider Error: [{err_type}]", provider=self.provider_name, raw_error=err)
 
-    def generate_completion_sync(self, request: LLMRequest) -> LLMResponse:
-        if not self.is_available():
-            raise ProviderConfigurationError("No valid LLM provider API key configured.")
-
-        config = self._get_client_config()
-        if "http_client" in config and isinstance(config["http_client"], httpx.AsyncClient):
-            del config["http_client"]
-
-        start_time = time.time()
-
-        try:
-            import openai
-            client = openai.OpenAI(**config)
-            response = client.chat.completions.create(
-                model=request.model,
-                messages=[
-                    {"role": "system", "content": request.system_prompt},
-                    {"role": "user", "content": request.prompt},
-                ],
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
-            )
-
-            latency_ms = (time.time() - start_time) * 1000
-
-            if not response.choices or not response.choices[0].message.content:
-                raise ProviderInvalidResponseError("Provider returned an empty completion response.", provider=self.provider_name)
-
-            content = response.choices[0].message.content
-            usage = LLMUsage()
-            if hasattr(response, "usage") and response.usage:
-                usage = LLMUsage(
-                    prompt_tokens=getattr(response.usage, "prompt_tokens", 0) or 0,
-                    completion_tokens=getattr(response.usage, "completion_tokens", 0) or 0,
-                    total_tokens=getattr(response.usage, "total_tokens", 0) or 0,
-                )
-
-            req_id = getattr(response, "id", None)
-            return LLMResponse(
-                content=content,
-                provider=self.provider_name,
-                model=request.model,
-                latency_ms=latency_ms,
-                usage=usage,
-                request_id=req_id,
-            )
-        except ProviderError:
-            raise
-        except Exception as err:
-            raise self._translate_sdk_error(err)
+    def _completion_options(self, request: LLMRequest) -> Dict[str, Any]:
+        options: Dict[str, Any] = {
+            "model": request.model,
+            "messages": [
+                {"role": "system", "content": request.system_prompt},
+                {"role": "user", "content": request.prompt},
+            ],
+            "max_tokens": request.max_tokens,
+        }
+        if self.provider_name != "gemini":
+            options["temperature"] = request.temperature
+        return options
 
     async def generate_completion(self, request: LLMRequest) -> LLMResponse:
         if not self.is_available():
-            raise ProviderConfigurationError("No valid LLM provider API key configured.")
+            detail = (
+                "GEMINI_API_KEY is required for Gemini models."
+                if self.provider_name == "gemini"
+                else "No valid LLM provider API key configured."
+            )
+            raise ProviderConfigurationError(detail)
 
-        config = self._get_client_config()
+        config = None
+        client = None
         start_time = time.time()
 
         async with self.semaphore:
-            if self.request_delay > 0:
-                await asyncio.sleep(self.request_delay)
-
             try:
+                config = self._get_client_config()
+                if self.request_delay > 0:
+                    await asyncio.sleep(self.request_delay)
                 import openai
                 client = openai.AsyncOpenAI(**config)
                 response = await client.chat.completions.create(
-                    model=request.model,
-                    messages=[
-                        {"role": "system", "content": request.system_prompt},
-                        {"role": "user", "content": request.prompt},
-                    ],
-                    temperature=request.temperature,
-                    max_tokens=request.max_tokens,
+                    **self._completion_options(request)
                 )
 
                 latency_ms = (time.time() - start_time) * 1000
 
-                if not response.choices or not response.choices[0].message.content:
+                if not response.choices:
                     raise ProviderInvalidResponseError("Provider returned an empty completion response.", provider=self.provider_name)
 
-                content = response.choices[0].message.content
+                content = response.choices[0].message.content or ""
                 usage = LLMUsage()
                 if hasattr(response, "usage") and response.usage:
                     usage = LLMUsage(
@@ -255,8 +219,28 @@ class OpenAIProviderAdapter(LLMProvider):
                     latency_ms=latency_ms,
                     usage=usage,
                     request_id=req_id,
+                    finish_reason=response.choices[0].finish_reason or "unknown",
                 )
             except ProviderError:
                 raise
             except Exception as err:
                 raise self._translate_sdk_error(err)
+            finally:
+                transport = config.get("http_client") if config else None
+                if client is not None:
+                    await self._close_transport(client.close())
+                elif transport is not None:
+                    await self._close_transport(transport.aclose())
+
+    @staticmethod
+    async def _close_transport(closing):
+        cleanup = asyncio.create_task(closing)
+        cancelled = False
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                cancelled = True
+        cleanup.result()
+        if cancelled:
+            raise asyncio.CancelledError

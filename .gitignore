@@ -7,20 +7,41 @@
 .devwatch/reports
 .devwatch/runs/
 .devwatch/checkpoints.sqlite*
+.devwatch/runtime/
+.devwatch/langsmith-evaluation/
+.devwatch/legacy-archive/
 # Python build & bytecode
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.egg-info/
 dist/
 build/
+.venv/
+venv/
+env/
 
 # Node & Frontend build
 node_modules/
 frontend/dist/
 frontend/node_modules/
+.tools/
+extensions/jetbrains/.gradle/
+extensions/jetbrains/.intellijPlatform/
+extensions/vscode/*.vsix
+
+# Generated output and temporary files
+output/
+tmp/
+tasks/evidence/
+*.log
+coverage.xml
+.coverage
+htmlcov/
 
 # IDE & OS
 .vscode/

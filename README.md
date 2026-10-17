@@ -1,56 +1,401 @@
-# DevWatch
+# 🔍 DevWatch
 
-DevWatch reviews changed code and produces reports. It does not apply fixes to reviewed files. The review engine collects Git changes, selects nearby context, runs bounded static analysis and optional configured commands in a disposable copy, sends relevant work to LangGraph specialists, verifies evidence, and renders confirmed findings plus manual-review candidates.
+DevWatch is a local, durable code-review service. It captures source files
+immutably, submits a review job to a worker-owned service, and produces
+evidence-based JSON, Markdown, or PDF reports.
 
-## Install and run
+The project provides:
 
-From the repository root:
+- A FastAPI service with durable jobs, checkpoints, events, and recovery.
+- A seven-agent LangGraph review workflow: one planner, five iterative
+  specialists, and a combined verification/synthesis agent.
+- A command-line client for reviewing directories, files, and changed Git
+  scope.
+- A browser client in [`frontend/`](frontend/).
+- VS Code and JetBrains integration under [`extensions/`](extensions/).
+- Immutable source navigation and bounded tool evidence.
 
-```powershell
-python -m pip install -e .
-$env:GROQ_API_KEY = "replace-with-your-key"
-$env:DEVWATCH_RUN_COMMANDS = "false"
-devwatch review .
-uvicorn devwatch.server:app --port 8000
+Reviewed source is never modified by the review workflow.
+
+## How DevWatch works
+
+```text
+CLI / Browser / IDE
+        |
+        v
+  Snapshot capture
+        |
+        v
+  Durable job service
+        |
+        v
+  Seven-agent review workflow
+        |
+        v
+  Completion and acceptance checks
+        |
+        v
+  Deterministic JSON / Markdown / PDF report
 ```
 
-The provider adapter also accepts `OPENROUTER_API_KEY` or `OPENAI_API_KEY`. Set `DEVWATCH_API_KEY` when protecting the HTTP API; production mode (`DEVWATCH_ENV=production`) refuses to start without it. `DEVWATCH_WORKSPACE_DIR` limits which local paths the API can read. The CLI's `--output` option explicitly writes a Markdown report to the path supplied by the operator.
+The service owns the review workers. A client disconnect, timeout, or
+interrupted command does not cancel a submitted job. Jobs can be explicitly
+cancelled or resumed.
 
-For a frontend development session, run `npm install` and `npm run dev` in `frontend/`. The app expects the API at `http://localhost:8000`.
+The default local runtime uses separate SQLite-backed stores:
 
-## Review interfaces
+| Store | Responsibility |
+| --- | --- |
+| Job Store | Job requests, status, ownership, limits, and recovery state |
+| Checkpoint Store | LangGraph workflow checkpoints |
+| Repository Cache | Versioned parser and repository intelligence cache |
+| Event Store | Ordered, replayable job events |
+| Artifact Store | Immutable snapshots, evidence, and generated reports |
 
-- CLI: `devwatch review <directory>` or `devwatch review <directory> --output report.md`.
-- REST: `POST /api/review` with `{"target_path":"."}`; `POST /api/review/file` and `POST /api/review/files` accept uploaded source; `GET /api/reports/{report_id}` retrieves stored repository reports.
-- WebSocket: `/ws/review` accepts `{"target_path":"."}`, sends `agent_update` frames and a final `review_completion` with `report_id`, or `review_error`. A disconnected client cancels its review.
-- Retired mutation endpoints (`/api/review/propose-fix`, `/api/review/apply-proposal`, `/api/review/apply-fix`, and `/api/fs/write`) remain discoverable and return HTTP 410. They do not change files.
+The default runtime directory is `.devwatch/runtime/`.
 
-Repository reviews use staged, unstaged, and untracked Git changes. For a non-Git directory, DevWatch reviews its eligible files. A clean Git tree produces an explanatory empty report. The strict gate requires source evidence and verification before a finding is confirmed. Uncertain high-impact findings appear separately for manual review. If a stage fails, the report records the failure and may be partial.
+## Requirements
 
-## Limits and command containment
+- Windows x64 with Python 3.11 is the verified environment.
+- Python 3.11 or newer, as declared in [`pyproject.toml`](pyproject.toml).
+- Node.js and npm for the browser client.
+- An OpenAI-compatible provider or Gemini-compatible provider.
+- A model identifier for each of the `small`, `medium`, and `strong` tiers.
 
-The main settings are listed in [`.env.example`](.env.example). Defaults in `devwatch/config.py` include 100 review files, 1,000 snapshot files, 10 MB of scanner input, 100 MB per snapshot, 1,000 candidate findings, 10 concurrent LLM calls, 250,000 job tokens, and a 120-second review deadline. The command runner caps each command at 120 seconds and 200,000 captured output bytes; `DEVWATCH_RUN_COMMANDS=false` disables commands.
+Other operating systems and Python versions may work, but they require their
+own installation and regression validation.
 
-When commands are enabled, DevWatch discovers supported test commands or reads exact argv entries from `.devwatch.toml`. It rejects shells, inline Python, package installation, path traversal, and executables inside the reviewed workspace. Commands run with secret-like environment variables removed and within a disposable source snapshot. This is containment for accidental effects, not a security boundary for hostile code. Disable commands when reviewing untrusted repositories.
+## Installation
 
-## Generated data and retention
+### Python service and CLI
 
-| Data | Default location | Lifecycle |
-|---|---|---|
-| Source snapshots and uploaded-file artifacts | `.devwatch/runs/{job_id}/` | The engine prunes expired run directories when a new engine starts; default retention is 7 days (`DEVWATCH_ARTIFACT_RETENTION_DAYS`). A resume requires its run directory to remain. |
-| LangGraph checkpoints | `.devwatch/checkpoints.sqlite` | Durable across restarts. No automatic row pruning occurs. Stop reviews before deleting the database and its SQLite sidecar files; doing so removes all resume state. |
-| Stored REST/WebSocket repository reports | `.devwatch/reports/{report_id}.json` | Persist until an operator removes them. Report lookup stops working after deletion. |
+Create a virtual environment and install the project in editable mode:
 
-Keep `.devwatch/` private: artifacts and reports can contain source code, and checkpoints contain review metadata. Back up or purge these locations under your own retention policy. Never remove an active run directory or SQLite database during a review.
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -e .
+```
 
-## Verification
+For the reproducible Windows dependency set:
+
+```powershell
+python -m venv .venv-verified
+.venv-verified\Scripts\python.exe -m pip install --require-hashes -r requirements-windows-py311.lock
+.venv-verified\Scripts\python.exe -m pip install --no-build-isolation --no-deps -e .
+.venv-verified\Scripts\python.exe -m pip check
+```
+
+The hash-locked file is platform-specific. The dependency ranges in
+[`pyproject.toml`](pyproject.toml) and [`constraints.txt`](constraints.txt)
+remain the source of truth for other environments.
+
+### Browser client
+
+```powershell
+cd frontend
+npm install
+```
+
+## Configuration
+
+Set configuration in the process that starts the service. DevWatch does not
+load `.env` files implicitly when imported.
+
+### Required model and provider settings
+
+```powershell
+$env:DEVWATCH_MODEL_SMALL = "your-small-model-id"
+$env:DEVWATCH_MODEL_MEDIUM = "your-medium-model-id"
+$env:DEVWATCH_MODEL_STRONG = "your-strong-model-id"
+$env:DEVWATCH_PROVIDER = "openai"
+$env:OPENAI_API_KEY = "replace-with-your-provider-key"
+$env:DEVWATCH_API_KEY = "replace-with-your-private-service-key"
+```
+
+For the Gemini-compatible adapter:
+
+```powershell
+$env:DEVWATCH_PROVIDER = "gemini"
+$env:GEMINI_API_KEY = "replace-with-your-provider-key"
+```
+
+The provider adapter also supports compatible OpenRouter configuration. Use
+provider-specific model identifiers; the examples above are placeholders.
+
+### Service settings
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DEVWATCH_RUNTIME_DIR` | `.devwatch/runtime` | Root directory for local stores |
+| `DEVWATCH_ENV` | `development` | `production` requires an API key |
+| `DEVWATCH_SERVICE_URL` | `http://127.0.0.1:8000` | CLI service URL |
+| `DEVWATCH_API_KEY` | unset | Client authentication key |
+| `DEVWATCH_LANGSMITH_METADATA` | `false` | Opt-in metadata-only telemetry |
+| `DEVWATCH_LANGSMITH_PROJECT` | `devwatch-metadata` | Telemetry project name |
+
+When no API key is configured, only loopback clients are accepted. Credentials
+are sent through the `X-API-Key` header or a Bearer authorization header, never
+in URLs.
+
+## Start the service
+
+Start the canonical service with either command:
+
+```powershell
+uvicorn devwatch.review.service:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+or:
+
+```powershell
+devwatch serve
+```
+
+Keep this process running while using the CLI, browser, or IDE clients.
+
+## Use the CLI
+
+Open a second terminal with the same service configuration:
+
+```powershell
+# Review the current directory and wait for the report.
+devwatch review . --output report.md
+
+# Submit without waiting.
+devwatch review . --no-wait
+
+# Inspect a job.
+devwatch job JOB_ID
+
+# Replay metadata events, follow activity, or reconnect from a sequence number.
+devwatch events JOB_ID
+devwatch events JOB_ID --follow
+devwatch events JOB_ID --after 120 --follow
+
+# Download a completed report.
+devwatch job JOB_ID --report --format json --output report.json
+devwatch job JOB_ID --report --format pdf --output report.pdf
+
+# Recover or stop a job explicitly.
+devwatch resume JOB_ID
+devwatch cancel JOB_ID
+```
+
+Use `--service-url` or `DEVWATCH_SERVICE_URL` when the service is not running
+at the default address.
+
+Report output files must be new files with the matching `.md`, `.json`, or
+`.pdf` extension. Existing files are never overwritten.
+
+### Debugging a review
+
+`events` prints one JSON event per line, draining paginated history. `--follow`
+polls the same durable stream until completion, failure, cancellation or interruption.
+`Ctrl+C` disconnects the observer and leaves the job running. The browser uses SSE;
+WebSocket and HTTP replay return the same persisted sequence. Reconnect with the
+last `sequence` as `--after`; no review is restarted by observation.
+
+Use `agent_id`, `task_id` and the random `run_id` to follow one agent invocation.
+`iteration_started` records admitted investigation steps. `model_call_started` /
+`model_call_completed` and `tool_called` / `tool_result` share an `operation_id`.
+Their completion records include outcome and duration; model records include
+attempt, finish classification and token consumption. A provider failure charges
+unknown usage conservatively. Crash recovery records pending dispatched calls as
+`unknown`; it does not silently replay them. A budget refusal creates no model-call
+event, and `agent_completed.stop_reason` explains why the agent stopped.
+
+Evidence moves through `evidence_retrieved`, `evidence_delivered` and
+`evidence_inspected`. Delivery/inspection include page offsets; inspection means
+the agent acknowledged the delivered page, not proof that its conclusion is correct.
+`candidate_submitted` records structured candidates, `finding_created` records
+structurally accepted publication, and `candidate_rejected` records quarantine.
+`verification_completed` records each verdict. `validation_passed` is explicitly
+scoped to the structural gate or final acceptance; rendering and finalization
+have separate start/completion records. A verified candidate becomes a final
+report only after acceptance, rendering and `job_completed`.
+
+Local events contain bounded identifiers, counts and classifications. They omit
+prompts, source, tool arguments/results, model reasoning and raw exception text.
+Evidence bodies remain in the separately owned artifact endpoint.
+
+### Reviewing a watch directory
+
+`watch` turns source changes into bounded review submissions:
+
+```powershell
+devwatch watch . --interval 1 --debounce 1
+devwatch watch . --max-reviews 3
+```
+
+The watcher coalesces changes while a job is running. `Ctrl+C` stops the
+watcher, not the service-owned job. If a submission has an unknown outcome,
+use the printed snapshot ID and idempotency key with `devwatch submit` rather
+than recapturing the source.
+
+### Capture behavior
+
+Capture is intentionally bounded and read-only:
+
+- At most 100 files, 500 KB per file, and 10 MB total.
+- Sensitive filenames, secret-like extensions, generated files, links, and
+  unreadable files are excluded or reported as omissions.
+- Git scope uses staged, unstaged, and untracked status paths.
+- A single-file or non-Git request captures the eligible source under that
+  request.
+- Git history, deleted source, and submodule contents are not uploaded.
+- A clean Git scope does not make model calls; it produces a coverage report.
+
+## Use the browser client
+
+Start the service, then run the frontend:
+
+```powershell
+cd frontend
+npm run dev
+```
+
+Open the local Vite URL shown in the terminal. The browser defaults to
+`http://127.0.0.1:8000` for the service.
+
+The browser can:
+
+1. Connect to a service and keep the API key in memory.
+2. Capture an eligible local folder.
+3. Submit and monitor a review job.
+4. Reconnect to an existing job by ID.
+5. Resume or cancel a job explicitly.
+6. Navigate immutable source excerpts and evidence.
+7. Download deterministic JSON, Markdown, or PDF reports.
+
+To open a Git-scoped review in the browser, submit it from the CLI with
+`devwatch review PATH --no-wait`, then use **Open job** in the browser.
+
+## API overview
+
+The service exposes the same contract used by the CLI and clients:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/snapshots` | Store an immutable source snapshot |
+| `POST /api/jobs` | Submit a snapshot for review |
+| `GET /api/jobs/{job_id}` | Read durable job status |
+| `POST /api/jobs/{job_id}/resume` | Resume an interrupted job |
+| `POST /api/jobs/{job_id}/cancel` | Request explicit cancellation |
+| `GET /api/jobs/{job_id}/snapshot` | Read the immutable file catalog |
+| `GET /api/jobs/{job_id}/source` | Read a bounded source excerpt |
+| `GET /api/jobs/{job_id}/evidence/{evidence_ref}` | Read owned tool evidence |
+| `GET /api/jobs/{job_id}/events` | Replay persisted events |
+| `GET /api/jobs/{job_id}/report` | Return JSON, Markdown, or PDF |
+| `GET /api/jobs/{job_id}/stream` | Stream events over SSE |
+| `GET /api/jobs/{job_id}/ws` | Stream events over WebSocket |
+
+Use an `Idempotency-Key` when submitting a job. Reusing the same snapshot,
+scope, and key safely returns the same submission; changing the request is
+rejected.
+
+## Trusted tools and database inspection
+
+Commands are disabled unless the operator configures
+`DEVWATCH_TRUSTED_TOOLS_FILE`. The file contains exact approved command IDs,
+absolute executables, argument lists, source-file assignments, and bounded
+timeouts. Reviewed project configuration cannot grant command execution.
+
+Commands run against disposable copies and are bounded at 120 seconds and
+200 KB of output. This is trusted-host execution, not a hostile-code security
+sandbox.
+
+Optional SQLite inspection requires `DEVWATCH_DATABASE_POLICIES_FILE`. Policies
+grant owners access to specific absolute database paths. Connections are
+read-only and query-only; model-provided queries cannot modify databases.
+
+Optional LangSmith export is disabled by default. When enabled, only allowlisted
+metadata is exported. Source, prompts, arguments, and evidence bodies are not
+sent. The local Event Store remains authoritative.
+Exported events include phase, iteration, attempt, outcome and random invocation /
+call IDs. Job/task/evidence/finding identifiers and fingerprints remain local;
+use the local timeline for complete review correlation. No automatic LangGraph
+or SDK tracing is enabled, and no external telemetry account is required.
+
+## IDE integrations
+
+### VS Code
+
+The VS Code extension is in [`extensions/vscode/`](extensions/vscode/). It
+requires a trusted Python interpreter with DevWatch installed and a running
+local service.
+
+```powershell
+cd extensions/vscode
+npm install
+npm test
+```
+
+Available commands include:
+
+- **DevWatch: Review Workspace**
+- **DevWatch: Open Review Job**
+- **DevWatch: Recover Same Submission**
+- **DevWatch: Set Service API Key**
+
+### JetBrains
+
+The JetBrains plugin is in [`extensions/jetbrains/`](extensions/jetbrains/).
+Use the Gradle wrapper/tasks provided by that extension for local development.
+
+## Development and verification
+
+Run the backend tests:
 
 ```powershell
 python -m pytest -q
-python -m pytest tests/test_m5_acceptance.py -q -s
+```
+
+Run contract export checks:
+
+```powershell
+python -m scripts.export_review_contracts --check
+```
+
+Run frontend tests and the production build:
+
+```powershell
 cd frontend
 npm test
 npm run build
 ```
 
-The versioned offline evaluation uses 20 changed-file cases and scores confirmed findings from a real Git-change review without a live provider. It measures the deterministic path; live-model accuracy depends on the configured provider and is not established by that offline gate.
+Browser parity verification requires local Chrome and the isolated Playwright
+tools:
+
+```powershell
+python -m scripts.verify_browser_parity
+```
+
+The repository's canonical migration inventory is documented in
+[`tasks/migration-inventory.md`](tasks/migration-inventory.md). The focused
+legacy cutover tests are [`tests/test_legacy_removal.py`](tests/test_legacy_removal.py)
+and [`tests/test_package_cutover.py`](tests/test_package_cutover.py).
+
+## Current limitations
+
+- The verified environment is Windows x64 with Python 3.11.
+- The default stores require a local filesystem; distributed/network storage
+  adapters are not part of the default service.
+- Live-provider accuracy, deployment, and remote publication require separate
+  validation.
+- A review can finish with partial coverage when an agent fails, a deadline
+  expires, or a required capability is unavailable.
+- Legacy checkpoints and reports are not imported into the canonical schema.
+  Start new snapshots and jobs for the current runtime.
+
+## Project documentation
+
+- [`docs/migration.md`](docs/migration.md) - canonical migration and cutover
+  details.
+- [`docs/decisions/001-local-job-recovery.md`](docs/decisions/001-local-job-recovery.md)
+  - local recovery design.
+- [`docs/decisions/002-trusted-tool-runtime.md`](docs/decisions/002-trusted-tool-runtime.md)
+  - trusted command execution boundary.
+- [`tasks/migration-inventory.md`](tasks/migration-inventory.md) - current
+  implementation mapping.

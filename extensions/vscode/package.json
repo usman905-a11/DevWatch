@@ -1,0 +1,73 @@
+{
+  "name": "devwatch",
+  "displayName": "DevWatch",
+  "description": "Durable seven-agent reviews with immutable source and evidence.",
+  "version": "0.1.0",
+  "publisher": "devwatch-local",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": false
+  },
+  "activationEvents": [
+    "onCommand:devwatch.review",
+    "onCommand:devwatch.open"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "devwatch.review",
+        "title": "DevWatch: Review Workspace"
+      },
+      {
+        "command": "devwatch.open",
+        "title": "DevWatch: Open Review Job"
+      },
+      {
+        "command": "devwatch.recover",
+        "title": "DevWatch: Recover Same Submission"
+      },
+      {
+        "command": "devwatch.configure",
+        "title": "DevWatch: Set Service API Key"
+      }
+    ],
+    "configuration": {
+      "title": "DevWatch",
+      "properties": {
+        "devwatch.serviceUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "scope": "machine",
+          "description": "Canonical local review service URL."
+        },
+        "devwatch.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "scope": "machine",
+          "description": "Trusted Python interpreter with DevWatch installed."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --out devwatch.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^4.0.0",
+    "typescript": "^5.2.2"
+  }
+}
