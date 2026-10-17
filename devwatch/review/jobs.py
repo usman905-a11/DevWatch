@@ -349,17 +349,20 @@ class JobStore(_SQLiteStore):
                               (job_id, task_id, evidence_ref)).fetchone() is not None
 
     def update_ledger(self, job_id: str, *, owner: str, ledger: dict[str, Any] | BudgetLedger,
-                      followup: FollowupRequest | None = None, reconciled_calls=()) -> None:
+                      followup: FollowupRequest | None = None, model_completions=()) -> None:
         updated = BudgetLedger.model_validate(ledger)
-        reconciled_calls = [EventPayload.model_validate(payload) for payload in reconciled_calls]
+        model_completions = [EventPayload.model_validate(payload) for payload in model_completions]
+        if len({payload.operation_id for payload in model_completions}) != len(model_completions):
+            raise JobConflict("duplicate model completion")
         with self._transaction() as db:
             record = self._get(db, job_id, owner)
             previous = record.ledger
-            for payload in reconciled_calls:
+            for payload in model_completions:
                 reservation = previous.inflight.get(payload.operation_id)
-                if (reservation is None or payload.operation_id in updated.inflight or payload.outcome != "unknown"
-                        or payload.total_tokens != reservation.tokens):
-                    raise JobConflict("reconciled call must settle a known reservation")
+                if (reservation is None or payload.operation_id in updated.inflight or payload.outcome is None
+                        or payload.agent_id != reservation.agent_id or payload.total_tokens is None
+                        or (payload.outcome == "unknown" and payload.total_tokens != reservation.tokens)):
+                    raise JobConflict("model completion must settle a known reservation")
             for field in ("task_iterations", "task_tools", "task_schema_repairs", "operation_retries"):
                 if any(getattr(updated, field).get(key, 0) < count for key, count in getattr(previous, field).items()):
                     raise JobConflict("cumulative budget counters cannot decrease")
@@ -380,7 +383,7 @@ class JobStore(_SQLiteStore):
                 record.followup_admission = followup.model_copy(deep=True)
             record.ledger = updated
             self._save(db, record)
-            for payload in reconciled_calls:
+            for payload in model_completions:
                 self._enqueue_event(db, job_id, "model_call_completed", payload)
             if (updated.total_tokens != previous.total_tokens or updated.task_tools != previous.task_tools
                     or updated.review_round != previous.review_round):

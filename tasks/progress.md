@@ -1075,3 +1075,36 @@ diffs against saved workspace baselines; no dependencies, agent identities,
 transport schemas or unrelated user changes were altered. The evidence-backed
 report records local limitations and exact failures corrected during development.
 No live provider calls, commits, pushes or deployments. Stopped before new M8.
+
+2026-10-17 M8: user requested the next milestone (Observability & Streaming).
+Added 14 event kinds and 13 optional bounded metadata fields; actual agent/model/
+tool lifecycle, iterations, safe retries, evidence stages, candidates, verification
+and finalization/rendering are visible through existing durable replay/SSE/WS.
+Normal model completion and its charge now commit together through the existing
+Job Store transaction/outbox; pending post-crash calls are recorded as unknown.
+`devwatch events JOB_ID --after N --follow` observes without owning execution.
+Generated contracts retain old payload compatibility; CLI metadata errors are
+sanitized. No new agents, dependencies or services; shared user work preserved.
+
+M8 approval review: rejected the proposed export of hashes of private job/task/
+evidence identifiers. That patch was not applied. Implemented the safe alternative:
+full correlation remains local; opt-in metadata export includes only allowlisted
+classifications and random invocation/call IDs. No live export/provider calls.
+
+M8 gates so far: 21 new backend cases; expanded gate 88 passed in 93.94s before
+the last visibility regression; final 38-case boundary gate passed in 72.90s.
+Frontend 50 passed, build passed, generated schema freshness/compilation passed.
+Normal scripted fixture: 46 events, 5 model calls, 1 tool call, 75 charged tokens.
+Full final backend regression is running. See m8-observability-report.md and
+evidence/m8-{focused,final-boundaries,backend,backend-final}.txt. Stop before M9.
+
+M8 final gate: complete. Fresh full backend regression passed all 302 tests in
+732.03s, including all 21 new observability cases and the real process-kill
+recovery assertions. One existing upstream LangSmith SDK wrapper deprecation
+warning. Frontend: 50 passed; TypeScript/Vite build passed with existing plugin
+deprecation notices. Generated schema freshness, changed Python compilation and
+incremental whitespace checks passed. The final visibility regression verifies
+that a visible model completion already has its token charge durably committed.
+Reviewed runtime diffs against saved workspace baselines; prior user work and
+the original seven-agent LangGraph architecture were preserved. No live external
+telemetry/provider calls, commits, pushes or deployment. Stopped before M9.

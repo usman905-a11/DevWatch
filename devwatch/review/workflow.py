@@ -124,7 +124,7 @@ class CanonicalReviewExecutor:
                 reconciled.append(started[ticket].model_copy(update={"outcome": "unknown", "total_tokens": reservation.tokens}))
         # Cost settlement and its unknown-completion events share the Job Store
         # transaction/outbox. Reservations without a start never invent a call.
-        self.jobs.update_ledger(job.job_id, owner=job.owner, ledger=budget.ledger, reconciled_calls=reconciled)
+        self.jobs.update_ledger(job.job_id, owner=job.owner, ledger=budget.ledger, model_completions=reconciled)
         self.jobs.dispatch_events(self.events)
 
     async def recover_timeout(self, job: JobRecord):
@@ -226,7 +226,12 @@ class _ReviewSession:
             models=executor.models, persist=self.persist_agent, model_slots=executor.model_slots, emit=self.emit)
 
     def emit(self, kind, **payload):
-        self.executor.jobs.emit(self.job.job_id, owner=self.job.owner, kind=kind, payload=payload)
+        if kind == "model_call_completed":
+            self.budget.refresh_time()
+            self.executor.jobs.update_ledger(self.job.job_id, owner=self.job.owner,
+                ledger=self.budget.ledger, model_completions=[payload])
+        else:
+            self.executor.jobs.emit(self.job.job_id, owner=self.job.owner, kind=kind, payload=payload)
         self.executor.jobs.dispatch_events(self.executor.events)
 
     async def persist_agent(self, state, ledger):

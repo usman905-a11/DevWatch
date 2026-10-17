@@ -398,10 +398,29 @@ def test_unknown_call_event_and_cost_settlement_rollback_together(tmp_path, monk
     with monkeypatch.context() as patch:
         patch.setattr(store, "_enqueue_event", fail)
         with pytest.raises(OSError):
-            store.update_ledger(job.job_id, owner="alice", ledger=budget.ledger, reconciled_calls=[payload])
+            store.update_ledger(job.job_id, owner="alice", ledger=budget.ledger, model_completions=[payload])
     saved = store.get(job.job_id, owner="alice").ledger
     assert operation in saved.inflight and saved.total_tokens == 0
     assert not [event for event in store.pending_events() if event.kind == "model_call_completed"]
-    store.update_ledger(job.job_id, owner="alice", ledger=budget.ledger, reconciled_calls=[payload])
+    store.update_ledger(job.job_id, owner="alice", ledger=budget.ledger, model_completions=[payload])
     assert store.get(job.job_id, owner="alice").ledger.total_tokens == 100
     assert len([event for event in store.pending_events() if event.kind == "model_call_completed"]) == 1
+
+
+def test_visible_model_completion_already_has_durable_cost_settlement(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from devwatch.review.workflow import _ReviewSession
+    from tests.test_review_service import app, completed, submit
+    observed = []
+    original = _ReviewSession.emit
+    def inspect(self, kind, **payload):
+        original(self, kind, **payload)
+        if kind == "model_call_completed":
+            ledger = self.executor.jobs.get(self.job.job_id, owner=self.job.owner).ledger
+            observed.append((payload["operation_id"] in ledger.inflight, ledger.total_tokens, payload["total_tokens"]))
+    monkeypatch.setattr(_ReviewSession, "emit", inspect)
+    with TestClient(app(tmp_path)) as client:
+        identity, _ = submit(client)
+        assert completed(client, identity)["status"] == "completed"
+    assert len(observed) == 5
+    assert all(not pending and charged >= consumed for pending, charged, consumed in observed)

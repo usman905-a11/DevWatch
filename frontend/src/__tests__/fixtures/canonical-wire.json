@@ -1,8 +1,8 @@
 {
   "events": [
     {
-      "event_id": "7330759d0e57498f89a3708e1939eacb",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "7dda2cf944a7453e91c2f1edb56fe4ce",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "job_queued",
       "payload": {
         "agent_id": null,
@@ -28,11 +28,11 @@
         "verdict": null
       },
       "sequence": 1,
-      "timestamp": 1792249703.3873308
+      "timestamp": 1792250265.8144548
     },
     {
-      "event_id": "32351741d7f346088abadb012c5c2898",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "b22fa278e1af41b698c2abdc54494df0",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "job_running",
       "payload": {
         "agent_id": null,
@@ -58,11 +58,11 @@
         "verdict": null
       },
       "sequence": 2,
-      "timestamp": 1792249703.4043303
+      "timestamp": 1792250265.8500764
     },
     {
-      "event_id": "f0e702f010d44aa3ab1878e2012aa38b",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "2c9f54bbecbe42ffa8a42db888dc285f",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "agent_started",
       "payload": {
         "agent_id": "planner",
@@ -79,7 +79,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "planning",
-        "run_id": "7e9aa3fe4c0949148f4c275cfc8fe3e0",
+        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
         "status": null,
         "stop_reason": null,
         "task_id": "__planner",
@@ -88,11 +88,11 @@
         "verdict": null
       },
       "sequence": 3,
-      "timestamp": 1792249704.1299527
+      "timestamp": 1792250266.4654996
     },
     {
-      "event_id": "3d937f54f3724eb7a1bef77a8c3476a0",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "88d01dae9fe442fc8269447954444012",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "iteration_started",
       "payload": {
         "agent_id": "planner",
@@ -109,7 +109,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "planning",
-        "run_id": "7e9aa3fe4c0949148f4c275cfc8fe3e0",
+        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
         "status": null,
         "stop_reason": null,
         "task_id": "__planner",
@@ -118,11 +118,11 @@
         "verdict": null
       },
       "sequence": 4,
-      "timestamp": 1792249704.153206
+      "timestamp": 1792250266.4857287
     },
     {
-      "event_id": "f69e647c7a054142817617953f64a228",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "b486b6ac9a60416c9c7f9cb9ae934692",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_started",
       "payload": {
         "agent_id": "planner",
@@ -136,10 +136,10 @@
         "finish_reason": null,
         "iteration": 1,
         "offset": null,
-        "operation_id": "dfa861f647f0452bb27c0bb81f3da6b3",
+        "operation_id": "72cbaccf375a4ed5bef0057987624721",
         "outcome": null,
         "phase": "planning",
-        "run_id": "7e9aa3fe4c0949148f4c275cfc8fe3e0",
+        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
         "status": null,
         "stop_reason": null,
         "task_id": "__planner",
@@ -148,17 +148,17 @@
         "verdict": null
       },
       "sequence": 5,
-      "timestamp": 1792249704.2273476
+      "timestamp": 1792250266.565136
     },
     {
-      "event_id": "5908e936327c4455b1898cb978e3c0f1",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "8190cb3d0f2c457bbf24e6ae42ccc9a3",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_completed",
       "payload": {
         "agent_id": "planner",
         "attempt": 1,
         "count": null,
-        "duration_seconds": 0.032000000000152795,
+        "duration_seconds": 0.03099999999994907,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -166,10 +166,10 @@
         "finish_reason": "stop",
         "iteration": 1,
         "offset": null,
-        "operation_id": "dfa861f647f0452bb27c0bb81f3da6b3",
+        "operation_id": "72cbaccf375a4ed5bef0057987624721",
         "outcome": "succeeded",
         "phase": "planning",
-        "run_id": "7e9aa3fe4c0949148f4c275cfc8fe3e0",
+        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
         "status": null,
         "stop_reason": null,
         "task_id": "__planner",
@@ -178,17 +178,17 @@
         "verdict": null
       },
       "sequence": 6,
-      "timestamp": 1792249704.2588644
+      "timestamp": 1792250266.6066182
     },
     {
-      "event_id": "d578d9c4a15d422ba692fc4eb74b33a8",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "6089f5f5c8be4b34ac0ace86a0e09d0a",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "budget_updated",
       "payload": {
         "agent_id": null,
         "attempt": null,
         "count": null,
-        "duration_seconds": 0.8290000000001783,
+        "duration_seconds": 0.7339999999999236,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -208,17 +208,17 @@
         "verdict": null
       },
       "sequence": 7,
-      "timestamp": 1792249704.2825255
+      "timestamp": 1792250266.6066182
     },
     {
-      "event_id": "732412480c5d4f87b14276b96a772f1a",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "e7a1046d01434976b7fe473856e0bc4f",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "agent_completed",
       "payload": {
         "agent_id": "planner",
         "attempt": null,
         "count": null,
-        "duration_seconds": 0.26499999999987267,
+        "duration_seconds": 0.25,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -229,7 +229,7 @@
         "operation_id": null,
         "outcome": "succeeded",
         "phase": "planning",
-        "run_id": "7e9aa3fe4c0949148f4c275cfc8fe3e0",
+        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
         "status": null,
         "stop_reason": "evidence_complete",
         "task_id": "__planner",
@@ -238,11 +238,11 @@
         "verdict": null
       },
       "sequence": 8,
-      "timestamp": 1792249704.389631
+      "timestamp": 1792250266.7170708
     },
     {
-      "event_id": "ebb5f7a6223149e091240821acd00be7",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "c1dc8d339c9e4ff5b3bab73eb5d46162",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "agent_started",
       "payload": {
         "agent_id": "logic_correctness",
@@ -259,7 +259,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -268,11 +268,11 @@
         "verdict": null
       },
       "sequence": 9,
-      "timestamp": 1792249704.451125
+      "timestamp": 1792250266.789889
     },
     {
-      "event_id": "a30d30ac9b3442a88e96fd7c9f29d3a6",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "a1b1acf488924355a6cf965e63d6a84d",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "iteration_started",
       "payload": {
         "agent_id": "logic_correctness",
@@ -289,7 +289,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -298,11 +298,11 @@
         "verdict": null
       },
       "sequence": 10,
-      "timestamp": 1792249704.4724789
+      "timestamp": 1792250266.8256164
     },
     {
-      "event_id": "52cf747177b74775aa8bcd618c05503a",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "557f41e67f554504b57d48dd8afa3890",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_started",
       "payload": {
         "agent_id": "logic_correctness",
@@ -316,10 +316,10 @@
         "finish_reason": null,
         "iteration": 1,
         "offset": null,
-        "operation_id": "7be92c1189b84c7bbea6070b3e6501ca",
+        "operation_id": "48464e071acb47f785f3352961c92802",
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -328,17 +328,17 @@
         "verdict": null
       },
       "sequence": 11,
-      "timestamp": 1792249704.527612
+      "timestamp": 1792250266.9141095
     },
     {
-      "event_id": "d12fac6a4081463485667fc1a68d8499",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "aeae0dfba32f459eb8eb84c18f548480",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_completed",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
         "count": null,
-        "duration_seconds": 0.01499999999987267,
+        "duration_seconds": 0.047000000000025466,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -346,10 +346,10 @@
         "finish_reason": "stop",
         "iteration": 1,
         "offset": null,
-        "operation_id": "7be92c1189b84c7bbea6070b3e6501ca",
+        "operation_id": "48464e071acb47f785f3352961c92802",
         "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -358,17 +358,17 @@
         "verdict": null
       },
       "sequence": 12,
-      "timestamp": 1792249704.551179
+      "timestamp": 1792250266.95648
     },
     {
-      "event_id": "fe6d15a522cb456390702caed191bad0",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "cabe57fda7544ac2974f9b7aa4f4271e",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "budget_updated",
       "payload": {
         "agent_id": null,
         "attempt": null,
         "count": null,
-        "duration_seconds": 1.125,
+        "duration_seconds": 1.094000000000051,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -388,17 +388,17 @@
         "verdict": null
       },
       "sequence": 13,
-      "timestamp": 1792249704.571178
+      "timestamp": 1792250266.95648
     },
     {
-      "event_id": "7004d5dabd4c482e93e3501289ed9843",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "4b02419bb2cb4466974015666f2261b7",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "budget_updated",
       "payload": {
         "agent_id": null,
         "attempt": null,
         "count": null,
-        "duration_seconds": 1.2040000000001783,
+        "duration_seconds": 1.1869999999998981,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -418,11 +418,11 @@
         "verdict": null
       },
       "sequence": 14,
-      "timestamp": 1792249704.6220121
+      "timestamp": 1792250267.052162
     },
     {
-      "event_id": "1b33a30c70eb45fcbb194304662b12e2",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "5c7435db600644759260c495c28f50be",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "tool_called",
       "payload": {
         "agent_id": "logic_correctness",
@@ -436,10 +436,10 @@
         "finish_reason": null,
         "iteration": 1,
         "offset": null,
-        "operation_id": "727ebe568931482393d6774ec4ef6a94",
+        "operation_id": "1b5d32627f6e4fa5b7196b7eb9e82ab5",
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -448,11 +448,11 @@
         "verdict": null
       },
       "sequence": 15,
-      "timestamp": 1792249704.6490488
+      "timestamp": 1792250267.0779696
     },
     {
-      "event_id": "a3968ff54a904afc95a735bddeffcdca",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "e5bf62098e9c45debe4227653e403939",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "tool_result",
       "payload": {
         "agent_id": "logic_correctness",
@@ -461,15 +461,15 @@
         "duration_seconds": 0.047000000000025466,
         "end_offset": null,
         "error_code": null,
-        "evidence_ref": "evidence-75966bc6d56c90c98906035fad0967e087d8835e8cf7345120789cc0a8f5a54b",
+        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
         "finding_id": null,
         "finish_reason": null,
         "iteration": 1,
         "offset": null,
-        "operation_id": "727ebe568931482393d6774ec4ef6a94",
+        "operation_id": "1b5d32627f6e4fa5b7196b7eb9e82ab5",
         "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -478,11 +478,11 @@
         "verdict": null
       },
       "sequence": 16,
-      "timestamp": 1792249704.6840763
+      "timestamp": 1792250267.1345236
     },
     {
-      "event_id": "236dac3c160a4e1c9eadc3e8f3804ab9",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "17e1cffe26f14521922696324b3ad693",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "evidence_retrieved",
       "payload": {
         "agent_id": "logic_correctness",
@@ -491,15 +491,15 @@
         "duration_seconds": null,
         "end_offset": null,
         "error_code": null,
-        "evidence_ref": "evidence-75966bc6d56c90c98906035fad0967e087d8835e8cf7345120789cc0a8f5a54b",
+        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
         "finding_id": null,
         "finish_reason": null,
         "iteration": 1,
         "offset": 0,
-        "operation_id": "727ebe568931482393d6774ec4ef6a94",
+        "operation_id": "1b5d32627f6e4fa5b7196b7eb9e82ab5",
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -508,11 +508,11 @@
         "verdict": null
       },
       "sequence": 17,
-      "timestamp": 1792249704.7070475
+      "timestamp": 1792250267.1482155
     },
     {
-      "event_id": "d1025e8337914f2faa97bac70fa3008b",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "b76ede5bbc7f4a8ca95666fdce2161e2",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "iteration_started",
       "payload": {
         "agent_id": "logic_correctness",
@@ -529,7 +529,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -538,11 +538,11 @@
         "verdict": null
       },
       "sequence": 18,
-      "timestamp": 1792249704.7585716
+      "timestamp": 1792250267.2363482
     },
     {
-      "event_id": "86fbcfbea4c741789974b8e33525225c",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "1990a63d036145e9b1dfff468fe34a8e",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_started",
       "payload": {
         "agent_id": "logic_correctness",
@@ -556,10 +556,10 @@
         "finish_reason": null,
         "iteration": 2,
         "offset": null,
-        "operation_id": "48ab1cc015664a8ba26b7016848c9c70",
+        "operation_id": "595ec831465b4275a937de42aaf8c84a",
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -568,17 +568,17 @@
         "verdict": null
       },
       "sequence": 19,
-      "timestamp": 1792249704.8312554
+      "timestamp": 1792250267.3318334
     },
     {
-      "event_id": "31ee4d1f0e014a619dbfe4d4f8fb984f",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "fa875e9cbcb247aa8c3ec322f084d4ee",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_completed",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
         "count": null,
-        "duration_seconds": 0.01499999999987267,
+        "duration_seconds": 0.03099999999994907,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -586,10 +586,10 @@
         "finish_reason": "stop",
         "iteration": 2,
         "offset": null,
-        "operation_id": "48ab1cc015664a8ba26b7016848c9c70",
+        "operation_id": "595ec831465b4275a937de42aaf8c84a",
         "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -598,47 +598,17 @@
         "verdict": null
       },
       "sequence": 20,
-      "timestamp": 1792249704.8512547
+      "timestamp": 1792250267.3730712
     },
     {
-      "event_id": "c271752347ab44f498a29bed48b80e5a",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
-      "kind": "evidence_delivered",
-      "payload": {
-        "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": 433,
-        "error_code": null,
-        "evidence_ref": "evidence-75966bc6d56c90c98906035fad0967e087d8835e8cf7345120789cc0a8f5a54b",
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 2,
-        "offset": 0,
-        "operation_id": "48ab1cc015664a8ba26b7016848c9c70",
-        "outcome": null,
-        "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
-      },
-      "sequence": 21,
-      "timestamp": 1792249704.8696291
-    },
-    {
-      "event_id": "b9fce07bb0c94bafb2708bf41212fdd2",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "5c144f0ce77b4f6ab2d2a67ee21af39f",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "budget_updated",
       "payload": {
         "agent_id": null,
         "attempt": null,
         "count": null,
-        "duration_seconds": 1.4220000000000255,
+        "duration_seconds": 1.5,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -657,12 +627,42 @@
         "total_tokens": 45,
         "verdict": null
       },
-      "sequence": 22,
-      "timestamp": 1792249704.8863635
+      "sequence": 21,
+      "timestamp": 1792250267.3730712
     },
     {
-      "event_id": "e2f86ca6a7934c5fafe23d9518db8285",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "fb69d358555f478f970de13513b916f9",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
+      "kind": "evidence_delivered",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "attempt": null,
+        "count": null,
+        "duration_seconds": null,
+        "end_offset": 433,
+        "error_code": null,
+        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
+        "finding_id": null,
+        "finish_reason": null,
+        "iteration": 2,
+        "offset": 0,
+        "operation_id": "595ec831465b4275a937de42aaf8c84a",
+        "outcome": null,
+        "phase": "investigation",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
+        "status": null,
+        "stop_reason": null,
+        "task_id": "logic-1",
+        "tool": null,
+        "total_tokens": null,
+        "verdict": null
+      },
+      "sequence": 22,
+      "timestamp": 1792250267.4317572
+    },
+    {
+      "event_id": "9fbd11cc31744497acb40773617faa08",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "evidence_inspected",
       "payload": {
         "agent_id": "logic_correctness",
@@ -671,7 +671,7 @@
         "duration_seconds": null,
         "end_offset": 433,
         "error_code": null,
-        "evidence_ref": "evidence-75966bc6d56c90c98906035fad0967e087d8835e8cf7345120789cc0a8f5a54b",
+        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
         "finding_id": null,
         "finish_reason": null,
         "iteration": 2,
@@ -679,7 +679,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -688,11 +688,11 @@
         "verdict": null
       },
       "sequence": 23,
-      "timestamp": 1792249704.8983636
+      "timestamp": 1792250267.4974139
     },
     {
-      "event_id": "fbca8f50bf70443197ec1642a9d82c04",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "402a2ef0aed04c3badfc89fe2623f55e",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "candidate_submitted",
       "payload": {
         "agent_id": "logic_correctness",
@@ -709,7 +709,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": null,
         "task_id": "logic-1",
@@ -718,17 +718,17 @@
         "verdict": null
       },
       "sequence": 24,
-      "timestamp": 1792249704.9444206
+      "timestamp": 1792250267.565032
     },
     {
-      "event_id": "663aea0f4c0e45eb91732528cb5b0de0",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "d84fdc4850e745118354fc45a757063f",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "agent_completed",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": null,
         "count": null,
-        "duration_seconds": 0.5309999999999491,
+        "duration_seconds": 0.8440000000000509,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -739,7 +739,7 @@
         "operation_id": null,
         "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "47486345ab2146d9809e3c26884f0bde",
+        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
         "status": null,
         "stop_reason": "evidence_complete",
         "task_id": "logic-1",
@@ -748,11 +748,11 @@
         "verdict": null
       },
       "sequence": 25,
-      "timestamp": 1792249704.98
+      "timestamp": 1792250267.6351388
     },
     {
-      "event_id": "de7fde56bed24a059b4a448b4476220a",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "e2cab686aec440d3998ce198b98c89f1",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "finding_created",
       "payload": {
         "agent_id": "logic_correctness",
@@ -762,7 +762,7 @@
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
-        "finding_id": "finding-91a8cc70e105df8d4349b311",
+        "finding_id": "finding-c9204e7f737036d9530efb96",
         "finish_reason": null,
         "iteration": null,
         "offset": null,
@@ -778,11 +778,11 @@
         "verdict": null
       },
       "sequence": 26,
-      "timestamp": 1792249705.0273018
+      "timestamp": 1792250267.6824234
     },
     {
-      "event_id": "971f5ee4957b45728dfd843b9984cde8",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "288fdf73be7f447a8d60f391d15fea6e",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "validation_passed",
       "payload": {
         "agent_id": null,
@@ -808,11 +808,11 @@
         "verdict": null
       },
       "sequence": 27,
-      "timestamp": 1792249705.0513313
+      "timestamp": 1792250267.7645485
     },
     {
-      "event_id": "069f18e400ed4d718d719b9cd398c10c",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "81710491668e4a9496e3179abb93d559",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "finalization_started",
       "payload": {
         "agent_id": null,
@@ -838,11 +838,11 @@
         "verdict": null
       },
       "sequence": 28,
-      "timestamp": 1792249705.1045356
+      "timestamp": 1792250268.1575022
     },
     {
-      "event_id": "f769338238da4ca492c5f05cc34a9011",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "0cfda0db20f44ccda47a81553b2ea592",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "agent_started",
       "payload": {
         "agent_id": "synthesizer_verifier",
@@ -859,7 +859,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "verification",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -868,11 +868,11 @@
         "verdict": null
       },
       "sequence": 29,
-      "timestamp": 1792249705.136237
+      "timestamp": 1792250268.3026848
     },
     {
-      "event_id": "16122cb4e5d04e36b38f130780213850",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "56dd82d6380d473ebb029eef98277fba",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "iteration_started",
       "payload": {
         "agent_id": "synthesizer_verifier",
@@ -889,7 +889,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "verification",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -898,11 +898,11 @@
         "verdict": null
       },
       "sequence": 30,
-      "timestamp": 1792249705.159237
+      "timestamp": 1792250268.4651477
     },
     {
-      "event_id": "c17921648655402db449aa724442d23d",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "0946fc1542dc49b1a836596ea9a6dbdc",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_started",
       "payload": {
         "agent_id": "synthesizer_verifier",
@@ -916,10 +916,10 @@
         "finish_reason": null,
         "iteration": 1,
         "offset": null,
-        "operation_id": "808d528f0f51419d8e2665289cddb86b",
+        "operation_id": "29790b1f93fa4ddab163af12adab716f",
         "outcome": null,
         "phase": "verification",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -928,17 +928,17 @@
         "verdict": null
       },
       "sequence": 31,
-      "timestamp": 1792249705.225858
+      "timestamp": 1792250268.648343
     },
     {
-      "event_id": "a4f50172c22144d4af2c659b30c94880",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "d61c43ac3c65486b81bbb63c69fec88a",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_completed",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": 1,
         "count": null,
-        "duration_seconds": 0.016000000000076398,
+        "duration_seconds": 0.1410000000000764,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -946,10 +946,10 @@
         "finish_reason": "stop",
         "iteration": 1,
         "offset": null,
-        "operation_id": "808d528f0f51419d8e2665289cddb86b",
+        "operation_id": "29790b1f93fa4ddab163af12adab716f",
         "outcome": "succeeded",
         "phase": "verification",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -958,47 +958,17 @@
         "verdict": null
       },
       "sequence": 32,
-      "timestamp": 1792249705.2432575
+      "timestamp": 1792250268.7911127
     },
     {
-      "event_id": "ef3f3f422e78448a8c53602e3c3f27bb",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
-      "kind": "evidence_delivered",
-      "payload": {
-        "agent_id": "synthesizer_verifier",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": 433,
-        "error_code": null,
-        "evidence_ref": "evidence-75966bc6d56c90c98906035fad0967e087d8835e8cf7345120789cc0a8f5a54b",
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 1,
-        "offset": 0,
-        "operation_id": "808d528f0f51419d8e2665289cddb86b",
-        "outcome": null,
-        "phase": "verification",
-        "run_id": "de2693058bf240a28e40677d36f033af",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
-      },
-      "sequence": 33,
-      "timestamp": 1792249705.2602572
-    },
-    {
-      "event_id": "cc248e926cfe482c8165058cac5ceb9c",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "bc87d8a5c52c4ec585fdc985736f457c",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "budget_updated",
       "payload": {
         "agent_id": null,
         "attempt": null,
         "count": null,
-        "duration_seconds": 1.8130000000001019,
+        "duration_seconds": 2.9220000000000255,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -1017,12 +987,42 @@
         "total_tokens": 60,
         "verdict": null
       },
-      "sequence": 34,
-      "timestamp": 1792249705.2772572
+      "sequence": 33,
+      "timestamp": 1792250268.7911127
     },
     {
-      "event_id": "78259ee89b3d4b0cb077086574fe322a",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "5c1ab249085647f38dce2578c9c47f2c",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
+      "kind": "evidence_delivered",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "attempt": null,
+        "count": null,
+        "duration_seconds": null,
+        "end_offset": 433,
+        "error_code": null,
+        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
+        "finding_id": null,
+        "finish_reason": null,
+        "iteration": 1,
+        "offset": 0,
+        "operation_id": "29790b1f93fa4ddab163af12adab716f",
+        "outcome": null,
+        "phase": "verification",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
+        "status": null,
+        "stop_reason": null,
+        "task_id": "__final",
+        "tool": null,
+        "total_tokens": null,
+        "verdict": null
+      },
+      "sequence": 34,
+      "timestamp": 1792250268.8608372
+    },
+    {
+      "event_id": "d46598c5ee8a4d608e9b21f30a880aab",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "evidence_inspected",
       "payload": {
         "agent_id": "synthesizer_verifier",
@@ -1031,7 +1031,7 @@
         "duration_seconds": null,
         "end_offset": 433,
         "error_code": null,
-        "evidence_ref": "evidence-75966bc6d56c90c98906035fad0967e087d8835e8cf7345120789cc0a8f5a54b",
+        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
         "finding_id": null,
         "finish_reason": null,
         "iteration": 1,
@@ -1039,7 +1039,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "verification",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -1048,11 +1048,11 @@
         "verdict": null
       },
       "sequence": 35,
-      "timestamp": 1792249705.2912557
+      "timestamp": 1792250268.922696
     },
     {
-      "event_id": "655db2f633504448a8699bedb5582076",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "0840d61e165f467380b04d81547df54d",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "verification_completed",
       "payload": {
         "agent_id": "synthesizer_verifier",
@@ -1062,14 +1062,14 @@
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
-        "finding_id": "finding-91a8cc70e105df8d4349b311",
+        "finding_id": "finding-c9204e7f737036d9530efb96",
         "finish_reason": null,
         "iteration": 1,
         "offset": null,
         "operation_id": null,
         "outcome": null,
         "phase": "verification",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -1078,11 +1078,11 @@
         "verdict": "uncertain"
       },
       "sequence": 36,
-      "timestamp": 1792249705.3491995
+      "timestamp": 1792250268.978265
     },
     {
-      "event_id": "1f254277745747f99dfadacd995722ec",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "bc99c04aec8c4b568a5f8e7283295419",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "iteration_started",
       "payload": {
         "agent_id": "synthesizer_verifier",
@@ -1099,7 +1099,7 @@
         "operation_id": null,
         "outcome": null,
         "phase": "synthesis",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -1108,11 +1108,11 @@
         "verdict": null
       },
       "sequence": 37,
-      "timestamp": 1792249705.3837101
+      "timestamp": 1792250269.0807283
     },
     {
-      "event_id": "cf1e0e38ba2d41128cb3d77e11d161e4",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "7dea3ec7a2f341439718a238d1f2f158",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_started",
       "payload": {
         "agent_id": "synthesizer_verifier",
@@ -1126,10 +1126,10 @@
         "finish_reason": null,
         "iteration": 2,
         "offset": null,
-        "operation_id": "a21d65c0fff840f2a9e4cbd6eacfacb1",
+        "operation_id": "7b21e954f3d34b84b7c969c4f4177916",
         "outcome": null,
         "phase": "synthesis",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -1138,17 +1138,17 @@
         "verdict": null
       },
       "sequence": 38,
-      "timestamp": 1792249705.451323
+      "timestamp": 1792250269.1651597
     },
     {
-      "event_id": "a91e5aeee0644dc3a8c47ff389e1e101",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "fd726938d82a4af4abca55e31dfafd18",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "model_call_completed",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": 1,
         "count": null,
-        "duration_seconds": 0.01499999999987267,
+        "duration_seconds": 0.06199999999989814,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -1156,10 +1156,10 @@
         "finish_reason": "stop",
         "iteration": 2,
         "offset": null,
-        "operation_id": "a21d65c0fff840f2a9e4cbd6eacfacb1",
+        "operation_id": "7b21e954f3d34b84b7c969c4f4177916",
         "outcome": "succeeded",
         "phase": "synthesis",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": null,
         "task_id": "__final",
@@ -1168,17 +1168,17 @@
         "verdict": null
       },
       "sequence": 39,
-      "timestamp": 1792249705.4678395
+      "timestamp": 1792250269.2168036
     },
     {
-      "event_id": "00b9b2cb97c8479c8c5715093475a714",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "5a4afbd675834d938a2dfa699e7e0740",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "budget_updated",
       "payload": {
         "agent_id": null,
         "attempt": null,
         "count": null,
-        "duration_seconds": 2.0470000000000255,
+        "duration_seconds": 3.3589999999999236,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -1198,17 +1198,17 @@
         "verdict": null
       },
       "sequence": 40,
-      "timestamp": 1792249705.48584
+      "timestamp": 1792250269.2168036
     },
     {
-      "event_id": "9fc6d6565db3454ab8b77292fe8b7193",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "060e1a1e002f486995c5cc8eb4927ed4",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "agent_completed",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": null,
         "count": null,
-        "duration_seconds": 0.40599999999994907,
+        "duration_seconds": 1.0470000000000255,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -1219,7 +1219,7 @@
         "operation_id": null,
         "outcome": "succeeded",
         "phase": "synthesis",
-        "run_id": "de2693058bf240a28e40677d36f033af",
+        "run_id": "b928d26e241e4225be9666faadf1efbf",
         "status": null,
         "stop_reason": "evidence_complete",
         "task_id": "__final",
@@ -1228,11 +1228,11 @@
         "verdict": null
       },
       "sequence": 41,
-      "timestamp": 1792249705.5340097
+      "timestamp": 1792250269.3483276
     },
     {
-      "event_id": "47677b3ee1174f09b62e76194b44d774",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "aac2c0c3554e4f5d92a38d90f3cc7268",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "validation_passed",
       "payload": {
         "agent_id": null,
@@ -1258,11 +1258,11 @@
         "verdict": null
       },
       "sequence": 42,
-      "timestamp": 1792249705.5717034
+      "timestamp": 1792250269.4159672
     },
     {
-      "event_id": "3604429b81b84c1f890cc976e06b81e3",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "c3cafe9b21fc41b3a1ddba4890691485",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "report_render_started",
       "payload": {
         "agent_id": null,
@@ -1288,17 +1288,17 @@
         "verdict": null
       },
       "sequence": 43,
-      "timestamp": 1792249705.5962121
+      "timestamp": 1792250269.5483286
     },
     {
-      "event_id": "16f6b3b782e84e1e8dce126833733be4",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "f759ed952a784ff2aceea55c2458002e",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "report_render_completed",
       "payload": {
         "agent_id": null,
         "attempt": null,
         "count": null,
-        "duration_seconds": 0.34400000000005093,
+        "duration_seconds": 0.3910000000000764,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -1318,17 +1318,17 @@
         "verdict": null
       },
       "sequence": 44,
-      "timestamp": 1792249705.9428687
+      "timestamp": 1792250269.9433796
     },
     {
-      "event_id": "d5edeae484c742fd89b4b908280e0511",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "c78b22da34724f429bab70a3eb873ddb",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "finalization_completed",
       "payload": {
         "agent_id": null,
         "attempt": null,
         "count": null,
-        "duration_seconds": 0.8600000000001273,
+        "duration_seconds": 1.8119999999998981,
         "end_offset": null,
         "error_code": null,
         "evidence_ref": null,
@@ -1348,11 +1348,11 @@
         "verdict": null
       },
       "sequence": 45,
-      "timestamp": 1792249705.9628763
+      "timestamp": 1792250269.9646907
     },
     {
-      "event_id": "3a4155ec657047dfbca45f552b7924c1",
-      "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+      "event_id": "9dcbb6f11fb94ce8aa445504f199c07c",
+      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
       "kind": "job_completed",
       "payload": {
         "agent_id": null,
@@ -1378,7 +1378,7 @@
         "verdict": null
       },
       "sequence": 46,
-      "timestamp": 1792249705.9943936
+      "timestamp": 1792250270.0981417
     }
   ],
   "failed_task_report": {
@@ -1404,7 +1404,7 @@
       }
     },
     "limitations": [],
-    "snapshot_id": "5ec1caf2c4924a9e9c4dd01425ccc0ce",
+    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
     "summary": "One uncertain candidate",
     "uncertain_high_impact_candidates": [
       {
@@ -1412,15 +1412,15 @@
         "confidence": 0.7,
         "description": "The first item is indexed without an empty check",
         "evidence_refs": [
-          "evidence-75966bc6d56c90c98906035fad0967e087d8835e8cf7345120789cc0a8f5a54b"
+          "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638"
         ],
-        "finding_id": "finding-91a8cc70e105df8d4349b311",
+        "finding_id": "finding-c9204e7f737036d9530efb96",
         "impact": "Request can fail",
         "kind": "high_impact_candidate",
         "location": {
           "end_line": 2,
           "file_path": "service.py",
-          "snapshot_id": "5ec1caf2c4924a9e9c4dd01425ccc0ce",
+          "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
           "start_line": 2
         },
         "remediation": "",
@@ -1435,8 +1435,8 @@
     "\ud83d\ude00.py": "pass\n"
   },
   "job": {
-    "created_at": 1792249703.3873308,
-    "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+    "created_at": 1792250265.8144548,
+    "job_id": "9787d8467c1c4d408746bce7c97cc55e",
     "ledger": {
       "agent_usage": {
         "logic_correctness": {
@@ -1452,7 +1452,7 @@
           "prompt_tokens": 20
         }
       },
-      "elapsed_seconds": 2.594000000000051,
+      "elapsed_seconds": 4.25,
       "inflight": {},
       "operation_retries": {},
       "review_round": 1,
@@ -1482,9 +1482,9 @@
       "tool_calls_per_task": 12,
       "transient_retries": 2
     },
-    "snapshot_id": "5ec1caf2c4924a9e9c4dd01425ccc0ce",
+    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
     "status": "completed",
-    "updated_at": 1792249706.0143924,
+    "updated_at": 1792250270.1315022,
     "workflow_version": "seven-agent-v1"
   },
   "report": {
@@ -1507,7 +1507,7 @@
       }
     },
     "limitations": [],
-    "snapshot_id": "5ec1caf2c4924a9e9c4dd01425ccc0ce",
+    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
     "summary": "One uncertain candidate",
     "uncertain_high_impact_candidates": [
       {
@@ -1515,15 +1515,15 @@
         "confidence": 0.7,
         "description": "The first item is indexed without an empty check",
         "evidence_refs": [
-          "evidence-75966bc6d56c90c98906035fad0967e087d8835e8cf7345120789cc0a8f5a54b"
+          "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638"
         ],
-        "finding_id": "finding-91a8cc70e105df8d4349b311",
+        "finding_id": "finding-c9204e7f737036d9530efb96",
         "impact": "Request can fail",
         "kind": "high_impact_candidate",
         "location": {
           "end_line": 2,
           "file_path": "service.py",
-          "snapshot_id": "5ec1caf2c4924a9e9c4dd01425ccc0ce",
+          "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
           "start_line": 2
         },
         "remediation": "",
@@ -1568,7 +1568,7 @@
       "limitations": []
     },
     "owner": "key-091d54677e472013d98d39c7312be93228f8cf198a5dc893cdb44ff6cb48a599",
-    "snapshot_id": "5ec1caf2c4924a9e9c4dd01425ccc0ce"
+    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f"
   },
   "source": {
     "content_hash": "c9f28bea98a2738fd61db45b1a927b35357a4a9a22303e1343450814dea7c632",
@@ -1576,7 +1576,7 @@
     "end_line": 2,
     "file_path": "service.py",
     "snapshot_hash": "a92a5277e19fe4acd1488a7778fa3a0a6f409f8687f2caf403c2be1e04457f52",
-    "snapshot_id": "5ec1caf2c4924a9e9c4dd01425ccc0ce",
+    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
     "source_scope": [
       "service.py"
     ],
@@ -1585,7 +1585,7 @@
   },
   "unicode_event": {
     "event_id": "unicode-fixture",
-    "job_id": "a549e617699c4b0cbb2612e26bc012ee",
+    "job_id": "9787d8467c1c4d408746bce7c97cc55e",
     "kind": "agent_started",
     "payload": {
       "agent_id": "logic_correctness",

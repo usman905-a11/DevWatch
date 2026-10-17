@@ -54,3 +54,20 @@ is conservatively charged up to the 600-second ceiling, with an explicit report
 limitation; a long outage may lead to the existing partial deadline finalization.
 Source remains read-only, publication remains deterministic, and seven-agent
 contracts, budgets and public REST/SSE/WebSocket schemas remain unchanged.
+
+## Observability addendum — 2026-10-17
+
+M8 extends event payloads with optional bounded runtime metadata. Old persisted
+events remain readable; no storage schema migration or execution role is added.
+Model completion and its ledger settlement commit in the same Job Store/outbox
+transaction. Otherwise a crash after a visible completion but before accounting
+could leave a reservation falsely classified as another unknown completion.
+After a genuine crash, pending calls with recorded starts receive an `unknown`
+completion alongside their conservative charge; reservations without starts do
+not invent model calls. Event Store dispatch keeps the existing outbox behavior.
+
+Full job/task/evidence/finding correlation stays in the owned local timeline.
+Optional metadata export uses random invocation/call IDs and bounded runtime
+classifications, excluding private identifiers and their derived fingerprints.
+Local replay is the complete debugging record; external account access is optional.
+This preserves the existing privacy boundary without adding a tracing service.

@@ -2,11 +2,11 @@
 
 ## Current local plan: M8 Observability & Streaming (2026-10-17)
 
-- [ ] Add bounded event metadata and actual model/retry instrumentation.
-- [ ] Verify lifecycle, iteration, evidence, candidate, verification and finalization events.
-- [ ] Add private export correlation and local CLI event observation.
-- [ ] Verify replay/SSE/WebSocket, refresh consumer contracts and run full checks.
-- [ ] Review, write M8 report and stop before storage cleanup M9.
+- [x] Add bounded event metadata and actual model/retry instrumentation.
+- [x] Verify lifecycle, iteration, evidence, candidate, verification and finalization events.
+- [x] Add random invocation/call export correlation and local CLI event observation; keep private review correlation local.
+- [x] Verify replay/SSE/WebSocket, refresh consumer contracts and run full checks.
+- [x] Review, write M8 report and stop before storage cleanup M9.
 
 ## Current local plan: M7 Reliability & Recovery (2026-10-17)
 
