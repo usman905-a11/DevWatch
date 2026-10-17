@@ -1,5 +1,13 @@
 # DevWatch seven-agent implementation checklist
 
+## Current local plan: M9 Basic Local Storage Cleanup (2026-10-17)
+
+- [x] Add safe offline retention, exact preview apply and artifact/database cleanup.
+- [x] Migrate cache timestamps and verify retention boundaries.
+- [x] Exclude live services/workers and wire configurable CLI cleanup.
+- [x] Run regression checks, review the incremental diff and write M9 report.
+- [x] Stop before M10.
+
 ## Current local plan: M8 Observability & Streaming (2026-10-17)
 
 - [x] Add bounded event metadata and actual model/retry instrumentation.

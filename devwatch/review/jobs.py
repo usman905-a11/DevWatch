@@ -20,7 +20,7 @@ from pydantic import Field
 
 from devwatch.review.budgets import BudgetLedger
 from devwatch.review.contracts import AgentId, BalancedLimits, ContractModel, FollowupRequest
-from devwatch.review.leases import execution_lock
+from devwatch.review.leases import execution_lock, runtime_lock
 
 _LOG = logging.getLogger(__name__)
 
@@ -496,6 +496,17 @@ class DurableJobManager:
         self._maintenance_id = uuid4().hex
         self._recovery_cursor = ""
         self._closed = False
+        self._runtime_lease = None
+
+    def _use_runtime(self):
+        if self._closed:
+            raise RuntimeError("job manager is closed")
+        if self._runtime_lease is None:
+            lease = runtime_lock(self.store.path.parent)
+            if not lease.__enter__():
+                lease.__exit__(None, None, None)
+                raise RuntimeError("runtime maintenance is in progress")
+            self._runtime_lease = lease
 
     def _schedule(self, job: JobRecord) -> None:
         self._ensure_maintenance()
@@ -554,15 +565,13 @@ class DurableJobManager:
             worker.cancel()
 
     async def start(self) -> None:
-        if self._closed:
-            raise RuntimeError("job manager is closed")
+        self._use_runtime()
         self._scan()
         self._ensure_maintenance()
 
     async def submit(self, *, owner: str, request: dict[str, Any], idempotency_key: str,
                      limits: BalancedLimits | None = None) -> JobRecord:
-        if self._closed:
-            raise RuntimeError("job manager is closed")
+        self._use_runtime()
         job = self.store.submit(owner=owner, request=request, idempotency_key=idempotency_key, limits=limits)
         self.store.dispatch_events(self.events)
         if job.status == "queued":
@@ -656,6 +665,7 @@ class DurableJobManager:
             await asyncio.sleep(0.01)
 
     async def cancel(self, job_id: str, *, owner: str) -> JobRecord:
+        self._use_runtime()
         job = self.store.get(job_id, owner=owner)
         if job.status in {"queued", "running", "interrupted"}:
             try:
@@ -670,8 +680,7 @@ class DurableJobManager:
         return job
 
     async def resume(self, job_id: str, *, owner: str) -> JobRecord:
-        if self._closed:
-            raise RuntimeError("job manager is closed")
+        self._use_runtime()
         job = self.store.transition(job_id, owner=owner, expected_status="interrupted", status="queued")
         self.store.dispatch_events(self.events)
         self._schedule(job)
@@ -686,3 +695,6 @@ class DurableJobManager:
             task.cancel()
         await asyncio.gather(*self._tasks.values(), return_exceptions=True)
         self._tasks.clear()
+        if self._runtime_lease is not None:
+            self._runtime_lease.__exit__(None, None, None)
+            self._runtime_lease = None

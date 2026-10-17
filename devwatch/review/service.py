@@ -26,6 +26,7 @@ from devwatch.review.stores import ArtifactStore, CaptureCoverage, GitMetadata, 
 from devwatch.review.workflow import CanonicalReviewExecutor
 from devwatch.review.tool_runtime import TrustedCommand
 from devwatch.review.database_tools import DatabasePolicy
+from devwatch.review.leases import runtime_lock
 
 
 @dataclass(frozen=True)
@@ -153,7 +154,7 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         provider = OpenAIProviderAdapter(provider_name=provider_name, max_concurrency=3)
 
     @asynccontextmanager
-    async def lifespan(application):
+    async def running_lifespan(application):
         layout = StoreLayout(settings.runtime_root)
         jobs, events = JobStore(layout.jobs), EventStore(layout.events)
         artifacts, cache = ArtifactStore(layout.artifacts), RepoCache(layout.repo_cache)
@@ -176,6 +177,15 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
             if telemetry is not None:
                 telemetry.cancel()
                 await asyncio.gather(telemetry, return_exceptions=True)
+
+    @asynccontextmanager
+    async def lifespan(application):
+        # Cover snapshot capture and read/evidence requests as well as worker drain.
+        with runtime_lock(settings.runtime_root) as acquired:
+            if not acquired:
+                raise RuntimeError("runtime maintenance is in progress")
+            async with running_lifespan(application):
+                yield
 
     app = FastAPI(title="DevWatch Local Review Service", lifespan=lifespan)
     app.add_middleware(BoundedRequestBody, limit=settings.max_request_bytes)

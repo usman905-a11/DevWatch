@@ -7,6 +7,35 @@ from contextlib import contextmanager
 import errno
 from hashlib import sha256
 import os
+from pathlib import Path
+import sqlite3
+
+
+@contextmanager
+def runtime_lock(root, *, exclusive=False):
+    """Shared lifetime lease or exclusive offline maintenance, released on death.
+
+    A separate tiny rollback-journal SQLite file supplies portable OS reader/writer
+    locks. Never unlink it: all processes must coordinate on the same file.
+    """
+    root = Path(root).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(root / ".maintenance.lock", timeout=0)
+    try:
+        try:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE name='guard'").fetchone():
+                db.execute("CREATE TABLE IF NOT EXISTS guard (id INTEGER PRIMARY KEY)")
+                db.commit()
+            db.execute("BEGIN EXCLUSIVE" if exclusive else "BEGIN")
+            db.execute("SELECT * FROM guard").fetchall()
+        except sqlite3.OperationalError as error:
+            if getattr(error, "sqlite_errorcode", None) not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+                raise
+            yield False
+            return
+        yield True
+    finally:
+        db.close()
 
 
 @contextmanager

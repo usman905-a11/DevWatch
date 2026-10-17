@@ -1108,3 +1108,29 @@ that a visible model completion already has its token charge durably committed.
 Reviewed runtime diffs against saved workspace baselines; prior user work and
 the original seven-agent LangGraph architecture were preserved. No live external
 telemetry/provider calls, commits, pushes or deployment. Stopped before M9.
+
+2026-10-17 M9: completed Basic Local Storage Cleanup from the attached local plan.
+Added configurable offline JSON preview and exact-preview `--apply --plan-id`,
+with shared runtime lifetime leases for services/managers and exclusive maintenance.
+Retain queued/running/interrupted reviews and shared snapshots; expire old terminal
+bundles, orphan source/evidence/report/measurement artifacts, scratch/temp files
+and unused cache rows. Cache access timestamps migrate with a full grace period.
+Check containment, canonical identities and sidecars before opening SQLite; refuse
+links/junctions/hard links. Preserve unknown files and process lock files. Partial
+deletion is restartable, with expired job records removed last.
+
+M9 approval review rejected the initial broad deletion/VACUUM patch because path
+and concurrency safety were unverified; it did not apply. Proved preview/locking
+first, then implemented the accepted exact-preview alternative. No startup deletion
+or VACUUM. No existing user runtime was cleaned; fixtures use owned temporary roots.
+
+M9 verification: 49 new cases; final focused gate 100 passed in 66.86s; full backend
+351 passed in 607.28s with one existing LangSmith SDK wrapper deprecation warning.
+Generated contract freshness, Python compilation and diff whitespace checks pass.
+Real interrupted graph resumes synthesis after cleanup; process death releases
+runtime leases; 600 terminal reviews can be cleaned. Three 20-review fixture cycles
+each return from 1,769,144 to 315,392 logical file bytes; SQLite stays at 307,200
+bytes without compaction. Full evidence and limitations: m9-cleanup-report.md and
+evidence/m9-{focused-final,backend,boundaries-final}.txt, m9-storage-metrics.json.
+Seven-agent architecture and user work preserved. No dependency, frontend or wire
+changes, live provider/export calls, commits, pushes or deployment. Stop before M10.

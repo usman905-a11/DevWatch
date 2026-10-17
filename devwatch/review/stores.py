@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import time
 from uuid import uuid4
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
@@ -302,6 +303,10 @@ class CacheKey(ContractModel):
 class RepoCache(_SQLiteStore):
     def __init__(self, path: Path | str):
         super().__init__(path, "CREATE TABLE IF NOT EXISTS cache (digest TEXT PRIMARY KEY, payload TEXT NOT NULL);")
+        with self._transaction() as db:
+            if "last_used" not in {row[1] for row in db.execute("PRAGMA table_info(cache)")}:
+                db.execute("ALTER TABLE cache ADD COLUMN last_used REAL NOT NULL DEFAULT 0")
+                db.execute("UPDATE cache SET last_used=?", (time.time(),))
 
     def put(self, key: CacheKey, value) -> None:
         payload = _canonical_json(value)
@@ -312,10 +317,13 @@ class RepoCache(_SQLiteStore):
             if previous is not None:
                 if previous[0] != payload:
                     raise CacheConflict("same cache identity produced different content")
+                db.execute("UPDATE cache SET last_used=? WHERE digest=?", (time.time(), key.digest))
                 return
-            db.execute("INSERT INTO cache(digest,payload) VALUES(?,?)", (key.digest, payload))
+            db.execute("INSERT INTO cache(digest,payload,last_used) VALUES(?,?,?)", (key.digest, payload, time.time()))
 
     def get(self, key: CacheKey):
         with self._transaction() as db:
             row = db.execute("SELECT payload FROM cache WHERE digest=?", (key.digest,)).fetchone()
+            if row is not None:
+                db.execute("UPDATE cache SET last_used=? WHERE digest=?", (time.time(), key.digest))
             return json.loads(row[0]) if row else None

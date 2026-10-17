@@ -256,6 +256,38 @@ def watch(
 
 
 @app.command()
+def cleanup(
+    runtime_dir: Path = typer.Option(Path(".devwatch/runtime"), "--runtime-dir", envvar="DEVWATCH_RUNTIME_DIR"),
+    apply: bool = typer.Option(False, "--apply", help="Apply the exact previously inspected preview"),
+    plan_id: Optional[str] = typer.Option(None, "--plan-id", help="Required with --apply; printed by the preview"),
+    terminal_days: Optional[float] = typer.Option(None, "--terminal-days"),
+    orphan_days: Optional[float] = typer.Option(None, "--orphan-days"),
+    scratch_hours: Optional[float] = typer.Option(None, "--scratch-hours"),
+    cache_days: Optional[float] = typer.Option(None, "--cache-days"),
+):
+    """Preview local retention as JSON. Stop services/workers before maintenance."""
+    from dataclasses import asdict, replace
+    import sqlite3
+    from devwatch.review.cleanup import RetentionPolicy, cleanup_storage
+    from devwatch.review.stores import StoreLayout
+
+    try:
+        overrides = {name: value for name, value in {
+            "terminal_days": terminal_days, "orphan_days": orphan_days,
+            "scratch_hours": scratch_hours, "cache_days": cache_days}.items() if value is not None}
+        policy = replace(RetentionPolicy.from_env(), **overrides)
+        layout = StoreLayout(runtime_dir)
+        report = cleanup_storage(layout, policy, dry_run=not apply, plan_id=plan_id)
+        typer.echo(json.dumps({"runtime_root": str(layout.root), "retention": asdict(policy), **asdict(report)}))
+    except (ValueError, RuntimeError) as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(1)
+    except (OSError, sqlite3.Error):
+        typer.echo("Storage cleanup failed; inspect a new preview before retrying.", err=True)
+        raise typer.Exit(1)
+
+
+@app.command()
 def serve(port: int = typer.Option(8000, "--port", min=1, max=65535)):
     """Run the canonical local review service on loopback."""
     import uvicorn

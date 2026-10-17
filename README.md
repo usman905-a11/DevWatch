@@ -219,6 +219,57 @@ Local events contain bounded identifiers, counts and classifications. They omit
 prompts, source, tool arguments/results, model reasoning and raw exception text.
 Evidence bodies remain in the separately owned artifact endpoint.
 
+### Cleaning local storage
+
+Stop every service and worker using the runtime before maintenance. Preview the
+eligible files, job IDs, row counts and byte totals as local JSON:
+
+```powershell
+devwatch cleanup --runtime-dir .devwatch/runtime
+```
+
+Inspect the preview, then apply its exact plan ID with the same retention options:
+
+```powershell
+devwatch cleanup --runtime-dir .devwatch/runtime --apply --plan-id <plan_id>
+```
+
+Any change to selected artifacts, jobs, cache entries or row counts invalidates
+the plan. Generate and inspect a new preview before retrying. A service or worker
+holding a shared runtime lease blocks cleanup; maintenance blocks startup. The
+lease is released by the OS after process death. Do not remove `.maintenance.lock`
+or `jobs.sqlite.leases/` lock files.
+
+| Option | Environment variable | Default |
+| --- | --- | --- |
+| `--terminal-days` | `DEVWATCH_RETENTION_TERMINAL_DAYS` | 30 days |
+| `--orphan-days` | `DEVWATCH_RETENTION_ORPHAN_DAYS` | 30 days |
+| `--scratch-hours` | `DEVWATCH_RETENTION_SCRATCH_HOURS` | 24 hours |
+| `--cache-days` | `DEVWATCH_RETENTION_CACHE_DAYS` | 30 days |
+
+Ages must be finite and positive; command options override environment values.
+Terminal age uses the job's last update. Queued, running and interrupted reviews
+are retained regardless of age, along with their snapshots, evidence, checkpoints,
+reports and measurements. Shared snapshots survive while any retained job needs
+them. Scratch copies are disposable and expire by age while workers are stopped.
+Orphan snapshots, evidence, reports and measurements use their newest file or
+directory modification time. Abandoned runtime temporary files use the scratch
+threshold. Cache entries age from their latest successful read/write; legacy
+entries receive a full grace period when the cache is first opened after upgrade.
+
+Expired terminal bundles lose job lookup, replay, reports, checkpoints and
+idempotency history. Reusing an expired intent can submit a new review. Cleanup
+handles only canonical runtime locations and filenames; arbitrary user files,
+source checkouts, exported reports, backups and external logs are outside its scope.
+Links/junctions/hard links in deletion targets are refused. Use a private local
+runtime directory; this is not a sandbox against another process that can modify it.
+
+Cleanup is explicitly invoked, with no background or startup deletion. Run it
+periodically between local review sessions. Failed or interrupted maintenance may
+be partial: inspect a fresh preview and finish cleanup before restarting workers.
+SQLite rows are removed and freed pages are reused on later runs; database files
+retain their size high-water mark because cleanup does not run `VACUUM`.
+
 ### Reviewing a watch directory
 
 `watch` turns source changes into bounded review submissions:

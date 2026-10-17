@@ -1,5 +1,33 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: Milestone 9 - Basic Local Storage Cleanup (2026-10-17)
+
+Complete M9 only. Use the existing local stores; no new services or dependencies.
+Implement configurable offline retention with dry-run CLI by default. Apply must
+match an inspected preview plan ID. A shared service/worker lease excludes maintenance.
+Keep queued/running/interrupted jobs, recent terminal jobs and all their snapshots,
+evidence, reports and checkpoints. Expired terminal jobs lose replay, reports and
+idempotency history together. Keep execution lock files and unknown user files.
+
+Slices, each with a failing behavioral test before implementation:
+1. Retention selection, dry run, safe artifact paths and disk/SQLite pruning.
+2. Cache access timestamps with backward-compatible migration and expiry.
+3. Shared runtime exclusion, CLI configuration and explicit reviewed apply.
+4. Focused and full backend checks, incremental diff review and M9 report.
+
+Test real temporary stores, shared snapshots, all protected statuses, interrupted
+recovery, process locks, malformed paths, junctions/symlinks, failed deletion and
+repeat cleanup. Never apply cleanup to the user's existing runtime during testing.
+Document offline operation and the age defaults; stop before M10.
+
+Safety adjustment: automatic approval review rejected the first broad deletion /
+VACUUM patch before it applied. Prove preview/path/locking behavior first, then
+implement only exact-preview apply. No automatic startup deletion or VACUUM.
+
+M9 complete: 49 new cases, 100-test focused gate, full backend 351 passed in
+607.28s with one existing SDK deprecation warning. Three 20-review fixture cycles
+return to the same file-byte totals; see m9-cleanup-report.md. Stopped before M10.
+
 ## Current request: Milestone 8 — Observability & Streaming (2026-10-17)
 
 Continue the attached local plan after completed reliability M7. Stop after M8;
