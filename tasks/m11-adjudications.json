@@ -1,0 +1,142 @@
+{
+  "empty-defect:specialist": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "findings": {
+      "0": {
+        "defect_id": "empty",
+        "evidence_correct": true
+      }
+    },
+    "rationale": "The cited immutable source directly indexes items[0]. The independent empty-list witness raises IndexError, agreeing with the finding and line range.",
+    "tools": {
+      "310f6dd7f462478991cb0e9ebd389c7d": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "assertion-defect:specialist": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "findings": {
+      "0": {
+        "defect_id": "assertion",
+        "evidence_correct": true
+      }
+    },
+    "rationale": "The cited test invokes add without an assertion. Replacing add with an incorrect return value leaves this test passing. Causal claim is correct; the specialist's defect kind differs from the corpus advisory label.",
+    "tools": {
+      "85c898f503e040dd9c90ef5c4f912ecd": {
+        "appropriate": true,
+        "necessary": true
+      },
+      "7c0f13a0540a4994a6f5bb6432c70997": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "mutation-defect:specialist": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "f6d3b9d32fe24cadbc0bf40bc49a132c": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "mutation-defect:full": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "95ca7996b05344058bce2e9dfd8b65e0": {
+        "appropriate": false,
+        "necessary": false
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "mutation-clean:specialist": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "68fbda14e7a34002b4830124fedc5725": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "assertion-clean:specialist": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "e8f1fcbd2ddb41a1b056b7818107e0ef": {
+        "appropriate": true,
+        "necessary": true
+      },
+      "5f6d0371b0124a4bbecc2904c36703e2": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "assertion-clean:full": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "42c9933c79fd4ed69f2921fe06c4641a": {
+        "appropriate": true,
+        "necessary": true
+      },
+      "9cf96ff591004151be123088e4b243df": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "membership-clean:specialist": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "a00ed000b76042a0ab6bc639ab7b2d91": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "offset-defect:specialist": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "e44624e437ee4a729837be9d671308d3": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "offset-defect:full": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "bc431f067c0e4d08b9dd2f8134fb7d48": {
+        "appropriate": true,
+        "necessary": true
+      },
+      "ab13cf38de8740bfa1bc9433f5de59ce": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  },
+  "offset-clean:full": {
+    "reviewer": "Codex author inspection; not an independent human review",
+    "tools": {
+      "93c014980fa04a4c998c51a97263b311": {
+        "appropriate": true,
+        "necessary": true
+      }
+    },
+    "tool_rationale": "First successful scoped source reads are appropriate and necessary for the public contract. A git_diff request is unnecessary on the harness snapshot with no captured Git diff. Failed source requests are unjudged because arguments are not retained in the exported observations."
+  }
+}

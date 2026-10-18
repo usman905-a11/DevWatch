@@ -194,16 +194,17 @@ class AgentSubgraphs:
             await self._event("agent_completed", state, outcome=outcome, stop_reason=safe_stop_reason(reason),
                               duration_seconds=time.monotonic() - started, total_tokens=state["private_state"].usage.total_tokens)
 
-    def _stop(self, state: AgentExecutionState, reason: str) -> AgentExecutionState:
+    def _stop(self, state: AgentExecutionState, reason: str, *, explanation: str = "") -> AgentExecutionState:
         private = state["private_state"]
         private.stop_reason = reason
+        private.stop_explanation = explanation
         if reason != "evidence_complete":
             private.coverage.failed[state["task"].task_id] = reason
         if state["task"].agent_id in SPECIALISTS:
             state["output"] = SpecialistResult(
                 task_id=state["task"].task_id, agent_id=state["task"].agent_id,
                 candidates=private.local_findings, quarantined=private.quarantined_candidates,
-                coverage=private.coverage, stop_reason=reason)
+                coverage=private.coverage, stop_reason=reason, stop_explanation=explanation)
         state["action"] = None
         return state
 
@@ -564,7 +565,7 @@ class AgentSubgraphs:
                     if path not in private.coverage.inspected_files:
                         private.coverage.skipped[path] = "not_inspected"
                 private.coverage.limitations.extend(output.coverage.limitations)
-                return self._stop(state, output.stop_reason)
+                return self._stop(state, output.stop_reason, explanation=output.stop_explanation)
             elif action.kind == "submit_plan":
                 state["output"] = ReviewPlan.model_validate(action.payload)
                 return self._stop(state, "evidence_complete")
@@ -649,6 +650,7 @@ class AgentSubgraphs:
         if private.coverage.failed.get(task.task_id) == "cancelled":
             private.coverage.failed.pop(task.task_id)
         private.current_task, private.stop_reason = task.task_id, None
+        private.stop_explanation = ""
         tier, escalations = ModelRouter.select(task.agent_id, complexity=complexity, confidence=confidence)
         state = {"task": task, "private_state": private, "action": None, "output": None,
                  "model_tier": tier, "escalation_count": escalations}
@@ -672,6 +674,7 @@ class AgentSubgraphs:
         if private.coverage.failed.get(identity) == "cancelled":
             private.coverage.failed.pop(identity)
         private.current_task, private.stop_reason = identity, None
+        private.stop_explanation = ""
         tier, escalations = ModelRouter.select(agent, complexity=complexity, confidence=confidence)
         work = AgentWorkItem(task_id=identity, agent_id=agent, files=files,
                              focus="Plan review" if agent == AgentId.PLANNER else "Verify then synthesize")

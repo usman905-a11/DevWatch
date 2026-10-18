@@ -402,6 +402,74 @@ Run the backend tests:
 python -m pytest -q
 ```
 
+Run the complete local runtime scenarios and process-recovery checks:
+
+```powershell
+python -m pytest tests/test_m10_runtime.py tests/test_crash_recovery.py -q
+```
+
+The runtime matrix creates isolated Git repositories and a real HTTP service on
+an ephemeral loopback port. It drives all seven roles through repository capture,
+tools, evidence/blackboard handoff, verification, synthesis and JSON/Markdown/PDF
+publication. Models return scripted responses; no provider credentials are needed.
+Cases cover bounded failures/repair, unavailable tools, context/evidence limits,
+budget exhaustion, timeouts, cancellation, specialist isolation and explicit resume.
+The service and workers are drained after every case. These checks establish local
+runtime behavior; live-agent review quality is evaluated separately.
+When overriding `--basetemp` for the full suite, choose a temporary directory
+outside this project's Git tree so standalone-directory capture tests keep their
+independent scope.
+
+Run the M11 agent evaluator from the repository root:
+
+```powershell
+New-Item -ItemType Directory -Force output | Out-Null
+python -m scripts.run_agent_evaluation --fixture --output output/evaluation-fixture.json
+```
+
+This exercises 12 paired Python/JavaScript samples through individual specialist
+subgraphs and the complete workflow. The deliberately narrow scripted provider
+only recognizes one bug family; its scores validate the evaluator, not model
+accuracy. Independent gold locations, descriptions and match facets never enter
+reviewer requests. Defect-specific matching checks the claim, file/line range and
+snapshot evidence; duplicates count as false positives. The older 60-case
+contract evaluator now also rejects unrelated findings on defective samples.
+
+For an explicitly paid run, configure `DEVWATCH_PROVIDER` and all three
+`DEVWATCH_MODEL_SMALL/MEDIUM/STRONG` tiers, plus the provider's existing environment
+credential. Supply current per-million-token USD input/output rates for every
+model (see [`tasks/m11-pricing.json`](tasks/m11-pricing.json)):
+
+```powershell
+python -m scripts.run_agent_evaluation --live --rates tasks/m11-pricing.json --max-cost-usd 2 --output output/evaluation-live.json
+```
+
+The cost guard reserves before dispatch, includes unallocated reasoning tokens at
+output rates and retains unknown charges. It estimates spending from supplied
+prices; provider billing remains authoritative. A provider completion with unknown
+usage stops the batch. Each finished case is saved so interrupted runs retain their
+observations. Choose a new output filename for every invocation. The cap applies
+to that invocation; previous attempts consume the overall authorized budget too.
+
+Results separate individual candidates, accepted report claims, precision/recall,
+FP/FN, evidence/localization, duplicates, source inspection, tool outcomes, latency,
+provider/ledger tokens and approximate cost. Facet matching is a screening heuristic.
+Semantic evidence and causal tool usefulness require manual annotation; severity
+accuracy is unavailable because the production finding schema has no severity.
+Provider-blocked cases are excluded from quality estimates. Local raw results
+include the authored corpus's evidence for inspection, with ambient tracing disabled.
+
+Re-score saved results without model calls:
+
+```powershell
+python -m scripts.run_agent_evaluation --rescore results.json --judgments judgments.json --output reviewed.json
+```
+
+Judgments map `case_id:mode` to `findings` (zero-based
+finding index -> `defect_id` or null, and boolean `evidence_correct`) and optional
+`tools` (observed operation ID -> boolean `appropriate` and `necessary`). The
+[`M11 report`](tasks/m11-evaluation-report.md) records measurements and limitations.
+
 Run contract export checks:
 
 ```powershell

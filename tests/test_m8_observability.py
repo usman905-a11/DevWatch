@@ -344,7 +344,7 @@ def test_arbitrary_model_stop_text_is_not_exportable_telemetry():
             PermissionedTools(), BudgetManager(), lambda state: {}, models=MODELS,
             emit=recorder(events)).run_specialist(task())
         end = next(p for kind, p in events if kind == "agent_completed")
-        assert end["stop_reason"] == "other" and end["outcome"] == "failed"
+        assert end["stop_reason"] == "invalid_schema" and end["outcome"] == "failed"
         assert "private source" not in json.dumps(events)
     asyncio.run(scenario())
 

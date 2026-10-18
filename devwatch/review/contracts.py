@@ -7,7 +7,7 @@ validate model actions here before performing any effect.
 from enum import Enum
 from pathlib import PurePosixPath, PureWindowsPath
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -113,6 +113,12 @@ class Coverage(ContractModel):
     limitations: list[str] = Field(default_factory=list)
 
 
+StopReason = Literal["evidence_complete", "finished_without_result", "invalid_schema", "model_unavailable",
+    "tools_unavailable", "unknown_tool_completion", "permission_denied", "budget_exhausted",
+    "prompt_context_limit", "context_timeout", "tool_timeout", "provider_truncated", "provider_incomplete",
+    "cancelled", "specialist_failed", "execution_failed", "review_time_exhausted", "final_consistency_failure", "other"]
+
+
 class ReviewTask(ContractModel):
     task_id: str = Field(min_length=1, max_length=128, pattern=r"^[\w.-]+$")
     agent_id: AgentId
@@ -169,7 +175,20 @@ class SpecialistResult(ContractModel):
     candidates: list[FindingCandidate] = Field(default_factory=list)
     quarantined: list[CandidateRejection] = Field(default_factory=list)
     coverage: Coverage
-    stop_reason: str = Field(min_length=1)
+    stop_reason: StopReason = Field(description="Controlled completion code; only evidence_complete indicates successful execution. Put explanatory prose in stop_explanation.")
+    stop_explanation: str = Field(default="", max_length=1000)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_narrative_stop(cls, value):
+        if isinstance(value, dict):
+            reason = value.get("stop_reason")
+            if isinstance(reason, str) and reason and reason not in get_args(StopReason):
+                # M11 responses/checkpoints used prose here. Preserve candidates
+                # without interpreting that prose as successful completion.
+                value = {**value, "stop_reason": "invalid_schema"}
+                value.setdefault("stop_explanation", reason[:1000])
+        return value
 
     @model_validator(mode="before")
     @classmethod
@@ -323,6 +342,7 @@ class AgentPrivateState(ContractModel):
     tool_call_count: int = Field(default=0, ge=0)
     usage: TokenUsage = Field(default_factory=TokenUsage)
     stop_reason: str | None = None
+    stop_explanation: str = Field(default="", max_length=1000)
 
 
 class AgentInput(ContractModel):

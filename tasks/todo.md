@@ -1,5 +1,29 @@
 # DevWatch seven-agent implementation checklist
 
+## Current roadmap v2.0: M12 Architecture and Contract Audit
+
+- [ ] Map all graph nodes/transitions, state, tools, providers and evaluation paths.
+- [ ] Establish a versioned architecture specification and actual-module roadmap.
+- [ ] Reproduce and repair the stop-reason contract; preserve valid partial findings.
+- [ ] Verify focused execution, full backend regression and transport compatibility.
+- [ ] Review the M12 changes and document results and limitations before M13.
+
+## Current local plan: M11 Real Agent Evaluation
+
+- [x] Add representative paired samples and defect-specific scorer regressions.
+- [x] Run individual specialist and full-system paths with observable metrics.
+- [x] Verify harness locally; measure live quality only with authorized provider runs.
+- [x] Review, run regression checks and write an honest M11 evaluation report.
+- [x] Stop before M12.
+
+## Current local plan: M10 End-to-End Runtime Testing
+
+- [x] Prove the full seven-agent workflow through real repository capture and HTTP.
+- [x] Add the requested fault matrix with real stores/tools/gates/rendering.
+- [x] Verify cancellation, resume and process recovery across runtime boundaries.
+- [x] Review changes, run full checks and write the M10 report.
+- [x] Stop before M11.
+
 ## Current local plan: M9 Basic Local Storage Cleanup (2026-10-17)
 
 - [x] Add safe offline retention, exact preview apply and artifact/database cleanup.

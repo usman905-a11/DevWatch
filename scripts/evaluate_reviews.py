@@ -20,6 +20,8 @@ from devwatch.review.jobs import DurableJobManager, EventStore, JobStore
 from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
 from devwatch.review.tool_runtime import TrustedCommand
 from devwatch.review.workflow import CanonicalReviewExecutor
+from devwatch.review.repository import RepositoryContext
+from scripts.evaluate_agents import score_findings
 
 
 class ContractProbeProvider:
@@ -144,17 +146,27 @@ async def evaluate(cases, runtime_root, *, provider_factory=ContractProbeProvide
                 failed_jobs += 1
                 confirmed = 0
                 coverage_failed = True
+                findings, records = [], {}
             else:
                 report = json.loads(finished.result["json"])
-                confirmed = len(report["confirmed_defects"])
+                findings = report["confirmed_defects"]
+                confirmed = len(findings)
+                repository = RepositoryContext(artifacts, RepoCache(layout.repo_cache), snapshot.snapshot_id, owner="evaluation")
+                records = {ref: repository.evidence(ref) for finding in findings for ref in finding["evidence_refs"]}
                 coverage_failed = bool(report["coverage"]["failed"])
                 failed_jobs += int(coverage_failed)
             expected = case["expected_defect"]
-            true_positive += int(expected and confirmed > 0)
-            false_negative += int(expected and confirmed == 0)
-            false_positive += confirmed if not expected else max(0, confirmed - 1)
+            # Version 2 labels describe a single executable contract at line 2.
+            # Require that specific claim, location and immutable evidence; an
+            # unrelated finding on a defective sample is a false positive/miss.
+            gold = [{"defect_id": case["family"], "file_path": case["subject"], "start_line": 2,
+                     "end_line": 2, "facets": [[case["contract"]]]}] if expected else []
+            score = score_findings(gold, findings, records)
+            true_positive += score["true_positive"]
+            false_negative += score["false_negative"]
+            false_positive += score["false_positive"]
             rows.append({"case_id": case["case_id"], "expected_defect": expected, "confirmed": confirmed,
-                "status": finished.status, "coverage_failed": coverage_failed})
+                "status": finished.status, "coverage_failed": coverage_failed, "score": score})
         finally:
             await manager.close()
     precision = true_positive / (true_positive + false_positive) if true_positive + false_positive else 0.
@@ -163,7 +175,9 @@ async def evaluate(cases, runtime_root, *, provider_factory=ContractProbeProvide
         "cases": len(cases), "true_positive": true_positive, "false_positive": false_positive, "false_negative": false_negative,
         "confirmed_precision": precision, "confirmed_recall": recall, "failed_jobs": failed_jobs,
         "passes_quality_gate": len(cases) >= 60 and precision >= .9 and recall >= .7 and failed_jobs == 0,
-        "live_model_accuracy": {"precision": precision, "recall": recall} if live else None,
+        "live_model_accuracy": None,
+        "live_model_screening": {"precision": precision, "recall": recall} if live else None,
+        "matching_method": "contract-text-location-evidence-screen; human semantic adjudication required",
         "corpus_sha256": sha256(json.dumps(cases, sort_keys=True).encode()).hexdigest(), "results": rows}
 
 

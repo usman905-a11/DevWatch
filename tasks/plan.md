@@ -1,5 +1,70 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: Milestone 11 - Real Agent Evaluation (2026-10-18)
+
+Complete M11 only; stop before M12. Preserve prior milestones and all seven roles.
+Build a small paired corpus spanning the five specialists and Python/JavaScript.
+Keep independent gold labels outside reviewer requests. Evaluate actual individual
+specialist subgraphs and the unchanged full graph, with defect-specific matching
+and an explicit manual-adjudication boundary for semantic evidence correctness.
+
+Slices: (1) corpus and scorer regression tests, including unrelated findings,
+wrong locations, duplicates and missed defects; (2) real-runtime runner and metrics
+from evidence/checkpoints/events/accounting; (3) reproducible local harness checks,
+full regression and report. Live runs require configured credentials and spending
+authorization (asked asynchronously); offline fixture scores must never claim live
+model accuracy. Report unavailable severity rather than infer it from confidence.
+Record precision/recall/FP/FN, localization, evidence, duplicate/tool/investigation
+metrics, latency, tokens, supplied-rate cost estimates and six failure categories.
+No new production roles, dependencies, services, deployment or commits.
+
+M11 live work: user authorized USD 2 and selected the existing local Gemini key.
+All 24 planned case/mode evaluations completed (26 attempts including two provider
+timeouts), using configured gemini-3.8-flash at all tiers. Author inspection found
+two valid individual claims; full Planner failed on all 12 samples (0/6 recall).
+Retain partial model failures in quality scores; exclude external provider failures
+only. Reasoning-token accounting fixed test-first; all-attempt bound < USD 0.57.
+Final focused 42 passed; full backend 413 passed in 669.86s with one existing SDK
+deprecation warning. Contract freshness, compilation and diff checks passed.
+M11 complete; see m11-evaluation-report.md. Stop before M12.
+
+
+## Current request: Milestone 10 - End-to-End Runtime Testing
+
+Complete M10 only. Exercise repository capture -> local HTTP client/service ->
+Planner -> all five specialists -> real tools -> blackboard -> combined verifier /
+synthesizer -> accepted JSON/Markdown/PDF, durable events and persisted accounting.
+Script external model responses; inject a missing optional tool and a task-local
+exception to prove isolation. Keep tools, validation, budgets, stores and rendering.
+
+Build a small repeatable matrix: normal; tool failure; invalid arguments;
+unavailable tool; malformed output (repair and exhaustion); context limit;
+oversized paged evidence; truncation; budget exhaustion; provider/job timeout;
+explicit cancellation; specialist failure; graceful resume; finalization repair.
+Existing actual process-kill recovery tests remain part of the milestone gate.
+Assert final behavior, evidence provenance, accounting, limits, source immutability,
+event replay, absence of leaked private errors and completion-before-publication.
+No evaluation dataset or live accuracy/cost benchmark (M11), new agents, dependency,
+frontend changes, external provider calls, commits or deployment.
+
+Slices: (1) establish seven-agent HTTP normal path and terminal assertions;
+(2) run the fault matrix and fix only reproduced runtime bugs through red/green;
+(3) cancellation/resume and process recovery gate; (4) full regression, contract /
+compile checks, review and M10 report. Tests live in test-only helpers and
+`tests/test_m10_runtime.py`; no production test switches. Use a fresh owned E:
+temporary root because C: was full during inspection. Stop before milestone 11.
+
+Verification adjustment on resume: C: has free space again. The complete suite
+must use a fresh system-temp root outside the repository; otherwise standalone
+directory-capture tests inherit the project's Git scope. Reproduced both affected
+capture tests inside the repository, then verified them in an external temp root.
+The isolated M10 Git fixtures may stay in their owned E: test roots.
+
+M10 complete on 2026-10-18: 20 new runtime cases; focused runtime/process recovery
+33 passed in 184.48s; full backend 371 passed in 758.30s with one existing SDK
+deprecation warning. JUnit confirms zero failures/errors/skips. Contract freshness,
+test compilation and diff checks passed. See m10-runtime-report.md. Stop before M11.
+
 ## Current request: Milestone 9 - Basic Local Storage Cleanup (2026-10-17)
 
 Complete M9 only. Use the existing local stores; no new services or dependencies.
@@ -63,7 +128,27 @@ Commands: `.venv/Scripts/python.exe -m pytest tests/test_m8_observability.py -q`
 `npm test` and `npm run build` from `frontend/`.
 Keep old persisted events readable, existing fields intact and export opt-in.
 
-## Current request: Milestone 7 — Reliability & Recovery (2026-10-17)
+## Current request: M12 — Architecture and Contract Audit (2026-10-18)
+
+The attached Final Architecture and Reliability Remediation Plan v2.0 is the
+current M12–M23 roadmap. Start with M12 and retain prior milestone records below.
+Preserve the seven identities, working runtime, frontend and M11 baseline.
+
+1. Audit actual graphs, private/parent state, tools, provider and evaluator against
+   the supplied design; record versions and a module map in the M12 audit.
+2. Reproduce completion-contract gaps with failing regressions. Publish controlled
+   stop codes and a separate bounded explanation. Preserve source-backed candidates
+   from legacy narrative stops while explicitly marking the completion invalid;
+   never infer successful inspection from prose. Verify canonical and partial paths.
+3. Run focused contracts/runtime/evaluation tests, real local graph execution, full
+   backend regression and transport-schema freshness. Review only the M12 diff.
+4. Record the versioned architecture specification, root-cause evidence, milestone
+   results and M13 handoff. Live quality is unchanged unless newly measured.
+
+M12 does not require a provider migration or a paid evaluation. Model-dependent
+reliability fixes belong to M13 onward. No commit, push or deployment is requested.
+
+## Previous request: Milestone 7 — Reliability & Recovery (2026-10-17)
 
 The attached local-side-project plan supersedes the older remaining-milestone
 sequence below. Complete this milestone only, then stop. Its M7 is reliability,

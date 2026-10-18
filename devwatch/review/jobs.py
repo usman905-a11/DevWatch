@@ -19,7 +19,7 @@ from uuid import uuid4
 from pydantic import Field
 
 from devwatch.review.budgets import BudgetLedger
-from devwatch.review.contracts import AgentId, BalancedLimits, ContractModel, FollowupRequest
+from devwatch.review.contracts import AgentId, BalancedLimits, ContractModel, FollowupRequest, StopReason
 from devwatch.review.leases import execution_lock, runtime_lock
 
 _LOG = logging.getLogger(__name__)
@@ -51,12 +51,6 @@ EventKind = Literal[
     "candidate_rejected", "verification_completed", "finalization_started", "finalization_completed",
     "report_render_started", "report_render_completed",
 ]
-
-StopReason = Literal["evidence_complete", "finished_without_result", "invalid_schema", "model_unavailable",
-    "tools_unavailable", "unknown_tool_completion", "permission_denied", "budget_exhausted",
-    "prompt_context_limit", "context_timeout", "tool_timeout", "provider_truncated", "provider_incomplete",
-    "cancelled", "specialist_failed", "execution_failed", "review_time_exhausted", "final_consistency_failure", "other"]
-
 
 def safe_stop_reason(value):
     # Specialist stop text is model output; never copy arbitrary prose to telemetry.

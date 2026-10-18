@@ -1134,3 +1134,76 @@ bytes without compaction. Full evidence and limitations: m9-cleanup-report.md an
 evidence/m9-{focused-final,backend,boundaries-final}.txt, m9-storage-metrics.json.
 Seven-agent architecture and user work preserved. No dependency, frontend or wire
 changes, live provider/export calls, commits, pushes or deployment. Stop before M10.
+
+2026-10-18 M10: complete End-to-End Runtime Testing from the attached local plan.
+Added 20 cases over isolated Git repositories, real loopback HTTP/ReviewClient,
+all seven roles, actual tools, blackboard/evidence/acceptance gates and report
+formats. Scripted models and scoped optional-backend/task-local fault injection
+exercise errors, argument rejection, unavailability/denial, malformed/truncated
+output, context compaction, oversized paging, budgets, provider/job deadlines,
+cancellation, restart/resume and bounded semantic synthesis repair. Runtime source,
+schemas, dependencies and seven-agent responsibilities are unchanged.
+
+M10 normal fixture: 15 model calls, 7 tools, 132 events, 225 scripted tokens and
+one verifier-backed finding. Verify immutable source, persisted event replay,
+reservation settlement and publication order. Unknown provider completion charges
+its reservation; explicit cancellation drains without a report; restart resumes
+synthesis alone with original job/snapshot/intent and cumulative accounting.
+
+M10 verification: focused runtime/process recovery 33 passed in 184.48s. Full
+backend 371 passed in 758.30s; JUnit confirms zero failures/errors/skips and all
+20 new cases. One existing LangSmith SDK wrapper deprecation warning. Contract
+freshness, changed-test compilation and whitespace checks passed. First in-repo
+full attempt was stopped after two capture-test failures caused by inherited Git
+scope; both reproduced there and passed unchanged in system temp (2 in 0.22s).
+Final full run uses a fresh system-temp root outside the project. Evidence and
+all fixture corrections: m10-runtime-report.md and evidence/m10-{focused-final,
+backend-final,capture-location-red,capture-location-green}.txt, runtime metrics
+JSON and backend JUnit XML. No live provider/export calls, project commit, push,
+deployment or user-data cleanup. Stopped before M11; live quality evaluation is
+not claimed by these deterministic runtime checks.
+
+2026-10-18 M11: complete Real Agent Evaluation from the attached local plan.
+Added a 12-sample paired corpus spanning five specialists and Python/JavaScript,
+actual individual/full runtime execution, one-to-one defect/facet/location/evidence
+matching, candidate/report separation, duplicate accounting, observable metrics,
+offline adjudication and an explicit paid-provider cost guard. Fixed the old
+60-case evaluator's presence-only TP rule; unrelated findings now count FP + FN.
+No production review contracts, seven agent identities or runtime roles changed.
+
+TDD covers false claims/misses, invalid provenance, matching order, duplicate
+inflation, real runtime paths, unavailable-provider exclusion, partial model
+failures, reasoning-token accounting and missing usage. Independent behavioral
+witnesses distinguish all 12 defective/repaired samples. Scripted 24-run matrix
+detects only its one programmed family (1/6 recall), explicitly not live quality.
+
+User authorized USD 2 and the existing Gemini key. Ran gemini-3.8-flash at all
+three configured evaluation tiers. Completed all 24 comparisons, retaining 26
+attempts including two provider timeouts. Individual specialists detected two of
+six known issues (one defect and one advisory); no false positives, correct cited
+source/localization for both. Every full-system review stopped at Planner:
+3 invalid schema, 7 incomplete provider output and 2 budget exhaustion; 0/6
+full-system recall. This Gemini baseline Needs Improvement. Live verification/
+synthesis reasoning remains unmeasured because no full run dispatched specialists.
+Narrative specialist stop reasons exposed a schema/runtime mismatch: accepted
+nonempty strings still become failed coverage unless equal to evidence_complete.
+Report records these follow-ups; no hidden runtime fixes or permissive bypasses.
+
+Author tool judgments cover 15/27 calls: 14 appropriate first source reads and
+one unnecessary diff request; failed source-call necessity remains unjudged.
+Severity absent from the finding schema, so severity accuracy is unavailable.
+Author checks are not independent human adjudication; machine live_model_accuracy
+remains null and screening results are separate. Selected comparisons estimate
+USD 0.1707195; all-attempt conservative bound USD 0.56326275, including unknown
+charges/preliminary attempts, below authorization. No provider invoices queried.
+OpenAI quota diagnostics and the first interrupted Gemini meter attempt are
+retained separately; unallocated reasoning tokens are now priced as output.
+
+M11 verification: focused 42 passed in 16.85s; full backend 413 passed in 669.86s
+with one existing LangSmith SDK wrapper deprecation warning. JUnit confirms zero
+failures/errors/skips, all 42 M11 cases, with latest accounting/eligibility code.
+Contract freshness, Python compilation and whitespace checks passed. Final report:
+m11-evaluation-report.md; evidence/m11-live-reviewed.json, m11-reviewed-summary.txt,
+all raw per-batch results, focused/backend logs and JUnit XML. Existing M10 work
+preserved; no dependency/frontend change, commit, push, deployment or user-data
+cleanup. Milestone 11 complete; stop before local security M12.
