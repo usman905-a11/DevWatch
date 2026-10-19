@@ -2,6 +2,10 @@
 
 Date: 2026-10-19. Status: **COMPLETE - engineering and deterministic runtime gates**.
 
+Requested follow-up: **live tool-reliability controls verified** on the approved
+fixtures. Five full fixture reports completed; semantic claim limitations remain.
+Live cost US$0.18621000; cumulative conservative charges US$0.95595150 of US$1.
+
 ## A. Existing implementation
 
 The existing seven custom LangGraph roles already used permission-filtered tool
@@ -147,17 +151,72 @@ miss-counting check, not improved model accuracy. Consolidated results:
 
 ## E. Live evaluation
 
-No paid provider calls are made for M15. HTTP MockTransport replaces the remote
-response while the actual SDK, stores, tool execution, graph, evidence inspection,
-verification, acceptance and report rendering run locally. These checks establish
-runtime correction behavior, not a new live-model accuracy result. M13's approved
-five-fixture live result remains historical evidence.
+The initial engineering pass used HTTP MockTransport. At the user's request, the
+follow-up uses the existing Gemini key, exact five approved fixtures/contracts in
+`m13-live-inputs.json`, agent policies and fixture-derived context/results. No
+working-repository source is sent. Original cumulative spending authorization is
+preserved, including all prior unknown-consumption reservations. TLS verification
+and disabled external tracing remain explicit.
+
+The fault harness was rehearsed offline before spending. It deliberately replaces
+selected visible tool actions or corrupts a stored artifact locally; these faults
+are not attributed to the model. Original visible responses are retained alongside
+applied actions. After the single range injection, correction is the real model's
+unmodified choice. The actual SDK, graph, stores, tool handlers, acknowledgments,
+verification, acceptance and rendering run throughout.
+
+| Live scenario | Observed result |
+|---|---|
+| Duplicate failed request, specialist control | Two deliberately identical bad actions; one handler attempt; second blocked with repeated_tool_failure. Terminal stop, no evidence fabricated. |
+| Corrupt stored evidence, specialist control | One real model response and source read, then a deliberately changed snapshot hash. Terminal evidence_integrity_failure before another model call; no delivered/inspected page. |
+| Invalid range in full empty-input review | Feedback includes start=99, line_count=2 and max_lines=200. Gemini independently chooses lines 1-2, acknowledges the delivered source and produces an accepted finding. Historical failed-call receipt remains. |
+| Clean empty-input fixture | Full report, inspected source, no finding and no failed coverage. |
+| Mutation fixture | Full report, core mutation found, no failed coverage; ancillary claim caveat below. |
+| Missing-assertion fixture | Full report, core defect found, no failed coverage. |
+| Query fixture | Initial report retains the core finding but has partial coverage after a cost-reservation refusal. Serial recheck completes with inspected source, finding retained, no failed coverage or refusal. |
+
+The first seven-attempt batch uses a US$0.22 guard. During the query case, concurrent
+reservations cause one pre-dispatch refusal. This is not a Gemini outage or unknown
+billed completion. The graph records generic model_unavailable coverage for that
+task and conservatively accounts for its token reservation. That partial run remains
+in the original journal. With US$0.079978 remaining, one query-only recheck uses
+the existing supported concurrency limit of one and a US$0.075 cap. Only this local
+test configuration changes; no production source or resource ceiling is raised.
+
+Eight attempts cover seven scenarios. **55 actual API responses all finish with
+stop**; the graph records 56 model-call admissions including the one refused before
+API dispatch. Unknown provider consumption: zero. The selected five completed full
+fixture reports score **4 TP / 0 FP / 0 FN**, zero duplicate findings. These are
+facet/location/evidence screens of core issues, not independent claim-level human
+adjudication. Expected terminal controls are excluded from detection scores. The
+range review's known historical failed-call receipt is retained, not erased.
+
+Evidence: [summary](evidence/m15-live-summary.json),
+[original seven attempts](evidence/m15-live-run-01.json),
+[serial query recheck](evidence/m15-live-run-02.json),
+[harness](evidence/m15_live_validation.py). Approved payload and production/test
+hashes match. Local evidence was checked for accidental credential inclusion;
+none was found. The 526-test offline regression remains on the same source hashes;
+live follow-up changes only local evidence/harness and documentation.
 
 ## F. Resource usage
 
-M15 provider cost: US$0. Conservative cumulative Gemini charges remain
-US$0.76974150 of the original US$1 cap; US$0.23025850 remains. Failed tool calls
-already dispatched retain their charge; blocked duplicates consume no second tool
+Initial offline provider cost: US$0. Live follow-up: **US$0.18621000**, including
+US$0.15028050 for the initial batch and US$0.03592950 for the serial query recheck.
+Conservative cumulative charges: **US$0.95595150 of US$1**; remaining
+**US$0.04404850**. Reservations are persisted before API effects and unknown
+consumption remains charged. Prices were checked against
+[Google's official Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing)
+on 2026-10-19: Gemini 3.8 Flash standard input US$0.75/million and output including
+thinking US$3.75/million through December 2026. These are local supplied-rate cost
+estimates, not a provider invoice reconciliation.
+
+Across all live attempts: 25 tool dispatches, 55 API responses (56 graph admissions),
+180,200 reported input tokens and 13,616 output tokens including unallocated total
+usage conservatively priced as output. Summed job latency is 272.031s. One safe
+budget refusal, zero unknown provider completions, no timeout reservation added.
+
+Failed tool calls already dispatched retain their charge; blocked duplicates consume no second tool
 call. Invalid arguments consume no handler effects. All iterations and corrective
 model requests retain cumulative accounting. Histories are bounded to eight and
 only the latest active diagnostic is added to model context.
@@ -167,6 +226,20 @@ The deterministic matrix used **181 scripted model calls**, **73 tool calls**,
 local fixture measurements, not provider pricing or live latency estimates.
 
 ## G. Remaining limitations
+
+Live tool controls pass, but agent inspection identifies two secondary claims that
+extend beyond demonstrated evidence: mutation description discusses immutable and
+non-list inputs outside the declared caller-input contract; the query recheck's
+impact mentions unauthorized-data extraction without a database schema/access-policy
+witness. The core mutation and SQL-concatenation defects remain supported. Raw
+findings are retained; neither clause is silently removed or promoted to verified
+semantic accuracy. Broader repeated-run quality and confidence calibration remain
+unmeasured. This follow-up verifies M15 tools, not completion of later reasoning or
+causal-verification milestones.
+
+Live faults exercise source reads, diagnostic correction, replay suppression and
+evidence integrity. The other tool families retain the offline regression evidence;
+this run does not execute host commands or connect to a real database.
 
 Free-text and capability values are intentionally redacted in durable diagnostics;
 coordinates, scoped paths, field names, structured codes and private identities

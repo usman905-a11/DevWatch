@@ -377,8 +377,12 @@ Processing, delivery, explicit page inspection and semantic verification remain
 separate. Recovered calls retain their historical failed-call coverage receipt.
 
 Implementation and fresh validation: [M15 report](m15-tool-reliability-report.md).
-No paid-provider calls, graph topology, wire changes or new dependencies are needed.
+The initial engineering pass needs no paid calls, graph topology/wire changes or
+new dependencies. Requested live follow-up uses only the approved synthetic inputs.
 M15 is complete for engineering/deterministic runtime gates: 526 backend tests,
 87 focused tests and 24/24 matrix runs pass. The matrix has no failed coverage;
-source/test hashes remain unchanged through verification. Broader live accuracy
-remains unmeasured by this milestone.
+source/test hashes remain unchanged through verification. Live range correction,
+duplicate suppression and integrity-stop controls pass. Five full fixture reports
+complete after one query-only serial recheck; the initial reservation-limited query
+attempt remains recorded. Two secondary semantic claims remain overbroad. New cost
+US$0.18621000; cumulative US$0.95595150 of US$1. Broader live accuracy is unmeasured.

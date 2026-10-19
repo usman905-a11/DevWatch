@@ -8,7 +8,13 @@ response reservations within the existing ceiling. Post-dispatch schema failures
 are terminal, including after real command effects. COMPLETE: backend 526 passed
 (36 new M15 cases), focused 87 passed, deterministic matrix 24/24 complete without
 failed coverage. Wire/compile/diff checks pass; source/test hashes match before and
-after. No new paid calls or later milestone work. Detailed evidence and status:
+after. The initial pass used no paid calls. Requested live follow-up verifies range
+correction, duplicate suppression and terminal integrity controls. Five completed
+full fixture reports score 4 core TP / 0 FP / 0 FN after one serial query recheck;
+the first query attempt's reservation-limited partial coverage remains recorded.
+Two secondary semantic claims remain overbroad. 55 actual API responses all stop,
+zero unknown completions. New cost US$0.18621000; cumulative US$0.95595150 of US$1.
+No production changes or later milestone work. Detailed evidence and status:
 [m15-tool-reliability-report.md](m15-tool-reliability-report.md).
 
 M13 live-quality remediation completed (2026-10-19) before advancing.

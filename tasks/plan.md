@@ -1,17 +1,45 @@
 # DevWatch seven-agent remediation: active implementation plan
 
-## Current request: M15 - Tool Infrastructure Reliability (2026-10-19)
+## Current follow-up: M15 live verification (2026-10-19)
+
+The user requests live verification in addition to the completed offline gates.
+Reuse the existing Gemini key and exact five fixtures/contracts approved in
+`evidence/m13-live-inputs.json`; send only agent policies and fixture-derived
+context/results. Prior conservative charges are US$0.76974150. This batch reserves
+at most US$0.22, preserving the original cumulative US$1 cap. Persist every call
+reservation before dispatch and stop on unknown completion or cap refusal.
+
+1. Rehearse range/duplicate/integrity controls offline; all three controls pass.
+2. Run two live specialist terminal controls plus five full fixture reviews, one
+   with a single controlled invalid range. Subsequent correction is chosen by the
+   live model. Distinguish injected failures from natural model actions and scores.
+3. Inspect durable diagnostics, bounds feedback, effect counts, page receipts,
+   accepted reports and visible responses. Verify unchanged production/test hashes;
+   record actual results and cumulative costs without inferring broad accuracy.
+
+Status: COMPLETE for live tool controls. Journals: `evidence/m15-live-run-01.json`
+and `m15-live-run-02.json`. Three controls pass. Five completed full fixture reports
+score 4 core TP / 0 FP / 0 FN; two ancillary semantic claims remain overbroad.
+The initial query attempt retained its finding but had partial coverage after one
+concurrent cost-reservation refusal. A query-only serial recheck under a US$0.075
+cap passes without failed coverage. Both attempts remain in evidence. New charges:
+US$0.18621000; conservative cumulative total US$0.95595150; US$0.04404850 remains.
+55 API responses finish with stop; no unknown provider consumption. Production/test
+hashes are unchanged. No new dependency, commit, push or next milestone work.
+
+## Initial M15 engineering pass (2026-10-19)
 
 Implement the supplied M15 roadmap. Preserve seven identities, scoped immutable
 evidence, M13 prompt/provider fixes, M14 orchestration and the shared dirty tree.
 The user authorizes implementation; no commit, push or deployment is requested.
-No additional provider spending is planned. Carry US$0.76974150 against the
-original cumulative US$1 cap; do not reset prior unknown-consumption charges.
+This initial offline pass made no additional provider calls. Its starting balance
+was US$0.76974150 against the original cumulative US$1 cap. The completed live
+follow-up above carries subsequent charges; retain all unknown-consumption charges.
 
 Status: COMPLETE for M15 engineering and deterministic runtime gates. Final
 backend: 526 passed (36 new M15 cases), 822.71s; focused: 87 passed; matrix:
 24/24 complete without failed coverage. Wire/compile/diff checks pass and source
-hashes match before/after. No new provider spending. A-H report:
+hashes match before/after. This offline gate used no provider spending. A-H report:
 [m15-tool-reliability-report.md](m15-tool-reliability-report.md).
 
 Intermediate focused infrastructure gate: 68 passed; broader

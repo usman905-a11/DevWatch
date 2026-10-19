@@ -2,6 +2,8 @@
 
 ## Current milestone: M15 Tool Infrastructure Reliability - COMPLETE
 
+- [x] Follow-up live verification on approved fixtures under the cumulative US$1 cap.
+
 - [x] Reproduce and fix actionable source/evidence errors and safe diagnostics.
 - [x] Add bounded correction/repeated-failure suppression with durable private history.
 - [x] Audit tool contracts and prove permission/snapshot/evidence boundaries.
@@ -9,8 +11,11 @@
 
 Backend: 526 passed (36 new M15 cases); focused: 87 passed; deterministic matrix:
 24/24 completed with no failed coverage. Source/test hashes match before/after.
-No new paid calls; cumulative US$0.76974150 of US$1. Broader live model quality is
-unmeasured by M15. Details: [m15-tool-reliability-report.md](m15-tool-reliability-report.md).
+Live follow-up: range correction, duplicate suppression and terminal integrity
+controls pass. Five full reports score 4 core TP / 0 FP / 0 FN after a serial query
+recheck; initial budget-limited partial run is retained. Two secondary semantic
+claims remain overbroad. New cost US$0.18621000; cumulative US$0.95595150 of US$1.
+Details: [m15-tool-reliability-report.md](m15-tool-reliability-report.md).
 
 ## Current priority: M13 live-quality remediation
 
