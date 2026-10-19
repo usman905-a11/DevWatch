@@ -116,6 +116,7 @@ class Coverage(ContractModel):
 
 
 StopReason = Literal["evidence_complete", "finished_without_result", "invalid_schema", "model_unavailable",
+    "evidence_incomplete", "no_progress",
     "tools_unavailable", "unknown_tool_completion", "permission_denied", "budget_exhausted",
     "prompt_context_limit", "context_timeout", "tool_timeout", "provider_truncated", "provider_incomplete",
     "cancelled", "specialist_failed", "execution_failed", "review_time_exhausted", "final_consistency_failure", "other"]
@@ -313,6 +314,7 @@ class Hypothesis(ContractModel):
 
 
 class EvidenceProgress(ContractModel):
+    source_file: str | None = None
     processed: bool = False
     delivered: list[tuple[int, int]] = Field(default_factory=list)
     last_delivered: tuple[int, int] | None = None
@@ -330,7 +332,18 @@ class EvidenceProgress(ContractModel):
         return self.total_chars > 0 and end >= self.total_chars
 
 
+class InvestigationProgress(ContractModel):
+    goal: str
+    required_files: list[str]
+    stage: Literal["investigating", "ready", "complete", "stopped"] = "investigating"
+    successful_actions: dict[str, str] = Field(default_factory=dict, max_length=8)
+    last_action: str | None = None
+    last_inspection: str | None = None
+    stagnant_calls: int = Field(default=0, ge=0, le=8)
+
+
 class AgentPrivateState(ContractModel):
+    investigation: InvestigationProgress | None = None
     current_task: str | None = None
     inspected_files_and_symbols: list[str] = Field(default_factory=list)
     hypotheses: list[Hypothesis] = Field(default_factory=list)
@@ -440,7 +453,10 @@ def _contract(agent_id: AgentId, responsibility: str, tools: set[str], tier: Mod
             "input domain has not been inspected, do not assert that domain is supported or claim "
             "a contract violation; distinguish unresolved hypotheses from demonstrated defects. "
             "Use candidates=[] if investigation supports no findings. Use evidence_complete for a "
-            "completed investigation; preserve uncertainty and failures in coverage. Do not use finish "
+            "completed investigation after acknowledging source for required files; inspect remaining_files "
+            "in investigation progress. A candidate needs acknowledged read_source covering its location, "
+            "not just parsed facts. Advance evidence offsets instead of repeating inspected requests. "
+            "Preserve uncertainty and failures in coverage. Do not use finish "
             "or a bare result to complete the task. " + instructions)
     return AgentContract(
         agent_id=agent_id, responsibility=responsibility,

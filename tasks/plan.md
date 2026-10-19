@@ -1,5 +1,41 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: M16 Specialist Reasoning Loop Reliability (2026-10-19)
+
+Implement the next supplied milestone, preserving seven custom LangGraph roles,
+M13-M15 fixes, stores, owner/snapshot scope and all cumulative limits. No paid calls
+are planned: carry US$0.95595150 of the original US$1 cap, US$0.04404850 remaining.
+No commit, push, deployment, M17 filtering or M20 semantic-verifier redesign.
+
+1. Evidence-backed completion (contracts, repository, subgraphs, one investigation
+   module, tests): retain the assigned goal and per-file evidence requirements in
+   private checkpoints. A required file needs at least one fully acknowledged source
+   artifact; this does not imply every file line was read. Add optional source-file
+   metadata to delivered receipts. Premature completion becomes evidence_incomplete.
+   Candidates require acknowledged read_source evidence covering their location;
+   one existing schema repair may guide retrieval/acknowledgment. Persist valid
+   siblings before repair and merge prior validated findings on later completion.
+   Verify failing-first scope, completion, source/AST distinction and partial tests.
+2. Unproductive investigation (same private module/loop plus tests): persist bounded
+   successful-action identities and actual inspection progress. Block an identical
+   already-inspected result before effects; stop a repeated read after two attempts
+   with no new inspection. Distinct offsets/requests may advance. Use no_progress,
+   distinguish it from M15 tool failures, preserve findings across stop/restart and
+   follow-up, and never reset budgets. Verify real handlers/checkpoints and counters.
+3. Integration and delivery: add the two controlled stop codes to generated wire
+   consumers, update scripted consumers to inspect required assigned files without
+   changing gold labels or weakening assertions, test full SDK/workflow/acceptance,
+   run frontend tests/build, serial full backend and deterministic matrix. Review
+   the M16-only diff, freeze source hashes and record A-H results/limitations.
+
+Internal seam: a focused investigation module owns progress and candidate retention;
+the repository supplies actual source/evidence validation. Public changes are two
+additive stop codes; legacy private checkpoints default to absent progress and are
+initialized from their bound task. No schema framework/dependency migration.
+Security scope remains the existing model-action/evidence boundary: authoritative
+receipts come only from delivered runtime pages, not model-reported coverage. No
+new secret handling, external integration or authorization boundary is introduced.
+
 ## Current follow-up: M15 live verification (2026-10-19)
 
 The user requests live verification in addition to the completed offline gates.

@@ -561,6 +561,8 @@
                 "finished_without_result",
                 "invalid_schema",
                 "model_unavailable",
+                "evidence_incomplete",
+                "no_progress",
                 "tools_unavailable",
                 "unknown_tool_completion",
                 "permission_denied",

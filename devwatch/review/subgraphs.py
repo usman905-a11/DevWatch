@@ -23,6 +23,7 @@ from devwatch.review.budgets import BudgetExceeded, BudgetManager
 from devwatch.review.jobs import UnknownToolCompletion, safe_stop_reason
 from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, CommandArguments, describe_tool
 from devwatch.review.tool_errors import ToolFailure, diagnose, failure_identity, safe_arguments
+from devwatch.review import investigation
 from devwatch.review.contracts import (
     AGENT_CONTRACTS, SPECIALISTS, AgentAction, AgentId, AgentPrivateState, AgentWorkItem,
     ContractModel, EvidenceProgress, ModelTier, ReviewPlan, ReviewTask, SpecialistResult, TokenUsage,
@@ -64,6 +65,7 @@ class PermissionedTools:
         self._arguments = dict(TOOL_ARGUMENTS)
         self._measurement_tasks: set[str] = set()
         self.validate_confirmation = None
+        self.validate_candidate = None
 
     def register(self, name: str, handler: ToolHandler, *, arguments_model=None) -> None:
         known = set().union(*(contract.allowed_tools for contract in AGENT_CONTRACTS.values())) | {"write_artifact"}
@@ -210,8 +212,12 @@ class AgentSubgraphs:
 
     def _stop(self, state: AgentExecutionState, reason: str, *, explanation: str = "") -> AgentExecutionState:
         private = state["private_state"]
+        if state["task"].agent_id in SPECIALISTS and private.investigation is not None:
+            reason = investigation.finish(private, reason)
         private.stop_reason = reason
         private.stop_explanation = explanation
+        if reason == "evidence_complete" and private.coverage.failed.get(state["task"].task_id) in {"evidence_incomplete", "no_progress"}:
+            private.coverage.failed.pop(state["task"].task_id)
         if reason != "evidence_complete":
             private.coverage.failed[state["task"].task_id] = reason
         if state["task"].agent_id in SPECIALISTS:
@@ -237,15 +243,22 @@ class AgentSubgraphs:
             span = receipt.last_delivered or receipt.delivered[-1]
             if span not in receipt.inspected:
                 receipt.inspected.append(span)
-            for path in receipt.source_scope if receipt.fully_inspected() else []:
+            for path in [receipt.source_file] if receipt.source_file is not None and receipt.fully_inspected() else []:
                 if path not in private.coverage.inspected_files:
                     private.coverage.inspected_files.append(path)
                 if path not in private.inspected_files_and_symbols:
                     private.inspected_files_and_symbols.append(path)
+                if private.coverage.skipped.get(path) == "not_inspected":
+                    private.coverage.skipped.pop(path)
+        if private.investigation is not None:
+            investigation.refresh(private)
         if action.kind == "submit_candidates":
             output = SpecialistResult.model_validate(action.payload)
             if output.task_id != task.task_id or output.agent_id != task.agent_id:
                 raise ValueError("result does not belong to the assigned agent/task")
+            if task.agent_id in SPECIALISTS:
+                output = investigation.admit(task, private, output, self.tools.validate_candidate)
+                action.payload = output.model_dump(mode="json")
         elif action.kind == "submit_plan":
             plan = ReviewPlan.model_validate(action.payload)
             requested = set(plan.priority_files) | {path for task in plan.review_tasks for path in task.files}
@@ -329,7 +342,7 @@ class AgentSubgraphs:
         large_synthesis = state.get("phase") == "synthesis" and len(known) > 8
         if large_synthesis:
             active = {}
-        compact = private.model_dump(mode="json", exclude={"local_findings", "pending_actions", "evidence_progress", "coverage", "quarantined_candidates", "tool_diagnostics"})
+        compact = private.model_dump(mode="json", exclude={"local_findings", "pending_actions", "evidence_progress", "coverage", "quarantined_candidates", "tool_diagnostics", "investigation"})
         compact["hypotheses"] = [{**item, "claim": item["claim"][:300]} for item in compact["hypotheses"][-3:]]
         compact["evidence_refs"] = compact["evidence_refs"][-12:]
         compact["evidence_progress"] = {ref: {"processed": receipt.processed, "delivered": bool(receipt.delivered), "inspected": bool(receipt.inspected)}
@@ -353,6 +366,7 @@ class AgentSubgraphs:
             "context_omissions": ["private_state_compacted"] if len(private.hypotheses) > 3 or private.local_findings else [],
             "repair": state.get("validation_error", "Previous response failed validation. Return one valid structured action.") if repair else None,
             "last_tool_error": state.get("last_tool_error"),
+            "investigation": investigation.context(private) if private.investigation is not None else None,
             "tool_diagnostic": private.tool_diagnostics[-1].model_dump(exclude={"fingerprint"})
                 if state.get("last_tool_error") and private.tool_diagnostics else None,
         }
@@ -493,6 +507,8 @@ class AgentSubgraphs:
                         receipt.delivered.append(span)
                     receipt.last_delivered = span
                     receipt.source_scope = page.get("source_scope", [])
+                    if page.get("source_file") in task.files:
+                        receipt.source_file = page["source_file"]
                     receipt.provenance = page.get("provenance", {})
                     receipt.total_chars = page["total_chars"]
                     await self._event("evidence_delivered", state, evidence_ref=page["evidence_ref"],
@@ -567,6 +583,9 @@ class AgentSubgraphs:
                         self.budget.consume_schema_repair(task.task_id)
                         await self._save(state)
                     except BudgetExceeded:
+                        if isinstance(exc, investigation.EvidenceInspectionRequired):
+                            private.quarantined_candidates.extend(item for item in exc.rejections if item not in private.quarantined_candidates)
+                            return self._stop(state, "evidence_incomplete", explanation=str(exc))
                         return self._stop(state, "invalid_schema")
                     repair = True
                 finally:
@@ -582,6 +601,8 @@ class AgentSubgraphs:
         except ToolFailure as exc:
             self._tool_diagnostic(state, exc)
             return self._stop(state, "tools_unavailable")
+        except PermissionError:
+            return self._stop(state, "permission_denied")
         except IncompleteCompletion as exc:
             return self._stop(state, str(exc))
         except BudgetExceeded:
@@ -637,6 +658,8 @@ class AgentSubgraphs:
                 action.arguments = arguments
                 if repeated:
                     raise ToolFailure("repeated_tool_failure", "Repeated failed action blocked.", recoverable=False)
+                if private.investigation is not None and investigation.stalled(private, fingerprint):
+                    return self._stop(state, "no_progress", explanation="Repeated request adds no new acknowledged evidence.")
                 self.budget.consume_tool(task.task_id)
                 private.tool_call_count += 1
                 await self._save(state)
@@ -656,6 +679,8 @@ class AgentSubgraphs:
                 private.evidence_page_sizes[observation.evidence_ref] = observation.max_chars
                 receipt = private.evidence_progress.setdefault(observation.evidence_ref, EvidenceProgress())
                 receipt.processed = True
+                if private.investigation is not None:
+                    investigation.observed(private, fingerprint, observation.evidence_ref)
                 state["last_tool_error"] = None
             elif action.kind == "submit_candidates":
                 output = SpecialistResult.model_validate(action.payload)
@@ -784,6 +809,7 @@ class AgentSubgraphs:
             private.coverage.failed.pop(task.task_id)
         private.current_task, private.stop_reason = task.task_id, None
         private.stop_explanation = ""
+        investigation.begin(task, private)
         tier, escalations = ModelRouter.select(task.agent_id, complexity=complexity, confidence=confidence)
         state = {"task": task, "private_state": private, "action": None, "output": None,
                  "model_tier": tier, "escalation_count": escalations}

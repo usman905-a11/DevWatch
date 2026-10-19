@@ -147,6 +147,7 @@ class RepositoryContext:
                               details={"total_chars": len(encoded)})
         end = min(len(encoded), offset + max_chars)
         page = {"evidence_ref": identity, "offset": offset, "end_offset": end,
+                "source_file": record.get("file_path") if record.get("tool") == "read_source" else None,
                 "total_chars": len(encoded), "next_offset": end if end < len(encoded) else None,
                 "source_scope": record["source_scope"] if len(_json(record["source_scope"]).encode("utf-8")) <= 512 else [],
                 "scope_count": len(record["source_scope"]), "provenance": record.get("provenance", {}),
@@ -187,9 +188,20 @@ class RepositoryContext:
                    for ref in decision.evidence_refs):
             raise ValueError("confirmation lacks fully inspected source evidence covering the claim")
 
+    def validate_candidate(self, candidate, work, private):
+        StructuralEvidenceGate(self).validate(candidate, work)
+        location = candidate.location
+        if not any((receipt := private.evidence_progress.get(ref)) is not None and receipt.fully_inspected()
+                   and (record := self.scoped_evidence(ref, work)).get("tool") == "read_source"
+                   and record.get("file_path") == location.file_path
+                   and record.get("start_line", 0) <= location.start_line
+                   and record.get("end_line", 0) >= location.end_line for ref in candidate.evidence_refs):
+            raise ValueError("candidate lacks acknowledged source covering its location")
+
     def tools(self, command_runtime=None, database_runtime=None) -> PermissionedTools:
         tools = PermissionedTools()
         tools.validate_confirmation = self.validate_confirmation
+        tools.validate_candidate = self.validate_candidate
         async def read_source(arguments, work):
             return self._read_source(arguments, work)
         async def read_evidence(arguments, work):

@@ -1,5 +1,14 @@
 # DevWatch seven-agent implementation checklist
 
+## Current milestone: M16 Specialist Reasoning Loop Reliability
+
+- [ ] Track goals/evidence and require acknowledged source before candidate admission.
+- [ ] Preserve partial findings and report incomplete coverage truthfully.
+- [ ] Bound repeated successful work across checkpoint restart/follow-up.
+- [ ] Verify SDK/full workflows, wire/frontend/backend/matrix and record A-H results.
+
+No new provider spending planned. Carry cumulative US$0.95595150 of US$1.
+
 ## Current milestone: M15 Tool Infrastructure Reliability - COMPLETE
 
 - [x] Follow-up live verification on approved fixtures under the cumulative US$1 cap.
