@@ -46,11 +46,13 @@ class AcceptedReport:
 
 class FinalAcceptanceGate:
     def __init__(self, candidates: dict[str, FindingCandidate], *, evidence_refs: set[str] | None = None,
-                 inspected_evidence: set[str] | None = None, snapshot_id: str | None = None):
+                 inspected_evidence: set[str] | None = None, snapshot_id: str | None = None,
+                 duplicate_groups=()):
         self.candidates = {key: value.model_copy(deep=True) for key, value in candidates.items()}
         self.evidence_refs = frozenset(evidence_refs or ())
         self.inspected_evidence = frozenset(inspected_evidence or ())
         self.snapshot_id = snapshot_id
+        self.duplicate_groups = tuple(tuple(group) for group in duplicate_groups)
 
     def accept(self, draft: ReportDraft, decisions: list[VerificationDecision]) -> AcceptedReport:
         draft = ReportDraft.model_validate(draft.model_dump())
@@ -97,21 +99,53 @@ class FinalAcceptanceGate:
                     raise AcceptanceError("draft overstates verified confidence")
                 if verdict == "confirmed" and min(finding.confidence, decision.confidence) < 0.8:
                     raise AcceptanceError("confirmed confidence is below 0.8")
-        expected = {identity for identity, decision in by_id.items() if decision.verdict != "rejected"}
+        expected = _report_ids(self.candidates, decisions, self.duplicate_groups)
         if seen != expected:
-            raise AcceptanceError("draft dropped a non-rejected verification decision")
+            raise AcceptanceError("draft dropped a non-rejected verification decision or retained a verified duplicate")
         return AcceptedReport(draft, _token=_ACCEPTANCE_TOKEN)
 
 
-def assemble_report(snapshot_id, candidates, decisions, *, summary, coverage=None, limitations=()):
+def _report_ids(candidates, decisions, duplicate_groups):
+    """Select representatives only from authoritative verifier duplicate groups.
+
+    Keep all decisions for audit and validation. Overlapping groups form one
+    component; prefer confirmation, then confidence, then a stable identity.
+    """
+    by_id = {decision.finding_id: decision for decision in decisions}
+    expected = {identity for identity, decision in by_id.items() if decision.verdict != "rejected"}
+    components = []
+    for group in duplicate_groups:
+        members = set(group)
+        if (len(group) < 2 or len(members) != len(group)
+                or not members.issubset(candidates) or not members.issubset(by_id)):
+            raise AcceptanceError("duplicate groups require distinct known verified candidates")
+        disjoint = []
+        for component in components:
+            if members & component:
+                members |= component
+            else:
+                disjoint.append(component)
+        components = [*disjoint, members]
+    priority = {"confirmed": 0, "uncertain": 1, "advisory": 2}
+    for component in components:
+        eligible = component & expected
+        if eligible:
+            representative = min(eligible, key=lambda identity: (
+                priority[by_id[identity].verdict], -by_id[identity].confidence, identity))
+            expected -= eligible - {representative}
+    return expected
+
+
+def assemble_report(snapshot_id, candidates, decisions, *, summary, coverage=None, limitations=(), duplicate_groups=()):
     """Keep claims, IDs and decisions runtime-owned; the model writes only prose."""
     draft = ReportDraft(snapshot_id=snapshot_id, summary=summary,
                         coverage=(coverage or Coverage()).model_copy(deep=True), limitations=list(limitations))
     buckets = {"confirmed": ("confirmed_defects", "defect"),
                "uncertain": ("uncertain_high_impact_candidates", "high_impact_candidate"),
                "advisory": ("advisories", "advisory")}
+    expected = _report_ids(candidates, decisions, duplicate_groups)
     for decision in decisions:
-        if decision.verdict == "rejected":
+        if decision.finding_id not in expected:
             continue
         candidate = candidates[decision.finding_id]
         claim = candidate.model_dump() if isinstance(candidate, FindingCandidate) else dict(candidate)

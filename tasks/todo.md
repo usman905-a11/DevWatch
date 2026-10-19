@@ -1,12 +1,69 @@
 # DevWatch seven-agent implementation checklist
 
+## Current priority: M13 live-quality remediation
+
+- [x] Diagnose exact live provider/action/tool failure paths.
+- [x] Reproduce and fix confirmed defects without bypassing evidence gates.
+- [x] Validate live fixture quality under the cumulative US$1 cap.
+- [x] Run regression, review and update the M13 status honestly.
+
+Status: COMPLETE for engineering and approved live fixtures. Backend 490 passed;
+focused 66 passed; deterministic matrix 24/24 complete. Final live: 5/5 complete,
+4 TP / 0 FP / 0 FN, no duplicates or failed coverage. Conservative cumulative
+Gemini charges: US$0.76974150 of US$1. Broader accuracy remains unmeasured.
+Details: [m13-live-remediation-report.md](m13-live-remediation-report.md).
+
+## Current milestone: M14 LangGraph Workflow and Orchestration - COMPLETE
+
+- [x] Reproduce and correct task dispatch/checkpoint reuse boundaries.
+- [x] Validate result aggregation and retain partial/completed sibling work.
+- [x] Prove concurrency, isolation, interruption/reuse and final-agent reachability.
+- [x] Run full regression/evaluation, review changes and document M14 status.
+
+Final backend: 466 passed, including all 16 new M14 cases; focused: 40 passed.
+Deterministic matrix: 24/24 complete. No new paid calls. M13 live quality remains
+partial. Details: [m14-orchestration-report.md](m14-orchestration-report.md).
+
+## Original M13 run: Planner and Provider Reliability — PARTIAL (historical)
+
+- [x] Reproduce action-schema, provider and cumulative-budget failure paths.
+- [x] Correct Planner contract, metadata, plan validation and bounded recovery.
+- [x] Verify SDK JSON/finish/usage/error behavior without changing providers.
+- [x] Validate full-system dispatch, failures, budgets, resume and backend regression.
+- [x] Record offline/live evidence, resource usage, limitations and M13 status.
+
+Live: 4/4 first-response plans dispatched and reached verification. Six approved
+evaluations ran for a conservative US$0.20180175 including two timeout
+reservations. Downstream tool/result/provider failures prevent reliable complete
+live reviews. Final serial backend: 450 passed, including all 28 new M13 tests.
+Frontend: 50 passed; production build passed. An earlier full-run 15-second
+deadline failure passed unchanged in isolation and the serial full recheck;
+its timing sensitivity remains documented.
+Details: [m13-reliability-report.md](m13-reliability-report.md).
+
 ## Current roadmap v2.0: M12 Architecture and Contract Audit
 
-- [ ] Map all graph nodes/transitions, state, tools, providers and evaluation paths.
-- [ ] Establish a versioned architecture specification and actual-module roadmap.
-- [ ] Reproduce and repair the stop-reason contract; preserve valid partial findings.
-- [ ] Verify focused execution, full backend regression and transport compatibility.
-- [ ] Review the M12 changes and document results and limitations before M13.
+- [x] Map all graph nodes/transitions, state, tools, providers and evaluation paths.
+- [x] Establish a versioned architecture specification and actual-module roadmap.
+- [x] Reproduce and repair the stop-reason contract; preserve valid partial findings.
+- [x] Verify focused execution, full backend regression and transport compatibility.
+- [x] Review the M12 changes and document results and limitations before M13.
+
+### Remaining milestones in the supplied v2.0 roadmap
+
+Detailed module mapping and gates: [architecture-v2.md](architecture-v2.md).
+
+- [ ] M13: Planner and Provider Reliability.
+- [x] M14: LangGraph Workflow and Orchestration (engineering/runtime gates).
+- [ ] M15: Tool Infrastructure Reliability.
+- [ ] M16: Specialist Reasoning Loop Reliability.
+- [ ] M17: Dynamic Tool Selection.
+- [ ] M18: Prompt and Context Engineering.
+- [ ] M19: Specialist Functional Intelligence.
+- [ ] M20: Synthesizer/Verifier Correctness.
+- [ ] M21: Token, Cost, and Latency Optimization.
+- [ ] M22: Streaming, Observability, and Recovery.
+- [ ] M23: Comprehensive Evaluation and Final Validation.
 
 ## Current local plan: M11 Real Agent Evaluation
 

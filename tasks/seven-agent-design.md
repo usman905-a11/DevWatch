@@ -1,5 +1,10 @@
 # DevWatch final system design
 
+Version 1, with the M12 audit and M13/M14 reliability supplements recorded in
+[architecture-v2.md](architecture-v2.md) (2026-10-18). That supplement maps the
+current implementation and the new M12–M23 roadmap; the accepted role boundaries
+and working runtime contracts below remain the baseline.
+
 This is the implementation specification. Historical plans under `history/` are
 records of prior work, not active architecture. This plan supersedes their stop
 rules and four-specialist design. No source-writing or patch-application feature

@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from devwatch.providers.base import LLMProvider, LLMRequest, LLMResponse
 from devwatch.providers.exceptions import (ProviderAuthenticationError, ProviderRateLimitError,
@@ -40,7 +40,9 @@ ToolHandler = Callable[[dict[str, Any], ReviewTask | AgentWorkItem], Awaitable[T
 
 
 class IncompleteCompletion(RuntimeError):
-    pass
+    def __init__(self, reason, *, recoverable=False):
+        super().__init__(reason)
+        self.recoverable = recoverable
 
 
 class PromptContextLimit(RuntimeError):
@@ -116,6 +118,8 @@ class AgentExecutionState(TypedDict, total=False):
     last_tool_error: dict[str, str] | None
     run_id: str
     model_call_id: str
+    provider_observation: dict[str, Any]
+    provider_observations: list[dict[str, Any]]
 
 
 class ModelRouter:
@@ -237,6 +241,13 @@ class AgentSubgraphs:
             requested = set(plan.priority_files) | {path for task in plan.review_tasks for path in task.files}
             if not requested.issubset(task.files) or any(t.task_id.startswith("__") for t in plan.review_tasks):
                 raise ValueError("plan requests source outside its scope or a runtime-reserved task ID")
+            if task.files and not plan.review_tasks:
+                raise ValueError("a nonempty review scope requires specialist investigation tasks")
+            evidence = set(private.evidence_refs) | set(task.evidence_refs)
+            if any(not set(item.evidence_refs).issubset(evidence) for item in plan.review_tasks):
+                raise ValueError("plan tasks reference evidence not retrieved by the Planner")
+            if any(self.budget.model_allowance(agent) == 0 for agent in plan.selected_agents):
+                raise BudgetExceeded("no investigation budget remains for a selected specialist")
         elif action.kind == "submit_verification":
             if state.get("phase") != "verification":
                 raise ValueError("verification has already been recorded")
@@ -270,7 +281,8 @@ class AgentSubgraphs:
                 prose = SynthesisSummary.model_validate(action.payload)
                 verified = state["verification"]
                 draft = assemble_report(state["snapshot_id"], state["candidates"], verified.decisions,
-                                        summary=prose.summary, limitations=prose.limitations)
+                                        summary=prose.summary, limitations=prose.limitations,
+                                        duplicate_groups=verified.duplicate_groups)
                 action.payload = VerificationSynthesisResult(**verified.model_dump(), report_draft=draft,
                                                             coverage_summary=draft.coverage).model_dump(mode="json")
             result = VerificationSynthesisResult.model_validate(action.payload)
@@ -282,7 +294,8 @@ class AgentSubgraphs:
             FinalAcceptanceGate({key: FindingCandidate.model_validate(raw) for key, raw in state["candidates"].items()},
                 evidence_refs={ref for decision in verification.decisions for ref in decision.evidence_refs},
                 inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.inspected},
-                snapshot_id=state["snapshot_id"]).accept(result.report_draft, verification.decisions)
+                snapshot_id=state["snapshot_id"], duplicate_groups=verification.duplicate_groups
+                ).accept(result.report_draft, verification.decisions)
         elif action.kind == "request_followup":
             # Follow-up proposals belong to the verification output; runtime
             # Completion Assessment alone may admit and dispatch a follow-up.
@@ -331,13 +344,23 @@ class AgentSubgraphs:
             "repair": state.get("validation_error", "Previous response failed validation. Return one valid structured action.") if repair else None,
             "last_tool_error": state.get("last_tool_error"),
         }
+        actions = set(contract.allowed_actions)
+        if state.get("phase") == "verification":
+            actions.discard("submit_synthesis")
+        elif state.get("phase") == "synthesis":
+            actions.difference_update({"submit_verification", "request_followup"})
+        body["action_schema"]["properties"]["kind"]["enum"] = sorted(actions)
         # Bound the complete serialized request, keeping schemas, permissions and
         # individual candidate claims intact. Optional context can be retrieved.
         while True:
             max_output = (min(8192, 2048 + 1024 * len(active)) if task.agent_id == AgentId.SYNTHESIZER_VERIFIER
-                          else 8192)
+                          else self.budget.limits.planner_output_tokens if task.agent_id == AgentId.PLANNER else 8192)
             prompt = json.dumps(body, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
-            if len(prompt.encode("utf-8")) + len(contract.system_prompt.encode("utf-8")) + 512 + max_output <= self.budget.limits.model_context_tokens:
+            input_bound = len(prompt.encode("utf-8")) + len(contract.system_prompt.encode("utf-8")) + 512
+            allowance = self.budget.model_allowance(task.agent_id) if task.agent_id == AgentId.PLANNER else None
+            if allowance is not None:
+                max_output = min(max_output, allowance - input_bound)
+            if max_output > 0 and input_bound + max_output <= self.budget.limits.model_context_tokens:
                 return prompt, max_output
             optional = {key: value for key, value in selected_context.items() if key not in {"evidence", "snapshot_id", "scope"}} if isinstance(selected_context, dict) else {}
             if optional:
@@ -354,6 +377,14 @@ class AgentSubgraphs:
                 active.pop(next(reversed(active)))
                 state["batch_ids"] = list(active)
             else:
+                # Optional context is already removed. A response reservation
+                # is a ceiling, not a minimum: retain mandatory schemas/claims
+                # and fit output to the remaining context without raising limits.
+                headroom = self.budget.limits.model_context_tokens - input_bound
+                if task.agent_id != AgentId.PLANNER and headroom >= 512:
+                    return prompt, min(max_output, headroom)
+                if allowance is not None and allowance <= input_bound:
+                    raise BudgetExceeded("remaining Planner budget cannot admit the required prompt")
                 raise PromptContextLimit("required request fields exceed model context")
 
     async def _call_model(self, state: AgentExecutionState, *, repair: bool, attempt: int = 1) -> str:
@@ -384,6 +415,8 @@ class AgentSubgraphs:
                     prompt=prompt, system_prompt=contract.system_prompt,
                     model=self.models[state.get("model_tier", contract.model_policy.initial_tier)], temperature=0,
                     max_tokens=max_output,
+                    json_mode=True,
+                    reasoning_effort="low",
                 )), timeout=self.budget.timeout_for("provider"))
                 response = LLMResponse.model_validate(response)
             except BaseException as exc:
@@ -406,6 +439,12 @@ class AgentSubgraphs:
             finally:
                 self.budget.refresh_time()
             reported = response.usage
+            state["provider_observation"] = self._provider_observation(response, max_output)
+            observations = state.get("provider_observations", []) + [
+                {**state["provider_observation"], "operation_id": ticket}]
+            observation_limit = ((self.budget.limits.iterations_per_task + self.budget.limits.schema_repairs_per_task)
+                                 * (1 + self.budget.limits.transient_retries))
+            state["provider_observations"] = observations[-observation_limit:]
             prompt_tokens, completion_tokens = reported.prompt_tokens, reported.completion_tokens
             split_total = prompt_tokens + completion_tokens
             if min(prompt_tokens, completion_tokens, reported.total_tokens) < 0 or max(split_total, reported.total_tokens) == 0:
@@ -423,7 +462,7 @@ class AgentSubgraphs:
                 self.budget.record_model(ticket, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
             finally:
                 await self._event("model_call_completed", state, operation_id=ticket, attempt=attempt,
-                    outcome="succeeded" if response.finish_reason == "stop" else "failed",
+                    outcome="succeeded" if response.finish_reason == "stop" and not response.refusal else "failed",
                     finish_reason=response.finish_reason if response.finish_reason in {"stop", "length", "content_filter"} else "other",
                     total_tokens=prompt_tokens + completion_tokens, duration_seconds=time.monotonic() - started)
             if isinstance(selected_context, dict):
@@ -441,9 +480,27 @@ class AgentSubgraphs:
                     await self._event("evidence_delivered", state, evidence_ref=page["evidence_ref"],
                                       operation_id=ticket, offset=span[0], end_offset=span[1])
             await self._save(state)
-            if response.finish_reason != "stop":
-                raise IncompleteCompletion("provider_truncated" if response.finish_reason == "length" else "provider_incomplete")
+            if response.finish_reason != "stop" or response.refusal:
+                raise IncompleteCompletion("provider_truncated" if response.finish_reason == "length" else "provider_incomplete",
+                    recoverable=not response.refusal and response.finish_reason in {"length", "unknown"})
             return response.content
+
+    @staticmethod
+    def _provider_observation(response, max_output):
+        """Bounded structural diagnostics, never source, response prose or thoughts."""
+        try:
+            value = json.loads(response.content)
+            shape = "object" if isinstance(value, dict) else "other_json"
+        except (ValueError, RecursionError):
+            shape = "invalid_json" if response.content else "empty"
+        return {"finish_reason": response.finish_reason if response.finish_reason in {
+                    "stop", "length", "content_filter", "tool_calls", "unknown"} else "other",
+                "content_chars": len(response.content), "json_shape": shape,
+                "refusal": response.refusal, "requested_output_tokens": max_output,
+                "reported_prompt_tokens": response.usage.prompt_tokens,
+                "reported_completion_tokens": response.usage.completion_tokens,
+                "reported_total_tokens": response.usage.total_tokens,
+                "reported_reasoning_tokens": response.usage.reasoning_tokens}
 
     async def _investigate(self, state: AgentExecutionState) -> AgentExecutionState:
         task, private = state["task"], state["private_state"]
@@ -453,17 +510,40 @@ class AgentSubgraphs:
                 private.iteration_count += 1
                 await self._event("iteration_started", state)
             await self._save(state)
-            repair = bool(state.get("retry_operation", "").endswith(".1")) if state.get("retry_operation") else False
+            repair = bool(state.get("validation_error")) or (state.get("retry_operation") or "").endswith(".1")
             while True:
-                raw = await self._call_with_retries(state, repair=repair)
+                try:
+                    raw = await self._call_with_retries(state, repair=repair)
+                except IncompleteCompletion as exc:
+                    if task.agent_id != AgentId.PLANNER or not exc.recoverable:
+                        raise
+                    try:
+                        self.budget.consume_schema_repair(task.task_id)
+                    except BudgetExceeded:
+                        return self._stop(state, str(exc))
+                    state["validation_error"] = ("Previous provider response was incomplete. Return one complete JSON "
+                        "AgentAction: kind=submit_plan, payload=ReviewPlan. Use the supplied repository metadata.")
+                    await self._save(state)
+                    await self._event("retry_started", state, attempt=2, stop_reason=str(exc))
+                    repair = True
+                    continue
                 inspected = {ref: len(receipt.inspected) for ref, receipt in private.evidence_progress.items()}
                 try:
                     state["action"] = self._parse_action(raw, state)
+                    state["validation_error"] = ""
                     return state
                 except ValueError as exc:
                     # Validation errors contain no source/tool payloads in the
                     # repair instruction; the specific invariant guides repair.
-                    state["validation_error"] = str(exc).splitlines()[0][:200]
+                    if isinstance(exc, ValidationError):
+                        # Error inputs may contain private content; field paths
+                        # and error types alone provide useful repair guidance.
+                        fields = set(AgentAction.model_fields) | set(ReviewPlan.model_fields) | {"agent_id", "task_id", "files", "focus", "evidence_refs"}
+                        state["validation_error"] = "Return a JSON action with kind and payload. " + "; ".join(
+                            ".".join(str(part) if isinstance(part, int) or part in fields else "field" for part in error["loc"])
+                            + ":" + error["type"] for error in exc.errors())[:155]
+                    else:
+                        state["validation_error"] = str(exc).splitlines()[0][:200]
                     await self._event("validation_failed", state, error_code="invalid_schema", outcome="failed")
                     try:
                         self.budget.consume_schema_repair(task.task_id)
@@ -659,6 +739,8 @@ class AgentSubgraphs:
                 raise ValueError("specialist checkpoint belongs to another task scope")
             state["retry_operation"] = self._restored_retry(restored_state, private)
             state["last_tool_error"] = restored_state.get("last_tool_error")
+            state["validation_error"] = restored_state.get("validation_error", "")
+            state["provider_observations"] = restored_state.get("provider_observations", [])
         # Ambient SDK settings must not export graph state, prompts or source.
         # Optional observability uses a separate metadata-only integration.
         return await self._invoke(self.graphs[task.agent_id], state)
@@ -697,6 +779,8 @@ class AgentSubgraphs:
             state["escalation_count"] = restored_state.get("escalation_count", escalations)
             state["retry_operation"] = self._restored_retry(restored_state, private)
             state["last_tool_error"] = restored_state.get("last_tool_error")
+            state["validation_error"] = restored_state.get("validation_error", "")
+            state["provider_observations"] = restored_state.get("provider_observations", [])
         return await self._invoke(self.control_graph, state)
 
     def _restored_retry(self, restored, private):

@@ -10,6 +10,7 @@ from contextlib import closing
 from hashlib import sha256
 import json
 import sqlite3
+from pathlib import PurePosixPath
 from typing import Any, TypedDict
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -180,7 +181,7 @@ class CanonicalReviewExecutor:
         def accept(draft, decisions):
             return FinalAcceptanceGate(session.board.candidates, evidence_refs=refs,
                 inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.inspected},
-                snapshot_id=repository.snapshot_id).accept(draft, decisions)
+                snapshot_id=repository.snapshot_id, duplicate_groups=result.duplicate_groups).accept(draft, decisions)
         workflow = FinalizationWorkflow(partial, no_followup, accept, budget=budget, tasks=tasks,
                                         renderer=lambda accepted: self.render_report(job, accepted), emit=session.emit)
         return (await workflow.run())["rendered"]
@@ -267,6 +268,12 @@ class _ReviewSession:
         selected["approved_databases"] = [{"database_id": policy.database_id} for policy in self.executor.databases
             if self.job.owner in policy.owners and state["task"].agent_id.value == "performance_scalability"]
         if state["task"].agent_id == AgentId.PLANNER:
+            selected["repository_metadata"] = {
+                "snapshot_id": self.repository.snapshot_id,
+                "file_count": len(self.repository.manifest.entries),
+                "selected_file_count": len(self.changed),
+                "file_extensions": sorted({PurePosixPath(path).suffix.lower() for path in self.repository.manifest.entries}),
+            }
             selected["changes"] = self.changed
             selected["intelligence"] = {path: {
                 "status": facts["status"], "symbol_count": len(facts["symbols"]),
@@ -362,8 +369,16 @@ class _ReviewSession:
         if self.command_runtime.grants_measurement(task):
             self.agents.tools.grant_measurement_artifact(task)
         checkpoint = self.executor.checkpoints.load(self.thread_id, task.task_id)
+        if followup is None and checkpoint:
+            if checkpoint["generation"] != 1 or checkpoint["state"].get("task") != task.model_dump(mode="json"):
+                raise ReviewExecutionError("worker checkpoint belongs to another assignment or generation")
         if followup is None and checkpoint and checkpoint["state"].get("output"):
-            output = SpecialistResult.model_validate(checkpoint["state"]["output"])
+            try:
+                output = SpecialistResult.model_validate(checkpoint["state"]["output"])
+            except ValueError as exc:
+                raise ReviewExecutionError("worker checkpoint contains an invalid result") from exc
+            if output.task_id != task.task_id or output.agent_id != task.agent_id:
+                raise ReviewExecutionError("worker checkpoint result belongs to another assignment")
             if output.stop_reason != "cancelled":
                 self.emit("agent_reused", agent_id=task.agent_id, task_id=task.task_id,
                           phase="investigation", stop_reason=safe_stop_reason(output.stop_reason))
@@ -378,8 +393,11 @@ class _ReviewSession:
 
     async def run_task_safely(self, task, *, followup=None):
         try:
-            return await self.run_task(task, followup=followup)
-        except (OSError, sqlite3.Error, JobConflict):
+            result = SpecialistResult.model_validate(await self.run_task(task, followup=followup))
+            if result.task_id != task.task_id or result.agent_id != task.agent_id:
+                raise ValueError("worker result belongs to another assignment")
+            return result
+        except (OSError, sqlite3.Error, JobConflict, ReviewExecutionError):
             # Persistence/ownership/integrity failures are infrastructure failures,
             # not a specialist's unavailable result. Drain siblings and fail closed.
             raise
@@ -401,6 +419,8 @@ class _ReviewSession:
 
     async def specialists(self, state):
         tasks = [ReviewTask.model_validate(task) for task in state["tasks"]]
+        if len({task.task_id for task in tasks}) != len(tasks):
+            raise ReviewExecutionError("duplicate specialist task IDs in dispatch")
         semaphore = asyncio.Semaphore(self.budget.limits.concurrent_model_calls)
         async def bounded(task):
             async with semaphore:
@@ -411,9 +431,20 @@ class _ReviewSession:
         return {"results": [result.model_dump(mode="json") for result in results]}
 
     def blackboard(self, state, *, replay=False):
-        tasks = {task["task_id"]: ReviewTask.model_validate(task) for task in state["tasks"]}
-        for raw in state["results"]:
-            self.publish(tasks[raw["task_id"]], SpecialistResult.model_validate(raw), record_events=not replay)
+        try:
+            assigned = [ReviewTask.model_validate(task) for task in state["tasks"]]
+            results = [SpecialistResult.model_validate(raw) for raw in state["results"]]
+        except ValueError as exc:
+            raise ReviewExecutionError("invalid task or result in aggregation") from exc
+        tasks = {task.task_id: task for task in assigned}
+        identities = [result.task_id for result in results]
+        if (len(tasks) != len(assigned) or len(set(identities)) != len(identities)
+                or set(identities) != set(tasks)
+                or any(result.agent_id != tasks[result.task_id].agent_id for result in results)):
+            raise ReviewExecutionError("aggregation requires exactly one matching result per assigned task")
+        # Check the entire join before changing shared candidates or coverage.
+        for result in results:
+            self.publish(tasks[result.task_id], result, record_events=not replay)
         return {}
 
     def publish(self, task, result, *, record_events=True):
@@ -501,32 +532,38 @@ class _ReviewSession:
         def accept(draft, decisions):
             private = self.private("__final") or AgentPrivateState()
             inspected = {ref for ref, receipt in private.evidence_progress.items() if receipt.inspected}
-            def gate_for(records):
+            checkpoint = self.executor.checkpoints.load(self.thread_id, "__final")
+            recorded = None
+            current = {key: candidate.model_dump(mode="json") for key, candidate in self.board.candidates.items()}
+            if (checkpoint and checkpoint["generation"] == self.budget.ledger.review_round
+                    and checkpoint["state"].get("candidates") == current
+                    and checkpoint["state"].get("verification") is not None):
+                recorded = VerificationPhaseResult.model_validate(checkpoint["state"]["verification"])
+            def gate_for(records, groups):
                 refs = {ref for candidate in self.board.candidates.values() for ref in candidate.evidence_refs}
                 for decision in records:
                     for ref in decision.evidence_refs:
                         self.repository.evidence(ref)
                         refs.add(ref)
                 return FinalAcceptanceGate(self.board.candidates, evidence_refs=refs, inspected_evidence=inspected,
-                                           snapshot_id=self.repository.snapshot_id)
+                                           snapshot_id=self.repository.snapshot_id, duplicate_groups=groups)
             try:
-                return gate_for(decisions).accept(draft, decisions)
+                same_decisions = (recorded is not None and len(recorded.decisions) == len(decisions)
+                                  and {item.finding_id: item for item in recorded.decisions}
+                                  == {item.finding_id: item for item in decisions})
+                groups = recorded.duplicate_groups if same_decisions else []
+                return gate_for(decisions, groups).accept(draft, decisions)
             except (ValueError, KeyError, FileNotFoundError, PermissionError):
                 # One deterministic repair uses authoritative recorded decisions,
                 # revalidating inspection and preserving the remaining claims as uncertain.
                 self.emit("validation_failed", agent_id=AgentId.SYNTHESIZER_VERIFIER, task_id="__final",
                           phase="acceptance", outcome="failed")
-                checkpoint = self.executor.checkpoints.load(self.thread_id, "__final")
-                recorded = None
-                current = {key: candidate.model_dump(mode="json") for key, candidate in self.board.candidates.items()}
-                if (checkpoint and checkpoint["generation"] == self.budget.ledger.review_round
-                        and checkpoint["state"].get("candidates") == current
-                        and checkpoint["state"].get("verification") is not None):
-                    recorded = VerificationPhaseResult.model_validate(checkpoint["state"]["verification"])
                 safe = self.partial_result(private.model_copy(update={"stop_reason": "final_consistency_failure"}),
                                            phase="final acceptance", verification=recorded)
+                safe.report_draft.coverage = draft.coverage.model_copy(deep=True)
+                safe.report_draft.coverage.failed.setdefault("__final", "final_consistency_failure")
                 safe.report_draft.limitations.append("Inconsistent synthesis replaced by deterministic verified findings.")
-                return gate_for(safe.decisions).accept(safe.report_draft, safe.decisions)
+                return gate_for(safe.decisions, safe.duplicate_groups).accept(safe.report_draft, safe.decisions)
         async def admit(request, ledger):
             self.executor.jobs.update_ledger(self.job.job_id, owner=self.job.owner, ledger=ledger, followup=request)
         workflow = FinalizationWorkflow(synthesize, followup, accept, budget=self.budget,
@@ -565,7 +602,10 @@ class _ReviewSession:
             confidence = min(candidate.confidence, 0.5)
             decisions.append(VerificationDecision(finding_id=identity, verdict="advisory" if advisory else "uncertain",
                 confidence=confidence, rationale=rationale, evidence_refs=candidate.evidence_refs))
+        groups = verification.duplicate_groups if verification else []
         draft = assemble_report(self.repository.snapshot_id, self.board.candidates, decisions,
             summary=f"Partial review: {phase} stopped ({reason})", coverage=self.board.coverage(),
+            duplicate_groups=groups,
             limitations=[f"Partial result: {phase} stopped ({reason}); recorded verification preserved; remaining claims unverified."])
-        return VerificationSynthesisResult(decisions=decisions, report_draft=draft, coverage_summary=draft.coverage)
+        return VerificationSynthesisResult(decisions=decisions, duplicate_groups=groups,
+                                           report_draft=draft, coverage_summary=draft.coverage)

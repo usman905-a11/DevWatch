@@ -17,7 +17,7 @@ class FileArguments(Arguments):
 
 class SourceArguments(FileArguments):
     start_line: int = Field(default=1, ge=1)
-    end_line: int | None = Field(default=None, ge=1, description="Inclusive; at most 200 lines; null/omitted selects up to 80. Large results are paged.")
+    end_line: int | None = Field(default=None, ge=1, description="Inclusive; at most 200 lines; clamped at EOF. Start must exist. Null/omitted selects up to 80. Large results are paged.")
 
     @model_validator(mode="after")
     def bounded_range(self):

@@ -171,6 +171,12 @@ class OpenAIProviderAdapter(LLMProvider):
         }
         if self.provider_name != "gemini":
             options["temperature"] = request.temperature
+        if request.json_mode:
+            options["response_format"] = {"type": "json_object"}
+        # Gemini's documented compatibility control; do not send unsupported
+        # reasoning options to older non-reasoning OpenAI-compatible models.
+        if self.provider_name == "gemini" and request.reasoning_effort is not None:
+            options["reasoning_effort"] = request.reasoning_effort
         return options
 
     async def generate_completion(self, request: LLMRequest) -> LLMResponse:
@@ -209,6 +215,8 @@ class OpenAIProviderAdapter(LLMProvider):
                         prompt_tokens=getattr(response.usage, "prompt_tokens", 0) or 0,
                         completion_tokens=getattr(response.usage, "completion_tokens", 0) or 0,
                         total_tokens=getattr(response.usage, "total_tokens", 0) or 0,
+                        reasoning_tokens=getattr(getattr(response.usage, "completion_tokens_details", None),
+                                                 "reasoning_tokens", 0) or 0,
                     )
 
                 req_id = getattr(response, "id", None)
@@ -220,6 +228,7 @@ class OpenAIProviderAdapter(LLMProvider):
                     usage=usage,
                     request_id=req_id,
                     finish_reason=response.choices[0].finish_reason or "unknown",
+                    refusal=bool(getattr(response.choices[0].message, "refusal", None)),
                 )
             except ProviderError:
                 raise

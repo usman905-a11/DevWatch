@@ -103,8 +103,11 @@ class RepositoryContext:
         if end is None:
             end = min(len(lines), start + 79)
         if (type(start) is not int or type(end) is not int or start < 1 or end < start
-                or end > len(lines) or end - start >= 200):
+                or start > len(lines) or end - start >= 200):
             raise ValueError("invalid or unbounded source range")
+        # A bounded request may extend past EOF; report only the actual source
+        # range rather than making the agent guess a short file's line count.
+        end = min(end, len(lines))
         excerpt = "\n".join(lines[start - 1:end])
         return self._record({"tool": "read_source", "file_path": path, "start_line": start,
                              "end_line": end, "content_hash": self.manifest.entries[path].content_hash,

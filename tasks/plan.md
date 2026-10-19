@@ -1,5 +1,95 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: resolve M13 live-quality limitations before advancing
+
+Status: COMPLETE for M13 engineering and approved live-fixture gates. Final backend
+490 passed; focused 66 passed; deterministic matrix 24/24 completed without failed
+coverage. Final five live full reviews: 4 TP, 0 FP, 0 FN, no duplicate findings or
+failed coverage. The earlier smaller-context regression was reproduced and fixed.
+Conservative provider charges are US$0.76974150 of the original cumulative US$1
+cap; US$0.23025850 remains. Future work must carry these charges forward.
+Broader model accuracy remains unmeasured. Detailed evidence:
+[m13-live-remediation-report.md](m13-live-remediation-report.md).
+
+User explicitly prioritizes the failed live investigations over the next milestone.
+Diagnose visible provider actions/finish reasons, source-tool ranges, specialist
+completion and verifier/synthesis behavior. Preserve M14 orchestration fixes and
+all seven roles. Reproduce each confirmed defect before implementing its fix.
+
+1. Run a small diagnostic on approved synthetic fixtures, retaining visible action
+   envelopes and exact bounded finish identifiers in local evidence only. Carry
+   forward US$0.20180175 against the original US$1 cap; journal reservations before
+   effects. No working repository source or secrets go to Gemini.
+2. Correct confirmed provider/protocol/tool defects in thin test-first slices;
+   preserve scope/evidence/acceptance gates and all cumulative limits. Include
+   necessary downstream fixes in this remediation rather than defer the failures.
+3. Verify complete live fixture investigations and defect/clean outcomes within
+   the remaining cap, then full regression and review. Report actual quality,
+   cost, partial cases and uncertainty; do not promote partial jobs to success.
+
+No next-milestone implementation, commit, push or deployment in this request.
+
+## Current request: M14 - LangGraph Workflow and Orchestration (2026-10-18)
+
+Status: COMPLETE for M14 engineering/runtime gates. Full backend 466 passed,
+focused 40 passed, scripted matrix 24/24 complete, boundary checks passed.
+The M14 report records the retained TaskGroup/single-writer design and M13's
+remaining live limits. No new paid calls; stop before M15.
+
+User requested the next milestone after M13's local engineering gates passed.
+Carry forward M13's PARTIAL live status; complete M14 orchestration work only.
+Preserve the seven roles, graph/version, stores and shared uncommitted changes.
+
+1. Audit and reproduce dispatch/reuse boundary failures. Validate unique scoped
+   tasks before scheduling; cached outputs must belong to the same task scope and
+   phase. Malformed local worker output becomes honest task failure, while durable
+   integrity/ownership failures still drain siblings and fail the job.
+   Check: real-store session tests, failing first for confirmed gaps.
+2. Validate complete one-result-per-task aggregation before blackboard publication.
+   Preserve valid partial siblings; prove interruption/resume reuses completed work
+   without duplicating model calls. Keep a single aggregation writer and bounded
+   TaskGroup unless evidence requires a Send/reducer topology change.
+   Check: aggregation fault matrix and full graph interrupted-worker scenarios.
+3. Prove deterministic order, concurrency limits, state isolation, final-agent
+   reachability and bounded termination/follow-up; run full backend regression and
+   existing deterministic evaluator, review the M14-only diff and record A-H report.
+   Check: focused tests, full pytest, export/compilation/whitespace checks, metrics.
+
+No new provider spending, provider migration, source-tool repair, specialist
+reasoning redesign, deployment, commit or M15 implementation in this milestone.
+
+## Current request: M13 — Planner and Provider Reliability (2026-10-18)
+
+Status: implementation delivered; milestone PARTIAL because live downstream
+reliability is not established. Final serial backend 450 passed, frontend 50
+passed, production build passed; an earlier deadline flake remains documented.
+Four of four live plans
+dispatched specialists on their first response; all six approved evaluations ran
+within US$0.202 conservative accounting. See m13-reliability-report.md.
+
+Implement M13 of the supplied remediation roadmap; preserve the completed M12
+contract correction and the seven existing identities. No commit or deployment.
+
+1. Reproduce Planner action-envelope ambiguity, cumulative reservation failures,
+   invalid delegation and provider finish/usage handling with deterministic cases.
+2. Make the Planner output contract explicit, supply bounded deterministic metadata,
+   and validate identity/scope/evidence/nonempty dispatch before accepting a plan.
+3. Exercise the current SDK over an injected HTTP transport. Add compatible JSON
+   output and Gemini reasoning controls, retain safe response diagnostics and
+   reasoning usage, and preserve classified retries and unknown-call accounting.
+4. Fit Planner output reservations to remaining cumulative budgets; permit one
+   bounded completion/schema recovery without resetting resource limits.
+5. Run full-graph failure/success scenarios, existing regressions and the evaluation
+   matrix; run bounded live validation only with a supplied spending authorization.
+   Record official references, actual observations, remaining uncertainty and status.
+
+Acceptance: valid plans reach specialists and synthesis; invalid scope/roles/IDs,
+empty plans and exhausted budgets fail explicitly; incomplete/refused/unknown
+provider responses never masquerade as completion; safe recovery is bounded and
+persisted; provider diagnostics contain no source, credentials or reasoning text.
+The M11 raw provider bodies were not retained, so exact historical attribution
+must remain UNDETERMINED where replay or new observations cannot establish it.
+
 ## Current request: Milestone 11 - Real Agent Evaluation (2026-10-18)
 
 Complete M11 only; stop before M12. Preserve prior milestones and all seven roles.

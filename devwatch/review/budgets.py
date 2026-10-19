@@ -117,6 +117,21 @@ class BudgetManager:
             if usage.total_tokens > reservation.tokens:
                 raise BudgetExceeded("provider exceeded token reservation")
 
+    def model_allowance(self, agent: AgentId) -> int:
+        """Read-only admission headroom; reserve_model still claims it atomically."""
+        with self._lock:
+            self._ensure_time()
+            pending = sum(item.tokens for item in self.ledger.inflight.values())
+            agent_pending = sum(item.tokens for item in self.ledger.inflight.values() if item.agent_id == agent)
+            agent_left = self._agent_ceiling(agent) - self.ledger.agent_usage.get(agent, TokenUsage()).total_tokens - agent_pending
+            job_left = self.limits.job_tokens - self.ledger.total_tokens - pending
+            if agent != AgentId.SYNTHESIZER_VERIFIER:
+                final_used = self.ledger.agent_usage.get(AgentId.SYNTHESIZER_VERIFIER, TokenUsage()).total_tokens
+                final_pending = sum(item.tokens for item in self.ledger.inflight.values()
+                                    if item.agent_id == AgentId.SYNTHESIZER_VERIFIER)
+                job_left -= max(0, self.limits.final_agent_tokens - final_used - final_pending)
+            return max(0, min(agent_left, job_left))
+
     def _consume(self, counters: dict[str, int], identity: str, ceiling: int, label: str) -> None:
         with self._lock:
             self._ensure_time()

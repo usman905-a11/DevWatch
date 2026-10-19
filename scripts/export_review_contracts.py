@@ -22,6 +22,10 @@ def export() -> str:
             definition["required"] = (sorted({"status", "agent_id", "task_id", "tool", "evidence_ref",
                 "error_code", "duration_seconds", "total_tokens"}) if name == "EventPayload"
                 else sorted(definition["properties"]))
+            if name == "BalancedLimits":
+                # M13 adds an optional policy knob. Older job views remain
+                # readable; the service fills its default on restored jobs.
+                definition["required"].remove("planner_output_tokens")
     return json.dumps(schema, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 
 

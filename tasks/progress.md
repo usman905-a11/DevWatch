@@ -1,5 +1,22 @@
 # Execution ledger — plan: tasks/seven-agent-design.md
 
+M13 live-quality remediation completed (2026-10-19) before advancing.
+Confirmed and fixed short-file range failures, specialist/final action contract
+confusion, duplicate publication and loss of failure coverage during recovery.
+Prompts now require complete candidate fields and source/contract-bounded claims.
+Final approved live matrix: 5/5 full reviews, 4 TP / 0 FP / 0 FN, no duplicates or
+failed coverage, 40 calls, one bounded Planner repair. Conservative cumulative
+charges: US$0.76974150 of US$1, including original unknown reservations. Intermediate
+partial/overbroad runs are retained; this is not a repeated-run accuracy guarantee.
+The first completed full regression had 484 passes and one reproducible 20,000-token
+context admission failure. After optional context removal, non-Planner output now
+fits remaining headroom while retaining the existing ceiling and required fields.
+All 66 focused checks pass. Corrected full backend: 490 passed, zero failures or
+skips, 785.64s; deterministic matrix: 24/24 complete without failed coverage.
+Source/test hashes stayed unchanged through verification; original M14 test and
+provider-adapter hashes are preserved. The request-only diff is in tasks/evidence.
+Report: [m13-live-remediation-report.md](m13-live-remediation-report.md).
+
 Spec authority: the user's agreed seven-agent design and two final fixes, recorded
 in tasks/seven-agent-design.md. Started 2026-10-11.
 
@@ -1207,3 +1224,130 @@ m11-evaluation-report.md; evidence/m11-live-reviewed.json, m11-reviewed-summary.
 all raw per-batch results, focused/backend logs and JUnit XML. Existing M10 work
 preserved; no dependency/frontend change, commit, push, deployment or user-data
 cleanup. Milestone 11 complete; stop before local security M12.
+
+2026-10-18 M12: completed Architecture and Contract Audit, the first milestone of
+the newly supplied remediation roadmap v2.0 (M12-M23). This numbering supersedes
+the previous local plan's security M12. Preserve all seven roles and working
+runtime, provider, evidence, frontend and evaluation contracts.
+
+Mapped all parent/agent/finalization graph nodes and transitions, state ownership,
+tool permissions/registration, provider text-action transport, checkpoints and
+evaluation boundaries in architecture-v2.md. Recorded installed versions and the
+actual-module map for every following milestone. No native LangChain agents or
+function-call messages exist in this implementation; no provider migration or
+Send/reducer rewrite is justified by the audit alone.
+
+Fixed the confirmed stop contract: shared controlled codes, separate bounded
+explanation, private/result persistence and stale-explanation reset. Legacy prose
+becomes invalid_schema with preserved explanation/candidates; it never implies
+successful inspection. Runtime evidence receipts, identity validation, candidate
+quarantine, causal verification and final acceptance remain authoritative.
+
+Verification: pre-change baseline 86 passed; red 4 failed/3 passed as expected;
+first green 7 passed; final new file 9 passed. Focused gate 93 passed plus the
+two subsequent full-graph additions in the nine-case gate. Full backend 422 passed
+in 660.93s, zero failures/errors/skips, one existing LangSmith wrapper deprecation
+warning. JUnit confirms all nine new cases. Transport freshness, changed Python
+compilation, incremental/committed whitespace and local report links passed.
+
+All 24 scripted individual/full evaluation runs completed: 181 model calls,
+73 tools, 2,715 synthetic tokens, 77.346s summed job latency. The deliberately
+narrow provider still detects only its programmed empty-input family, matching
+the M11 fixture baseline; these metrics do not establish live quality. Offline
+replay of the 12 M11 specialist envelopes retains both original findings and the
+original baseline hash. No new paid-provider calls; live Planner reliability,
+model accuracy and production resource improvements remain unmeasured.
+
+Report: m12-audit-report.md. Evidence: evidence/m12-{contracts-red,contracts-green,
+contracts-final,focused,backend,fixture-run}.txt, m12-backend.xml,
+m12-fixture-results.json, m12-m11-contract-replay.json and m12-boundaries.json.
+The shared repository advanced externally to e8d7d03 during work and included the
+M12 source/tests with the user's M10/M11 changes; inspected and preserved it.
+I issued no commit/push/deployment, added no agents/dependencies/services, and
+performed no user-data cleanup. M12 complete; next is M13 Planner and Provider
+Reliability under the supplied roadmap.
+
+M13 implementation: Planner instructions now require the action envelope and use
+bounded deterministic metadata. Runtime rejects empty delegation, unused selected
+roles and invented task evidence before dispatch. Configurable output defaults to
+4,096, shrinks against remaining admission headroom, and preserves the 25,000
+cumulative Planner ceiling and final-agent reserve. Gemini JSON mode/low reasoning,
+refusal/usage preservation and bounded private structural diagnostics are added
+without changing provider, model tiers, framework, identities or dependencies.
+
+M13 recovery: one existing persisted schema-repair allowance is shared by schema
+and returned length/unknown completion recovery. Unknown network consumption,
+authentication, quota and refusal are not automatically replayed. Review exposed
+stale repair guidance and frontend compatibility for the added limit; both have
+regressions and fixes. Focused 87 passed; final recovery/resume 38 passed. Frontend
+50 passed, TypeScript/production build passed; existing upstream warnings remain.
+
+M13 live: user explicitly authorized the five synthetic fixture payloads to Gemini
+under US$1 after automatic review required specific transfer consent. Six planned
+evaluations completed over three conservatively capped batches. All four full
+Planner outputs were valid on the first response and dispatched specialists to
+the combined final agent. Downstream source/result/incomplete/timeout failures
+remain partial: no accepted findings, no successful live synthesis. Unknown calls
+were retained in accounting, not replayed. Total conservative charge US$0.20180175;
+34 model calls, 15 tools (11 successes), 249.001s summed job latency. PARTIAL live
+validation; no M14 work. Final backend evidence follows in the completion entry.
+Details and evidence: tasks/m13-reliability-report.md.
+
+M13 final verification: full backend on delivered source ran 450 tests, 449 passed
+and one existing M10 real-deadline test failed (804.77s). All 28 new M13 tests
+passed. The failing job correctly expired at 15.656s during specialist work,
+without pending reservations, before the test's expected synthesis pause. The
+same test passed unchanged in isolation (19.64s); an earlier 449-test full run also
+passed before the final guidance regression/fix. Exact cause of excess elapsed
+time remains UNDETERMINED. No threshold or production deadline was changed to
+hide the failure. Final full regression remains an open gate. The report and
+m13-verification-summary.json retain the failure, rerun and persisted job evidence.
+Source/test hashes and M11 baseline stayed unchanged during final verification.
+M13 PARTIAL, with implementation complete but full backend/live reliability gates
+unmet. No dependent M14 work, commits, pushes or deployments performed.
+
+M13 serial recheck closes the local regression gate: 450 passed, zero failures,
+errors or skips, 678.11s, including all 28 M13 cases and the real-deadline test.
+One existing upstream SDK warning remains. Source/test hashes are unchanged.
+Evidence: m13-backend-serial.txt/.xml and m13-verification-summary.json. The prior
+full-run failure and its event timelines remain available; no deadline change or
+claim of fixing its timing sensitivity. Frontend 50 passed, production build and
+contract/compilation/whitespace checks passed. Current milestone status stays
+PARTIAL solely for incomplete downstream live reliability, with the intermittent
+deadline behavior retained as a documented risk. M13 report/checklist updated;
+no M14 implementation, commit, push or deployment.
+
+M14 started at user request to advance after M13 local engineering gates. Kept
+M13 partial live status and all shared changes. TDD reproduced duplicate worker
+dispatch, initial checkpoint scope/generation/identity reuse, missing internal
+worker output, and incomplete/duplicate/foreign aggregation joins. Corrected red
+was six expected dispatch/reuse failures and five aggregation failures. Production
+changes are confined to workflow.py; initial task binding and complete join checks
+fail closed, while malformed local results retain valid siblings as task failure.
+No graph/provider/dependency or workflow-version migration.
+
+M14 focused gates: 12 dispatch/canonical/recovery passed; 23 aggregation/recovery
+passed; final 40 focused passed including all 16 new M14 cases. Real full graphs
+prove durable completed-worker reuse after sibling interruption, two concurrent
+jobs sharing three model slots, five same-role task states isolated, ordered
+routing, sibling preservation and final verification/synthesis. One barrier test
+fixture initially assumed default parallel jobs and three same-role reservations;
+inspection confirmed correct admission, then explicit two-job/two-slot setup
+passed. Existing production budget/deadline thresholds are unchanged.
+
+M14 deterministic evaluator: 24/24 runs, no failed coverage, unchanged programmed
+TP1/FP0/FN5 full score; 181 scripted calls, 73 tools, 2,715 tokens, 81.361s summed
+latency. No paid calls. Boundary checks passed; full backend regression running.
+M14-only source diff and evidence retained under tasks/evidence/m14-*; report at
+tasks/m14-orchestration-report.md. No M15 work or publishing actions.
+
+M14 complete for orchestration engineering/runtime gates: final full backend 466
+passed, zero failures/errors/skips, 754.70s, including all 16 new M14 cases. The
+existing real-deadline scenario passed (17.57s total test duration); its historical
+M13 timing sensitivity remains documented, not claimed fixed. One existing SDK
+wrapper deprecation warning remains. Source/test hashes stayed unchanged during
+verification. Final focused 40 passed and deterministic matrix 24/24 complete;
+wire freshness, compilation and whitespace passed. M14-only self-review found no
+required remaining change. See m14-orchestration-report.md and evidence/m14-*.
+M13 live model quality remains PARTIAL. No new paid calls or M15 implementation;
+no commit, push, deployment or global configuration changes performed.

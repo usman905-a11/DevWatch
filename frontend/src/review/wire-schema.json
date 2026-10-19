@@ -58,6 +58,13 @@
           "title": "Model Context Tokens",
           "type": "integer"
         },
+        "planner_output_tokens": {
+          "default": 4096,
+          "maximum": 8192,
+          "minimum": 512,
+          "title": "Planner Output Tokens",
+          "type": "integer"
+        },
         "planner_tokens": {
           "default": 25000,
           "maximum": 25000,
