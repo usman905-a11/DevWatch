@@ -10,6 +10,7 @@ from types import MappingProxyType
 from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from devwatch.review.tool_errors import ToolDiagnostic
 
 
 class ContractModel(BaseModel):
@@ -338,6 +339,7 @@ class AgentPrivateState(ContractModel):
     evidence_cursors: dict[str, int] = Field(default_factory=dict)
     evidence_page_sizes: dict[str, int] = Field(default_factory=dict)
     pending_actions: list[AgentAction] = Field(default_factory=list)
+    tool_diagnostics: list[ToolDiagnostic] = Field(default_factory=list, max_length=8)
     local_findings: list[FindingCandidate] = Field(default_factory=list)
     quarantined_candidates: list[CandidateRejection] = Field(default_factory=list)
     coverage: Coverage = Field(default_factory=Coverage)

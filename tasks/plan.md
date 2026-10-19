@@ -1,5 +1,59 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: M15 - Tool Infrastructure Reliability (2026-10-19)
+
+Implement the supplied M15 roadmap. Preserve seven identities, scoped immutable
+evidence, M13 prompt/provider fixes, M14 orchestration and the shared dirty tree.
+The user authorizes implementation; no commit, push or deployment is requested.
+No additional provider spending is planned. Carry US$0.76974150 against the
+original cumulative US$1 cap; do not reset prior unknown-consumption charges.
+
+Status: COMPLETE for M15 engineering and deterministic runtime gates. Final
+backend: 526 passed (36 new M15 cases), 822.71s; focused: 87 passed; matrix:
+24/24 complete without failed coverage. Wire/compile/diff checks pass and source
+hashes match before/after. No new provider spending. A-H report:
+[m15-tool-reliability-report.md](m15-tool-reliability-report.md).
+
+Intermediate focused infrastructure gate: 68 passed; broader
+gate: 81 passed and one reproduced evidence-delivery regression. Corrected context
+and execution gate: 7 passed. M15 reduces non-Planner response reservations before
+dropping evidence that fits, retaining the existing 512 minimum and all ceilings.
+The negative page test derives its budget from real mandatory role/schema bytes;
+an initial fixed 13,500-token full-job fixture stopped at Planner admission and
+was replaced rather than changing Planner admission policy.
+
+1. Structured source/evidence failures and diagnostics (repository, catalogue,
+   one focused error module, tests). Invalid ranges/offsets identify usable bounds;
+   empty captured files return honest empty evidence without invented lines.
+   Argument snapshots retain only bounded safe fields, redacting free text and
+   unknown values. Verify failing-first repository and redaction tests.
+2. Bounded recovery in the existing graph (private contracts, subgraphs, tests).
+   Preserve the legacy two-field error receipt and add detailed private feedback.
+   Persist bounded failed-attempt identities through restart/follow-up; suppress
+   identical failed execution before repeating effects. Permissions, unknown
+   completion, timeout/cancellation and integrity failures remain terminal with
+   diagnosable records; success clears active guidance without erasing history.
+   Verify correction, repeated failure, restart, partial findings and event privacy.
+3. Audit every registered tool's description/arguments and boundary enforcement.
+   Enforce assigned paths before handlers; retain owner/snapshot/evidence and exact
+   command/database grants. Known read/query failures get safe structured guidance;
+   ambiguous command effects are never called recoverable or automatically replayed.
+   Verify real command/database/evidence integration, full backend, deterministic
+   matrix, wire freshness, source hashes, diff review and an A-H milestone report.
+
+Security scope: untrusted model actions cross PermissionedTools into captured
+source, owner-granted read-only databases and exact approved commands. Assets are
+snapshot/owner isolation, source and credentials, bounded resources and diagnostic
+integrity. Abuse cases: out-of-scope paths, unseen/foreign evidence, repeated failed
+calls, attacker-controlled exception text, and SQL/query/unknown argument values
+leaking through logs. Controls: schema/role/scope checks before effects, private
+allowlisted/redacted diagnostics, metadata-only public events, bounded histories
+and cumulative accounting. Existing local-service authentication/deployment is
+unchanged; no new trust boundary or category of sensitive data is introduced.
+
+Stop after M15. Specialist reasoning redesign/dynamic tool filtering belong to
+later milestones. Existing completed sections below are historical context.
+
 ## Current request: resolve M13 live-quality limitations before advancing
 
 Status: COMPLETE for M13 engineering and approved live-fixture gates. Final backend

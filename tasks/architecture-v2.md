@@ -4,7 +4,7 @@ Date: 2026-10-18. Baseline: M12 of the supplied Final Architecture and Reliabili
 Remediation Plan v2.0. This supplements [seven-agent-design.md](seven-agent-design.md)
 with the actual implementation map and the dependency-ordered M12–M23 work.
 It preserves the existing seven identities, transport and immutable-source design.
-The M13 and M14 supplements below record subsequent changes; other later milestone
+The M13, M14 and M15 supplements below record subsequent changes; other later milestone
 entries remain planned work, not claims of implementation.
 
 ## Installed implementation
@@ -350,3 +350,35 @@ Final verification on 2026-10-19: 490 backend tests and 66 focused checks pass;
 24/24 deterministic case-mode runs complete without failed coverage. M13's
 engineering and approved-fixture gates are complete; broader model accuracy is
 unmeasured. Later milestone entries remain planned.
+
+## M15 tool infrastructure supplement (2026-10-19)
+
+All 24 tool names have specific descriptions and strict argument contracts. File
+paths are normalized and checked against task assignment before handlers; owner,
+snapshot, capability and database boundaries remain runtime-enforced. SQLite
+parameters must be finite; query plans remain read-only EXPLAIN without result
+rows. Missing/parser/configuration/query errors carry safe correction guidance;
+source/evidence integrity failures stop before more model work.
+
+`tool_errors.py` defines private structured diagnostics with static hints, safe
+argument coordinates, redacted free text and normalized failed-request identities.
+The graph persists at most eight diagnostics, suppresses identical failed actions
+before effects, and exposes only the latest active feedback to the model alongside
+the legacy receipt. Recovery uses existing cumulative iterations/tool calls; no
+automatic command replay is added. Unknown effects, permission denial and timeout
+remain terminal. Checkpoint actions are redacted; public events remain metadata.
+
+After optional metadata pruning, non-Planner output reservations now fit remaining
+headroom (minimum 512) before evidence pages are discarded. Thus a fitting page can
+be delivered and acknowledged rather than losing inspection to an output ceiling.
+Pages that still cannot fit are omitted without delivery/inspection receipts;
+mandatory prompts that cannot fit stop with the existing context-limit reason.
+Processing, delivery, explicit page inspection and semantic verification remain
+separate. Recovered calls retain their historical failed-call coverage receipt.
+
+Implementation and fresh validation: [M15 report](m15-tool-reliability-report.md).
+No paid-provider calls, graph topology, wire changes or new dependencies are needed.
+M15 is complete for engineering/deterministic runtime gates: 526 backend tests,
+87 focused tests and 24/24 matrix runs pass. The matrix has no failed coverage;
+source/test hashes remain unchanged through verification. Broader live accuracy
+remains unmeasured by this milestone.

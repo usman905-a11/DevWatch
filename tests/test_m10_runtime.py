@@ -187,12 +187,9 @@ def test_oversized_evidence_is_paged_inspected_and_bounded_through_final_report(
         evidence = client.evidence(done, ast)
         assert evidence["tool"] == "parse_ast" and len(json.dumps(evidence)) > 12000
         assert all(call["request_bound"] <= context_tokens for call in provider.observed)
-        if context_tokens == 20000:
-            assert any("evidence_page; retrieve via read_evidence" in call["omissions"] for call in provider.observed)
-            assert not any(event["kind"] in {"evidence_delivered", "evidence_inspected"} and
-                           event["payload"]["evidence_ref"] == ast for event in events)
-        else:
-            assert any(page["end_offset"] == 13000 and page["evidence_ref"] == ast for page in inspected)
+        # M15 fits the response reservation before dropping retrievable evidence.
+        # Both windows can now deliver and acknowledge the requested AST page.
+        assert any(page["end_offset"] == 13000 and page["evidence_ref"] == ast for page in inspected)
         assert not done.ledger.inflight
 
 

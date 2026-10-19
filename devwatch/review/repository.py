@@ -19,6 +19,7 @@ from devwatch.config import Config
 from devwatch.review.contracts import CandidateRejection, Coverage, FindingCandidate, ReviewTask, SpecialistResult
 from devwatch.review.stores import ArtifactStore, CacheKey, RepoCache, validate_source_path
 from devwatch.review.subgraphs import PermissionedTools, ToolObservation
+from devwatch.review.tool_errors import ToolFailure
 from devwatch.review.intelligence import PARSER_VERSION, analyze_source, import_edges
 
 
@@ -36,13 +37,20 @@ class RepositoryContext:
         self.evidence_root.mkdir(parents=True, exist_ok=True)
         self._analysis = None
 
+    def _source(self, path):
+        try:
+            return self.artifacts.read_source(self.snapshot_id, path, owner=self.owner)
+        except (ValueError, FileNotFoundError) as exc:
+            raise ToolFailure("snapshot_integrity_failure", "Stop: captured source integrity could not be verified.",
+                              recoverable=False, arguments={"file_path": path}) from exc
+
     def analyze(self) -> dict[str, Any]:
         if self._analysis is not None:
             return self._analysis
         result = {}
         for path, entry in sorted(self.manifest.entries.items()):
             # Integrity is checked even on cache hits.
-            source = self.artifacts.read_source(self.snapshot_id, path, owner=self.owner)
+            source = self._source(path)
             key = CacheKey(owner_namespace=self.owner, namespace="repository-intelligence",
                            content_hash=entry.content_hash, parser_version=PARSER_VERSION,
                            analysis_config_hash=Path(path).suffix.lower())
@@ -83,28 +91,46 @@ class RepositoryContext:
     def evidence(self, identity: str) -> dict[str, Any]:
         if not re.fullmatch(r"evidence-[0-9a-f]{64}", identity):
             raise ValueError("invalid evidence reference")
-        record = json.loads((self.evidence_root / (identity + ".json")).read_text(encoding="utf-8"))
-        expected = "evidence-" + sha256(_json(record).encode("utf-8")).hexdigest()
-        if (expected != identity or record["snapshot_id"] != self.snapshot_id
-                or record["snapshot_hash"] != self.manifest.content_hash):
-            raise ValueError("evidence artifact integrity mismatch")
+        try:
+            record = json.loads((self.evidence_root / (identity + ".json")).read_text(encoding="utf-8"))
+            encoded = _json(record)
+        except FileNotFoundError as exc:
+            raise ToolFailure("evidence_not_found", "Use an evidence_ref returned by a tool in this snapshot.",
+                              arguments={"evidence_ref": identity}) from exc
+        except (ValueError, UnicodeError) as exc:
+            raise ToolFailure("evidence_integrity_failure", "Stop: evidence integrity could not be verified.",
+                              recoverable=False, arguments={"evidence_ref": identity}) from exc
+        expected = "evidence-" + sha256(encoded.encode("utf-8")).hexdigest()
+        if (not isinstance(record, dict) or expected != identity
+                or record.get("snapshot_id") != self.snapshot_id
+                or record.get("snapshot_hash") != self.manifest.content_hash
+                or not isinstance(record.get("source_scope"), list)
+                or any(not isinstance(path, str) or path not in self.manifest.entries for path in record["source_scope"])):
+            raise ToolFailure("evidence_integrity_failure", "Stop: evidence integrity could not be verified.",
+                              recoverable=False, arguments={"evidence_ref": identity})
         for path in record["source_scope"]:
-            self.artifacts.read_source(self.snapshot_id, path, owner=self.owner)
+            self._source(path)
         return record
 
     def _read_source(self, arguments, work):
         if set(arguments) - {"file_path", "start_line", "end_line"}:
             raise ValueError("unsupported source arguments")
         path = self._scoped_path(arguments.get("file_path"), work)
-        source = self.artifacts.read_source(self.snapshot_id, path, owner=self.owner)
+        source = self._source(path)
         lines = source.splitlines()
         start = arguments.get("start_line", 1)
         end = arguments.get("end_line")
-        if end is None:
-            end = min(len(lines), start + 79)
+        if end is None and type(start) is int:
+            end = start + 79
         if (type(start) is not int or type(end) is not int or start < 1 or end < start
-                or start > len(lines) or end - start >= 200):
-            raise ValueError("invalid or unbounded source range")
+                or start > max(1, len(lines)) or end - start >= 200):
+            raise ToolFailure("invalid_source_range",
+                "Choose start_line within the captured line_count and request at most 200 lines; "
+                "omit end_line for up to 80 lines. Empty files accept start_line=1.",
+                details={"line_count": len(lines), "max_lines": 200})
+        if not lines:
+            return self._record({"tool": "read_source", "file_path": path, "line_count": 0,
+                                 "content_hash": self.manifest.entries[path].content_hash, "data": ""}, work=work)
         # A bounded request may extend past EOF; report only the actual source
         # range rather than making the agent guess a short file's line count.
         end = min(end, len(lines))
@@ -117,7 +143,8 @@ class RepositoryContext:
         record = self.scoped_evidence(identity, work)
         encoded = _json(record)
         if type(offset) is not int or not 0 <= offset < len(encoded):
-            raise ValueError("evidence offset is outside the artifact")
+            raise ToolFailure("invalid_evidence_offset", "Choose offset below total_chars; use next_offset for later pages.",
+                              details={"total_chars": len(encoded)})
         end = min(len(encoded), offset + max_chars)
         page = {"evidence_ref": identity, "offset": offset, "end_offset": end,
                 "total_chars": len(encoded), "next_offset": end if end < len(encoded) else None,
@@ -177,7 +204,7 @@ class RepositoryContext:
             path = self._scoped_path(arguments["file_path"], work)
             data = self.analyze()[path]
             if data["status"] != "parsed":
-                raise LookupError("AST parser unavailable or source parse failed")
+                raise ToolFailure("parser_unavailable", "Use read_source or code_search; parser facts are unavailable for this source.")
             scope = [path]
             if name in {"dependency_graph", "import_graph"}:
                 data = import_edges(self.analyze(), work.files)
@@ -201,8 +228,14 @@ class RepositoryContext:
             if set(arguments) != {"file_path"}:
                 raise ValueError("config_read requires exactly file_path")
             path = self._scoped_path(arguments["file_path"], work)
-            source = self.artifacts.read_source(self.snapshot_id, path, owner=self.owner)
-            data = json.loads(source) if path.endswith(".json") else tomllib.loads(source) if path.endswith(".toml") else None
+            source = self._source(path)
+            try:
+                data = json.loads(source) if path.endswith(".json") else tomllib.loads(source) if path.endswith(".toml") else None
+            except (json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
+                details = {key: value for key, value in {"line": getattr(exc, "lineno", None),
+                           "column": getattr(exc, "colno", None)}.items() if type(value) is int}
+                raise ToolFailure("invalid_configuration", "Check captured JSON/TOML syntax; use read_source to inspect the reported location.",
+                                  details=details) from exc
             if data is None:
                 raise LookupError("Only captured JSON/TOML configuration is supported")
             def redact(value):
@@ -232,7 +265,7 @@ class RepositoryContext:
             paths = [self._scoped_path(arguments["file_path"], work)] if arguments.get("file_path") is not None else work.files
             matches, scanned = [], []
             for path in paths:
-                source = self.artifacts.read_source(self.snapshot_id, path, owner=self.owner)
+                source = self._source(path)
                 scanned.append(path)
                 for line, text in enumerate(source.splitlines(), 1):
                     if arguments["query"] in text:

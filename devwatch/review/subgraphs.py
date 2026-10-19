@@ -21,7 +21,8 @@ from devwatch.providers.exceptions import (ProviderAuthenticationError, Provider
     ProviderQuotaExhaustedError, ProviderTemporaryError, ProviderTimeoutError)
 from devwatch.review.budgets import BudgetExceeded, BudgetManager
 from devwatch.review.jobs import UnknownToolCompletion, safe_stop_reason
-from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, describe_tool
+from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, CommandArguments, describe_tool
+from devwatch.review.tool_errors import ToolFailure, diagnose, failure_identity, safe_arguments
 from devwatch.review.contracts import (
     AGENT_CONTRACTS, SPECIALISTS, AgentAction, AgentId, AgentPrivateState, AgentWorkItem,
     ContractModel, EvidenceProgress, ModelTier, ReviewPlan, ReviewTask, SpecialistResult, TokenUsage,
@@ -89,14 +90,18 @@ class PermissionedTools:
         AGENT_CONTRACTS[task.agent_id].validate_action(
             action, produces_measurement_artifact=task.task_id in self._measurement_tasks)
         if action.kind in {"call_tool", "request_context"}:
-            self._arguments[action.tool or "read_source"].model_validate(action.arguments)
+            parsed = self._arguments[action.tool or "read_source"].model_validate(action.arguments)
+            path = getattr(parsed, "file_path", None)
+            if path is not None and path not in task.files:
+                raise PermissionError("source is outside the assigned scope")
+            return parsed.model_dump(mode="json", exclude_unset=True)
 
     async def execute(self, task: ReviewTask, action: AgentAction) -> ToolObservation:
-        self.authorize(task, action)
+        arguments = self.authorize(task, action)
         handler = self._handlers.get(action.tool)
         if handler is None:
-            raise LookupError("tool is unavailable")
-        return ToolObservation.model_validate(await handler(action.arguments, task))
+            raise ToolFailure("tool_unavailable", "Choose another permitted tool or report unavailable coverage.")
+        return ToolObservation.model_validate(await handler(arguments, task))
 
 
 class AgentExecutionState(TypedDict, total=False):
@@ -166,7 +171,12 @@ class AgentSubgraphs:
 
     async def _save(self, state: AgentExecutionState) -> None:
         if self.persist is not None:
-            await _resolve(self.persist(state, self.budget.ledger.model_dump(mode="json")))
+            saved = dict(state)
+            action = state.get("action")
+            if action is not None and action.kind in {"call_tool", "request_context"}:
+                arguments, _ = safe_arguments(action.arguments, state["task"].files)
+                saved["action"] = action.model_copy(update={"arguments": arguments})
+            await _resolve(self.persist(saved, self.budget.ledger.model_dump(mode="json")))
 
     async def _event(self, kind, state, **metadata):
         if self.emit is not None:
@@ -319,7 +329,7 @@ class AgentSubgraphs:
         large_synthesis = state.get("phase") == "synthesis" and len(known) > 8
         if large_synthesis:
             active = {}
-        compact = private.model_dump(mode="json", exclude={"local_findings", "pending_actions", "evidence_progress", "coverage", "quarantined_candidates"})
+        compact = private.model_dump(mode="json", exclude={"local_findings", "pending_actions", "evidence_progress", "coverage", "quarantined_candidates", "tool_diagnostics"})
         compact["hypotheses"] = [{**item, "claim": item["claim"][:300]} for item in compact["hypotheses"][-3:]]
         compact["evidence_refs"] = compact["evidence_refs"][-12:]
         compact["evidence_progress"] = {ref: {"processed": receipt.processed, "delivered": bool(receipt.delivered), "inspected": bool(receipt.inspected)}
@@ -343,6 +353,8 @@ class AgentSubgraphs:
             "context_omissions": ["private_state_compacted"] if len(private.hypotheses) > 3 or private.local_findings else [],
             "repair": state.get("validation_error", "Previous response failed validation. Return one valid structured action.") if repair else None,
             "last_tool_error": state.get("last_tool_error"),
+            "tool_diagnostic": private.tool_diagnostics[-1].model_dump(exclude={"fingerprint"})
+                if state.get("last_tool_error") and private.tool_diagnostics else None,
         }
         actions = set(contract.allowed_actions)
         if state.get("phase") == "verification":
@@ -368,6 +380,12 @@ class AgentSubgraphs:
                 selected_context.pop(key)
                 body["context_omissions"].append(key)
             elif isinstance(selected_context, dict) and selected_context.get("evidence"):
+                # Retrieved pages must be deliverable before acknowledgment.
+                # Fit the response reservation first; it is a ceiling, not a
+                # reason to discard evidence that fits the actual context.
+                headroom = self.budget.limits.model_context_tokens - input_bound
+                if task.agent_id != AgentId.PLANNER and headroom >= 512:
+                    return prompt, min(max_output, headroom)
                 selected_context["evidence"].pop()
                 body["context_omissions"].append("evidence_page; retrieve via read_evidence")
             elif compact.get("hypotheses"):
@@ -561,6 +579,9 @@ class AgentSubgraphs:
             return self._stop(state, "prompt_context_limit")
         except ContextRetrievalTimeout:
             return self._stop(state, "context_timeout")
+        except ToolFailure as exc:
+            self._tool_diagnostic(state, exc)
+            return self._stop(state, "tools_unavailable")
         except IncompleteCompletion as exc:
             return self._stop(state, str(exc))
         except BudgetExceeded:
@@ -607,9 +628,15 @@ class AgentSubgraphs:
     async def _execute_action(self, state: AgentExecutionState) -> AgentExecutionState:
         task, private, action = state["task"], state["private_state"], state["action"]
         operation_id, observation, tool_error, started = None, None, None, None
+        name = action.tool or "read_source"
+        fingerprint = failure_identity(name, action.arguments, self.tools._arguments.get(name))
+        repeated = any(item.fingerprint == fingerprint for item in private.tool_diagnostics)
         try:
-            self.tools.authorize(task, action)
+            arguments = self.tools.authorize(task, action)
             if action.kind in {"call_tool", "request_context"}:
+                action.arguments = arguments
+                if repeated:
+                    raise ToolFailure("repeated_tool_failure", "Repeated failed action blocked.", recoverable=False)
                 self.budget.consume_tool(task.task_id)
                 private.tool_call_count += 1
                 await self._save(state)
@@ -682,17 +709,31 @@ class AgentSubgraphs:
             raise
         except UnknownToolCompletion:
             tool_error = "unknown_tool_completion"
+            self._tool_diagnostic(state, ToolFailure(tool_error, "Do not replay unknown completion.", recoverable=False), fingerprint)
             return self._stop(state, "unknown_tool_completion")
-        except PermissionError:
+        except PermissionError as exc:
             tool_error = "permission_denied"
+            self._tool_diagnostic(state, exc, fingerprint)
             return self._stop(state, "permission_denied")
         except BudgetExceeded:
             return self._stop(state, "budget_exhausted")
-        except TimeoutError:
+        except TimeoutError as exc:
             # A drained timeout may still have had effects. Never automatically
             # replay the action or claim that it produced evidence.
+            tool_error = "tool_timeout"
+            self._tool_diagnostic(state, exc, fingerprint)
             return self._stop(state, "tool_timeout")
-        except (LookupError, ValueError, FileNotFoundError):
+        except (LookupError, ValueError, FileNotFoundError) as exc:
+            if repeated:
+                exc = ToolFailure("repeated_tool_failure", "Repeated failed action blocked.", recoverable=False)
+            elif isinstance(exc, ValidationError) and operation_id is not None:
+                # Admission already validated the arguments. A later schema
+                # failure belongs to execution/results and may follow effects.
+                exc = ToolFailure("tool_execution_failed", "Invalid tool execution result; do not replay.", recoverable=False)
+            diagnostic = self._tool_diagnostic(state, exc, fingerprint)
+            if not diagnostic.recoverable:
+                tool_error = diagnostic.code
+                return self._stop(state, "tools_unavailable")
             # These are known read failures, so another bounded action is safe.
             name = action.tool or "read_source"
             private.coverage.failed[f"{task.task_id}:{name}"] = "recoverable_tool_error"
@@ -707,8 +748,9 @@ class AgentSubgraphs:
         except asyncio.CancelledError:
             await self._save(self._stop(state, "cancelled"))
             raise
-        except Exception:
+        except Exception as exc:
             tool_error = "execution_failed"
+            self._tool_diagnostic(state, exc, fingerprint)
             return self._stop(state, "tools_unavailable")
         finally:
             if operation_id is not None:
@@ -721,6 +763,17 @@ class AgentSubgraphs:
                     await self._event("evidence_retrieved", state, tool=action.tool or "read_source",
                                       evidence_ref=observation.evidence_ref, operation_id=operation_id, offset=observation.offset)
             await self._save(state)
+
+    def _tool_diagnostic(self, state, error, fingerprint=None):
+        task, private = state["task"], state["private_state"]
+        action = state.get("action") or AgentAction(kind="call_tool",
+            tool="read_evidence" if error.code.startswith("evidence") else "read_source", arguments=error.arguments)
+        name = action.tool or "read_source"
+        fingerprint = fingerprint or failure_identity(name, action.arguments, self.tools._arguments.get(name))
+        diagnostic = diagnose(name if name in self.tools._arguments else "unrecognized_tool", action.arguments,
+            task.files, error, fingerprint, replay_safe=self.tools._arguments.get(name) is not CommandArguments)
+        private.tool_diagnostics = (private.tool_diagnostics + [diagnostic])[-8:]
+        return diagnostic
 
     async def run_specialist(self, task: ReviewTask, *, private_state: AgentPrivateState | None = None,
                              complexity: float = 0, confidence: float = 1, restored_state: dict | None = None):

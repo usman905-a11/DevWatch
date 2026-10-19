@@ -10,6 +10,7 @@ from pydantic import ConfigDict, Field
 
 from devwatch.review.contracts import AGENT_CONTRACTS, ContractModel
 from devwatch.review.tool_runtime import _drain
+from devwatch.review.tool_errors import ToolFailure
 
 
 class DatabasePolicy(ContractModel):
@@ -74,4 +75,7 @@ class DatabaseTools:
         except asyncio.CancelledError:
             await _drain(operation)
             raise
+        except sqlite3.Error as exc:
+            raise ToolFailure("invalid_query" if action.tool == "query_analyze" else "database_unavailable",
+                              "Check the owner-granted schema and SELECT syntax/bindings; no query values are disclosed.") from exc
         return self.repo._record({"tool": action.tool, "source_scope": list(task.files), "inspected": [], "data": data}, work=task)

@@ -1,5 +1,17 @@
 # DevWatch seven-agent implementation checklist
 
+## Current milestone: M15 Tool Infrastructure Reliability - COMPLETE
+
+- [x] Reproduce and fix actionable source/evidence errors and safe diagnostics.
+- [x] Add bounded correction/repeated-failure suppression with durable private history.
+- [x] Audit tool contracts and prove permission/snapshot/evidence boundaries.
+- [x] Run regression/evaluation, review the M15-only diff and record A-H results.
+
+Backend: 526 passed (36 new M15 cases); focused: 87 passed; deterministic matrix:
+24/24 completed with no failed coverage. Source/test hashes match before/after.
+No new paid calls; cumulative US$0.76974150 of US$1. Broader live model quality is
+unmeasured by M15. Details: [m15-tool-reliability-report.md](m15-tool-reliability-report.md).
+
 ## Current priority: M13 live-quality remediation
 
 - [x] Diagnose exact live provider/action/tool failure paths.

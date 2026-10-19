@@ -1,5 +1,16 @@
 # Execution ledger — plan: tasks/seven-agent-design.md
 
+M15 Tool Infrastructure Reliability implementation (2026-10-19): source/evidence
+bounds, redacted private diagnostics, persistent duplicate-failure suppression,
+strict assigned-path/finite argument admission and all 24 tool descriptions are
+implemented. Corrected reads retain deliverable evidence by fitting non-Planner
+response reservations within the existing ceiling. Post-dispatch schema failures
+are terminal, including after real command effects. COMPLETE: backend 526 passed
+(36 new M15 cases), focused 87 passed, deterministic matrix 24/24 complete without
+failed coverage. Wire/compile/diff checks pass; source/test hashes match before and
+after. No new paid calls or later milestone work. Detailed evidence and status:
+[m15-tool-reliability-report.md](m15-tool-reliability-report.md).
+
 M13 live-quality remediation completed (2026-10-19) before advancing.
 Confirmed and fixed short-file range failures, specialist/final action contract
 confusion, duplicate publication and loss of failure coverage during recovery.

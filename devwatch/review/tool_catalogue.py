@@ -2,17 +2,22 @@
 
 from typing import Any
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from devwatch.review.contracts import ContractModel, SourceLocation
 
 
 class Arguments(ContractModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
+    model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
 
 
 class FileArguments(Arguments):
     file_path: str = Field(min_length=1, description="Captured repository-relative path in the assigned files")
+
+    @field_validator("file_path")
+    @classmethod
+    def relative_path(cls, value):
+        return SourceLocation.relative_source_path(value)
 
 
 class SourceArguments(FileArguments):
@@ -21,7 +26,6 @@ class SourceArguments(FileArguments):
 
     @model_validator(mode="after")
     def bounded_range(self):
-        SourceLocation.relative_source_path(self.file_path)
         if self.end_line is not None and not self.start_line <= self.end_line < self.start_line + 200:
             raise ValueError("invalid or unbounded source range")
         return self
@@ -40,6 +44,11 @@ class SymbolArguments(FileArguments):
 class SearchArguments(Arguments):
     query: str = Field(min_length=1, max_length=256, description="Literal search; at most 20 matches")
     file_path: str | None = Field(default=None, min_length=1)
+
+    @field_validator("file_path")
+    @classmethod
+    def relative_path(cls, value):
+        return SourceLocation.relative_source_path(value) if value is not None else None
 
 
 class CommandArguments(Arguments):
@@ -67,21 +76,38 @@ TOOL_ARGUMENTS: dict[str, type[Arguments]] = {
     **{name: CommandArguments for name in ("run_tests", "run_command", "lint", "type_check", "coverage", "sast", "profile", "benchmark", "db_analyze", "query_analyze")},
 }
 DESCRIPTIONS = {
-    "read_source": "Read a bounded inclusive immutable source range.",
-    "read_evidence": "Retrieve a scoped page of stored evidence; use next_offset for subsequent pages.",
+    "read_source": "Read 1-based inclusive immutable source lines, at most 200. End clamps to EOF; start must exist (empty files accept 1).",
+    "read_evidence": "Page scoped evidence JSON by character offset; follow next_offset. Acknowledge delivered pages with inspected_evidence.",
     "repo_map": "List captured file metadata in the assigned scope.",
-    "code_search": "Search assigned immutable files for a literal string.",
+    "code_search": "Search assigned immutable files for a literal string; at most 20 matches, each truncated to 500 characters.",
+    "parse_ast": "Retrieve deterministic parser facts for an assigned file; unsupported or invalid syntax requires source/search fallback.",
+    "symbol_lookup": "List parsed symbols in an assigned file, optionally matching an exact symbol name; no runtime resolution.",
+    "call_graph": "Retrieve syntactic call sites in an assigned file; targets are not proven runtime dispatch.",
+    "dependency_graph": "Retrieve resolved local import edges from an assigned file within task scope, plus unresolved imports.",
+    "import_graph": "Retrieve resolved local import edges from an assigned file within task scope, plus unresolved imports.",
+    "complexity": "Estimate syntactic cyclomatic lower bound and symbol count; not a maintainability verdict.",
     "config_read": "Read captured JSON/TOML configuration with sensitive keys redacted.",
     "git_diff": "Read captured client-reported Git diff; not causal verification.",
     "git_history": "Read captured client-reported Git history; not causal verification.",
+    "run_tests": "Run the exact approved test command in assigned scratch files; inspect bounded output and exit status.",
+    "run_command": "Run an exact approved host command in assigned scratch files; no model-supplied shell or argv.",
+    "lint": "Run the exact approved lint command in assigned scratch files; findings depend on configured rules.",
+    "type_check": "Run the exact approved type-check command in assigned scratch files; inspect output and exit status.",
+    "coverage": "Run the exact approved coverage command in assigned scratch files; output is limited to the configured tests.",
+    "sast": "Run the exact approved static security command in assigned scratch files; reported matches require review.",
+    "profile": "Run the exact approved profiling command in assigned scratch files; results describe that configured workload.",
+    "benchmark": "Run the exact approved benchmark command in assigned scratch files; results describe that configured workload.",
+    "db_analyze": "Run the exact approved database-analysis command in assigned scratch files; inspect bounded output and exit status.",
+    "query_analyze": "Run the exact approved query-analysis command in assigned scratch files; inspect bounded output and exit status.",
     "write_artifact": "Serialize an explicitly granted measurement to a runtime-owned destination.",
 }
 
 
 def describe_tool(name: str, model: type[Arguments]) -> dict[str, Any]:
-    return {"name": name, "description": DESCRIPTIONS.get(name, (
-        "Inspect read-only owner-granted database metadata/query plans." if model in {DatabaseArguments, QueryArguments}
-        else "Execute the exact runtime-approved command in assigned scratch files." if model is CommandArguments
-        else "Retrieve deterministic scoped parser facts; parser failures are reported explicitly.")),
+    description = ("Inspect read-only owner-granted SQLite table/column metadata; no application rows."
+                   if model is DatabaseArguments else
+                   "Explain a SELECT plan against an owner-granted SQLite database; no query execution or result rows."
+                   if model is QueryArguments else DESCRIPTIONS[name])
+    return {"name": name, "description": description,
         "arguments": model.model_json_schema(),
         "output": "Evidence reference (processed), retrievable via read_evidence/context pages. Processing does not imply delivery or inspection."}
