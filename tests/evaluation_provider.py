@@ -41,7 +41,8 @@ class EvaluationProvider:
                     candidates = [{"category": "bug", "title": "Empty input raises IndexError",
                         "description": "Empty input indexes element zero without a guard", "impact": "The caller crashes",
                         "confidence": .9, "location": {"snapshot_id": context["snapshot_id"], "file_path": files[0],
-                        "start_line": 2, "end_line": 2}, "evidence_refs": private["evidence_refs"]}]
+                        "start_line": 2, "end_line": 2}, "evidence_refs": list(dict.fromkeys(
+                            private["evidence_refs"] + task.get('evidence_refs', [])))}]
                 action = {"kind": "submit_candidates", "payload": {"task_id": task["task_id"], "agent_id": role,
                     "candidates": candidates, "coverage": {}, "stop_reason": "evidence_complete"}}
         elif phase == "verification":

@@ -4,7 +4,7 @@ Date: 2026-10-18. Baseline: M12 of the supplied Final Architecture and Reliabili
 Remediation Plan v2.0. This supplements [seven-agent-design.md](seven-agent-design.md)
 with the actual implementation map and the dependency-ordered M12–M23 work.
 It preserves the existing seven identities, transport and immutable-source design.
-The M13, M14, M15, M16, M17 and M18 supplements below record subsequent changes; other later milestone
+The M13, M14, M15, M16, M17, M18 and M19 supplements below record subsequent changes; other later milestone
 entries remain planned work, not claims of implementation.
 
 ## Installed implementation
@@ -503,3 +503,29 @@ raw 18 TP/0 FP/2 FN; 23 complete source/goal reviews without failed coverage.
 remains charged. M18 total US$0.55952325, cumulative US$2.12967300 of US$4,
 remaining shared budget US$1.87032700. No commit/push/deployment or M19/M20 work.
 Report: [m18-prompt-context-report.md](m18-prompt-context-report.md).
+
+## M19 specialist-intelligence supplement (2026-10-20)
+
+The optional direct-specialist evaluator mode supplies immutable source artifacts
+before the first model request to separate reasoning from autonomous retrieval.
+Actual context delivery, continuation paging, acknowledgment and scoped candidate
+validation remain canonical. Prefetch has its own metric; it does not fabricate
+inspection or tool effects. Provided/full combinations are rejected before effects.
+
+Five role policies now require contract witnesses and appropriate advisory/defect
+classification. Performance allocation/lifetime guidance loads progressively only
+after source delivery. Final policy revision is review-prompts-v3.3. An all-invalid
+structural candidate batch gets the existing bounded schema repair; terminal
+rejections and mixed valid siblings retain explicit behavior. Eight authority and
+evidence methods remain unchanged. No public wire or dependency change.
+
+The frozen corpus has twelve original cases and five new paired held-out families.
+Latest-attempt evidence combines 36 unchanged-role v3.1 and eight v3.3 performance
+reviews: 22 TP / 0 FP / 0 FN across both modes, all 22 kinds correct, all 44
+source/goal/runtime/quarantine gates pass. Held-out kind accuracy improves 80% to
+100%; primary detection was already perfect. Three secondary impact extensions
+remain flagged; direct specialist checks do not prove final synthesis correctness.
+No held-out outcomes select corrections and all 148 attempts remain in evidence.
+Backend 596 passed, zero failures/errors/skips; all 159 frozen inputs match,
+with zero credential leaks. M20 remains planned.
+See [M19 report](m19-specialist-intelligence-report.md).

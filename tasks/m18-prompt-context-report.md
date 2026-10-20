@@ -2,6 +2,11 @@
 
 Date: 2026-10-20. Status: **Engineering and scoped verification complete; broader semantic acceptance OPEN**.
 
+Follow-up: [the v2.4 claim-quality fix](m18-claim-quality-followup.md) resolves the
+two observed confirmed overclaims in fresh completed reviews. This initial v2.3
+report and its raw receipts remain historical; the follow-up retains a partial,
+explicitly unverified SQL candidate and documents the remaining limits.
+
 ## A. Existing implementation
 
 Seven typed roles use custom StateGraph JSON loops. M16 enforces acknowledged

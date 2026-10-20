@@ -55,6 +55,13 @@ class ContextRetrievalTimeout(RuntimeError):
     pass
 
 
+class CandidateSchemaError(ValueError):
+    def __init__(self, rejections):
+        super().__init__('Return complete candidates: category, title, description, impact, confidence, '
+                         'location, evidence_refs, kind and remediation. Preserve valid findings.')
+        self.rejections = rejections
+
+
 class EventPersistenceError(OSError):
     """Durable telemetry failure must propagate through specialist isolation."""
 
@@ -279,6 +286,8 @@ class AgentSubgraphs:
             if output.task_id != task.task_id or output.agent_id != task.agent_id:
                 raise ValueError("result does not belong to the assigned agent/task")
             if task.agent_id in SPECIALISTS:
+                if not output.candidates and output.quarantined:
+                    raise CandidateSchemaError(output.quarantined)
                 output = investigation.admit(task, private, output, self.tools.validate_candidate)
                 action.payload = output.model_dump(mode="json")
         elif action.kind == "submit_plan":
@@ -618,11 +627,12 @@ class AgentSubgraphs:
                         self.budget.consume_schema_repair(task.task_id)
                         await self._save(state)
                     except BudgetExceeded:
-                        if isinstance(exc, investigation.EvidenceInspectionRequired):
+                        if isinstance(exc, (investigation.EvidenceInspectionRequired, CandidateSchemaError)):
                             private.quarantined_candidates.extend(item for item in exc.rejections if item not in private.quarantined_candidates)
+                            reason = 'invalid_schema' if isinstance(exc, CandidateSchemaError) else 'evidence_incomplete'
                             await self._event("candidate_rejected", state, count=len(exc.rejections),
-                                              error_code="invalid_schema", stop_reason="evidence_incomplete", outcome="failed")
-                            return self._stop(state, "evidence_incomplete", explanation=str(exc))
+                                              error_code="invalid_schema", stop_reason=reason, outcome="failed")
+                            return self._stop(state, reason, explanation=str(exc))
                         return self._stop(state, "invalid_schema")
                     repair = True
                 finally:

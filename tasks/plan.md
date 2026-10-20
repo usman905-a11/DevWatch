@@ -1,5 +1,11 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+M18 observed-claim follow-up and M19 scoped implementation/verification are
+complete. Backend 596 passed; latest 44 live reviews find 22 targets with no
+false positives or misses. Three secondary impact extensions remain explicit
+M20 follow-up. Shared remaining budget: US$0.85179700.
+See [M19 report](m19-specialist-intelligence-report.md). M20 is not started.
+
 ## Current request: fix M18 secondary claims, then start M19 (2026-10-20)
 
 1. Reproduce the two final v2.3 failures from immutable live journals. Hypothesis:

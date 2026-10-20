@@ -1,6 +1,6 @@
 # M18 secondary-claim follow-up
 
-Date: 2026-10-20. Status: **Live fix verified; full backend pending**.
+Date: 2026-10-20. Status: **Observed confirmed-claim issues resolved in completed reviews**.
 
 ## A. Existing implementation
 
@@ -30,7 +30,8 @@ This is a prompt fix; M20's runtime semantic-verifier work remains separate.
 ## D. Verification
 
 Focused graph, SDK, restart and control checks: 33 passed in 7.82s. Fresh full
-backend against 155 frozen source/fixture files is pending. Policy prose is
+backend: 571 passed, one dependency warning, 963.54s. All 155 frozen M18 inputs
+match; additional M19 files are tracked separately. Policy prose is
 evaluated through the actual consuming model, not string-presence assertions.
 
 ## E. Live results
@@ -81,5 +82,6 @@ Advice/defect classification and new defect families are M19 evaluation targets.
 
 Production change: prompts.py phase guidance/version only. Existing dirty work is
 preserved. Initial M18 receipts remain historical; follow-up receipts use m18r
-filenames. Full regression/source/credential receipts are pending. M19 follows
+filenames. Full regression, frozen-source and credential receipts pass, with zero
+credential leaks. See m18r-verification.json. M19 follows
 this fix; no M20 implementation, commit, push or deployment occurred.

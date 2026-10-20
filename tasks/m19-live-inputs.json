@@ -1,0 +1,215 @@
+{
+  "destination": "Google Gemini Developer API",
+  "model": "gemini-3.8-flash",
+  "max_additional_m19_usd": 0.8,
+  "shared_cumulative_cap_usd": 4,
+  "cases": [
+    {
+      "case_id": "empty-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def first(items):\n    return items[0]\n"
+        },
+        "contract": "Return the first item, or None for empty input."
+      }
+    },
+    {
+      "case_id": "empty-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def first(items):\n    return items[0] if items else None\n"
+        },
+        "contract": "Return the first item, or None for empty input."
+      }
+    },
+    {
+      "case_id": "mutation-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def ordered(items):\n    items.sort()\n    return items\n"
+        },
+        "contract": "Return sorted values without modifying the caller's input."
+      }
+    },
+    {
+      "case_id": "mutation-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def ordered(items):\n    return sorted(items)\n"
+        },
+        "contract": "Return sorted values without modifying the caller's input."
+      }
+    },
+    {
+      "case_id": "assertion-defect",
+      "payload": {
+        "files": {
+          "test_subject.py": "def test_add():\n    from subject import add\n    add(2, 3)\n",
+          "subject.py": "def add(a, b):\n    return a + b\n"
+        },
+        "contract": "Tests must fail if add(2, 3) returns an incorrect result. add is a normal integer sum."
+      }
+    },
+    {
+      "case_id": "assertion-clean",
+      "payload": {
+        "files": {
+          "test_subject.py": "def test_add():\n    from subject import add\n    assert add(2, 3) == 5\n",
+          "subject.py": "def add(a, b):\n    return a + b\n"
+        },
+        "contract": "Tests must fail if add(2, 3) returns an incorrect result. add is a normal integer sum."
+      }
+    },
+    {
+      "case_id": "query-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def find_user(db, name):\n    return db.execute(\"SELECT id FROM users WHERE name = '\" + name + \"'\").fetchone()\n"
+        },
+        "contract": "Look up a user by an untrusted name. Keep SQL data separate from query syntax."
+      }
+    },
+    {
+      "case_id": "query-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def find_user(db, name):\n    return db.execute('SELECT id FROM users WHERE name = ?', (name,)).fetchone()\n"
+        },
+        "contract": "Look up a user by an untrusted name. Keep SQL data separate from query syntax."
+      }
+    },
+    {
+      "case_id": "membership-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def unique(items):\n    result = []\n    for value in items:\n        if value not in result:\n            result.append(value)\n    return result\n"
+        },
+        "contract": "Find unique integers in encounter order. Input can contain millions of distinct integers. Report unmeasured complexity as an advisory."
+      }
+    },
+    {
+      "case_id": "membership-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def unique(items):\n    result, seen = [], set()\n    for value in items:\n        if value not in seen:\n            seen.add(value)\n            result.append(value)\n    return result\n"
+        },
+        "contract": "Find unique integers in encounter order. Input can contain millions of distinct integers. Report unmeasured complexity as an advisory."
+      }
+    },
+    {
+      "case_id": "offset-defect",
+      "payload": {
+        "files": {
+          "subject.js": "function offset(page) {\n  return page * 10;\n}\nmodule.exports = {offset};\n"
+        },
+        "contract": "Convert one-based page numbers into zero-based offsets for pages of size ten."
+      }
+    },
+    {
+      "case_id": "offset-clean",
+      "payload": {
+        "files": {
+          "subject.js": "function offset(page) {\n  return (page - 1) * 10;\n}\nmodule.exports = {offset};\n"
+        },
+        "contract": "Convert one-based page numbers into zero-based offsets for pages of size ten."
+      }
+    },
+    {
+      "case_id": "cleanup-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def load(handle, decode):\n    value = decode(handle.read())\n    handle.close()\n    return value\n"
+        },
+        "contract": "Read and decode the acquired handle. Close it exactly once on success and when decode raises; propagate the decode exception."
+      }
+    },
+    {
+      "case_id": "cleanup-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def load(handle, decode):\n    try:\n        return decode(handle.read())\n    finally:\n        handle.close()\n"
+        },
+        "contract": "Read and decode the acquired handle. Close it exactly once on success and when decode raises; propagate the decode exception."
+      }
+    },
+    {
+      "case_id": "window-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def page(rows, cursor, limit):\n    return rows[cursor:cursor + limit + 1]\n"
+        },
+        "contract": "Given a list of integer rows, a nonnegative zero-based cursor and a positive integer limit, return at most limit rows starting at cursor."
+      }
+    },
+    {
+      "case_id": "window-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def page(rows, cursor, limit):\n    return rows[cursor:cursor + limit]\n"
+        },
+        "contract": "Given a list of integer rows, a nonnegative zero-based cursor and a positive integer limit, return at most limit rows starting at cursor."
+      }
+    },
+    {
+      "case_id": "tautology-defect",
+      "payload": {
+        "files": {
+          "test_subject.py": "def test_total():\n    from subject import total\n    actual = total([2, 3])\n    assert actual == actual\n",
+          "subject.py": "def total(values):\n    return sum(values)\n"
+        },
+        "contract": "total returns the normal integer sum of a list of integers. This test must fail if total([2, 3]) returns an incorrect integer."
+      }
+    },
+    {
+      "case_id": "tautology-clean",
+      "payload": {
+        "files": {
+          "test_subject.py": "def test_total():\n    from subject import total\n    actual = total([2, 3])\n    assert actual == 5\n",
+          "subject.py": "def total(values):\n    return sum(values)\n"
+        },
+        "contract": "total returns the normal integer sum of a list of integers. This test must fail if total([2, 3]) returns an incorrect integer."
+      }
+    },
+    {
+      "case_id": "indirect_query-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def lookup(db, request):\n    name = request[\"query\"]\n    statement = \"SELECT id FROM users WHERE name = '\" + name + \"'\"\n    return db.execute(statement).fetchone()\n"
+        },
+        "contract": "request is a mapping whose query value is untrusted text. Look up a user by that name and keep SQL data separate from query syntax."
+      }
+    },
+    {
+      "case_id": "indirect_query-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def lookup(db, request):\n    name = request[\"query\"]\n    statement = \"SELECT id FROM users WHERE name = ?\"\n    return db.execute(statement, (name,)).fetchone()\n"
+        },
+        "contract": "request is a mapping whose query value is untrusted text. Look up a user by that name and keep SQL data separate from query syntax."
+      }
+    },
+    {
+      "case_id": "prefix-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def prefixes(values):\n    return [sum(values[:i + 1]) for i in range(len(values))]\n"
+        },
+        "contract": "Return inclusive prefix sums for a list of integers; input may have millions of values. Report unmeasured complexity concerns as advisories, not measured timing claims."
+      }
+    },
+    {
+      "case_id": "prefix-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def prefixes(values):\n    result, total = [], 0\n    for value in values:\n        total += value\n        result.append(total)\n    return result\n"
+        },
+        "contract": "Return inclusive prefix sums for a list of integers; input may have millions of values. Report unmeasured complexity concerns as advisories, not measured timing claims."
+      }
+    }
+  ],
+  "additional_context": "Agent policies, scoped tool definitions, fixture-derived immutable evidence/results only; no working-repository source, secrets or gold labels sent.",
+  "proposed_modes": [
+    "autonomous",
+    "provided"
+  ]
+}

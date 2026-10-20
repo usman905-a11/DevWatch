@@ -1,11 +1,25 @@
 # DevWatch seven-agent implementation checklist
 
+## Current milestone: M19 Specialist Functional Intelligence - COMPLETE (scoped verification)
+
+- [x] Add provided/autonomous source evaluation without fabricated inspection.
+- [x] Add five role reasoning policies and frozen paired held-out cases.
+- [x] Obtain explicit 22-payload approval and rehearse the full comparison offline.
+- [x] Repair all-invalid candidate batches within existing schema-repair budgets.
+- [x] Run final full regression, source/transport checks and code review: 596 passed; 159 frozen inputs match.
+- [x] Complete live comparison/rechecks and clause review under US$0.80; retain three secondary impact flags for M20.
+
+Latest live selection: 44 reviews, 22 TP / 0 FP / 0 FN, all matched kinds correct.
+All 148 attempts retained. M19 US$0.76228725; cumulative US$3.14820300 of shared
+US$4; remaining US$0.85179700. Backend 596 passed; no credential leaks. M20 is not started.
+Report: [m19-specialist-intelligence-report.md](m19-specialist-intelligence-report.md).
+
 ## Current follow-up: resolve M18 claims, then begin M19
 
-- [ ] Reproduce final unsupported exception/input-domain clauses and tighten phase guidance.
-- [ ] Pass fresh approved-fixture live checks with complete, narrow supported findings.
-- [ ] Verify focused/full regression, source integrity and shared budget receipts.
-- [ ] Begin M19 evidence-provided/autonomous specialist evaluation with held-out controls.
+- [x] Reproduce final unsupported exception/input-domain clauses and tighten phase guidance.
+- [x] Pass fresh approved-fixture live checks with complete, narrow supported findings.
+- [x] Verify focused/full regression, source integrity and shared budget receipts.
+- [x] Begin M19 evidence-provided/autonomous specialist evaluation with held-out controls.
 
 ## Current milestone: M18 Prompt and Context Engineering - COMPLETE (scoped verification)
 

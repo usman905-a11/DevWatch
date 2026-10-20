@@ -1,5 +1,32 @@
 # Execution ledger — plan: tasks/seven-agent-design.md
 
+M19 Specialist Functional Intelligence (2026-10-20), COMPLETE for engineering
+and scoped detection/classification verification:
+provided/autonomous source evaluation, five role policies, source-stage cost
+guidance, bounded candidate-schema repair and frozen paired held-out cases are
+implemented. Backend 596 passed, zero failures/errors/skips, 788.50s. All
+159 frozen inputs match and credential scan finds zero leaks. Final focused 35
+pass; additional boundaries 79 pass. Live latest
+44 reviews: 22 TP / 0 FP / 0 FN, all 22 kinds correct, complete source/goal/runtime
+and no terminal quarantine. Held-out kind accuracy improves 8/10 to 10/10;
+baseline held-out primary detection was already perfect. Three secondary impact
+extensions remain explicitly flagged for M20. All 148 paid attempts retained:
+73 TP / 4 FP / 1 FN, including the initial candidate-schema miss. No unknown API
+consumption or cap refusal. M19 US$0.76228725; cumulative US$3.14820300 of US$4,
+remaining US$0.85179700; old US$0.04114425 hold remains. No held-out outcome tuning
+or every-clause semantic correctness claim. No M20/commit/push/deployment work.
+Report: [m19-specialist-intelligence-report.md](m19-specialist-intelligence-report.md).
+
+M18 follow-up v2.4: the two confirmed secondary-domain overclaims are resolved
+in fresh completed reviews. Backend 571 passed; 33 focused checks pass. All 155
+frozen inputs match. Eleven paid attempts retain 9 TP/0 FP/0 FN; ten complete
+source/goal reviews with no failed coverage. One local-cap partial SQL attempt
+retains an explicitly unverified unsupported clause; fresh SQL recheck completes
+with narrow supported text. No new unknown API consumption. New charges
+US$0.25624275; cumulative US$2.38591575; remaining US$1.61408425 before M19.
+Original US$0.04114425 unknown hold remains. No raw findings rewritten.
+Report: [m18-claim-quality-followup.md](m18-claim-quality-followup.md).
+
 M18 Prompt and Context Engineering (2026-10-20), COMPLETE for engineering and
 scoped verification: versioned compact shared/seven role policies, conditional
 guidance and private provider revision metadata are implemented. Context prefers

@@ -166,6 +166,7 @@ class MeasuredProvider:
             raise ValueError("cost cap must be positive and finite")
         self.provider, self.rates, self.max_cost_usd = provider, rates or {}, max_cost_usd
         self.usage, self.unknown_calls, self.charged_usd = {}, 0, 0.
+        self.budget_refusals = 0
 
     async def generate_completion(self, request):
         reserve = 0.
@@ -176,6 +177,7 @@ class MeasuredProvider:
                 "prompt_tokens": len(request.prompt.encode()) + len(request.system_prompt.encode()) + 1024,
                 "completion_tokens": request.max_tokens}}, self.rates)
             if self.charged_usd + reserve > self.max_cost_usd:
+                self.budget_refusals += 1
                 raise RuntimeError("evaluation cost cap reached before dispatch")
             self.charged_usd += reserve
         try:
@@ -199,7 +201,8 @@ class MeasuredProvider:
         return response
 
 
-async def run_case(case, runtime_root, *, mode, provider, live=False, models=None, judgments=None):
+async def run_case(case, runtime_root, *, mode, provider, live=False, models=None, judgments=None,
+                   evidence_mode='autonomous'):
     """Run real isolated specialist subgraph or unchanged seven-agent full graph.
 
     Individual mode intentionally excludes planning/verification/synthesis and
@@ -215,6 +218,8 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
 
     if mode not in {"specialist", "full"}:
         raise ValueError("mode must be specialist or full")
+    if evidence_mode not in {'autonomous', 'provided'} or (mode=='full' and evidence_mode!='autonomous'):
+        raise ValueError('provided evidence mode requires a specialist evaluation')
     public = review_input(case)
     layout = StoreLayout(Path(runtime_root))
     if layout.jobs.exists():
@@ -229,15 +234,20 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     meter = provider if isinstance(provider, MeasuredProvider) else MeasuredProvider(provider)
     usage_before = json.loads(json.dumps(meter.usage))
     unknown_before = meter.unknown_calls
+    budget_refusals_before = meter.budget_refusals
     executor = CanonicalReviewExecutor(layout, artifacts, cache, jobs, events, meter,
         models=models or {tier: tier.value + "-scripted" for tier in ModelTier})
 
+    prefetched = []
     async def individual(job):
         budget = BudgetManager(job.limits, job.ledger.model_copy(deep=True))
         budget.begin_execution()
         session = _ReviewSession(executor, job, repository, budget, sorted(public["files"]))
         task = ReviewTask(task_id="individual", agent_id=AgentId(case["specialist"]),
                           files=sorted(public["files"]), focus=public["contract"])
+        if evidence_mode=='provided':
+            prefetched.extend(repository._read_source({'file_path':path},task).evidence_ref for path in task.files)
+            task=task.model_copy(update={'evidence_refs':list(prefetched)})
         result = await session.run_task_safely(task)
         return {"json": result.model_dump_json()}
 
@@ -253,7 +263,7 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     thread_id = sha256(("evaluation\0" + job.job_id).encode()).hexdigest()
     with closing(sqlite3.connect(layout.checkpoints)) as db:
         states = [json.loads(row[0]) for row in db.execute("SELECT state FROM agent_progress WHERE thread_id=?", (thread_id,))]
-    candidates, records, inspected, roles = [], {}, set(), set()
+    candidates, quarantined, records, inspected, roles = [], [], {}, set(), set()
     invalid_evidence = 0
     for state in states:
         role = state["task"]["agent_id"]
@@ -261,7 +271,8 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         private = state["private_state"]
         if role not in {"planner", "synthesizer_verifier"}:
             candidates.extend(private.get("local_findings", []))
-        for ref in private.get("evidence_refs", []):
+            quarantined.extend(private.get('quarantined_candidates', []))
+        for ref in dict.fromkeys(private.get("evidence_refs", []) + state['task'].get('evidence_refs', [])):
             if ref not in records:
                 try:
                     records[ref] = repository.evidence(ref)
@@ -276,6 +287,9 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
                 if mode == "full" else report.get("candidates", []))
     score = score_findings(case["gold"], findings, records, judgments=judgments)
     candidate_score = score_findings(case["gold"], candidates, records)
+    expected_kinds = {defect['defect_id']:defect['kind'] for defect in case['gold'] if 'kind' in defect}
+    classified = [findings[match['finding_index']].get('kind') == expected_kinds[match['defect_id']]
+        for match in score['matches'] if match['defect_id'] in expected_kinds]
     timeline, cursor = [], 0
     while page := events.replay(job.job_id, after=cursor):
         timeline.extend(page)
@@ -297,7 +311,7 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     missing = bool(score["false_negative"])
     provider_errors = sorted({e.payload.error_code for e in timeline if e.kind == "model_call_completed" and e.payload.error_code})
     if provider_errors:
-        categories.add("tool_harness")
+        categories.add('evaluation_budget' if meter.budget_refusals > budget_refusals_before else 'tool_harness')
     if missing and not provider_errors:
         if mode == "full" and case["specialist"] not in roles:
             categories.add("orchestration")
@@ -305,6 +319,8 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
             categories.add("verification")
         elif not set(public["files"]).issubset(inspected):
             categories.add("evidence_retrieval")
+        elif quarantined:
+            categories.add('candidate_validation')
         else:
             categories.add("model_reasoning")
     if score["false_positive"]:
@@ -315,6 +331,10 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     if finished.status != "completed" and not categories:
         categories.add("tool_harness")
     metrics = {"latency_seconds": latency, "tool_calls": len(calls),
+        "prefetched_source_artifacts": len(prefetched),
+        "local_budget_refusals": meter.budget_refusals - budget_refusals_before,
+        "finding_kind_evaluated": len(classified), "finding_kind_correct": sum(classified),
+        "finding_kind_accuracy": sum(classified)/len(classified) if classified else None,
         "successful_tool_fraction": successes / len(calls) if calls else None,
         "tool_selection_quality": None, "unnecessary_tool_calls": None,
         "repeated_identical_evidence_calls": repeated,
@@ -327,6 +347,7 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         "approximate_cost_usd": estimate_cost(usage, meter.rates) if live and meter.unknown_calls == unknown_before else None,
         "usage_by_model": usage}
     return {"case_id": case["case_id"], "specialist": case["specialist"], "mode": mode,
+        "evidence_mode": evidence_mode,
         "status": finished.status, "score": score, "candidate_score": candidate_score, "metrics": metrics,
         "models": {tier.value: name for tier, name in executor.models.items()},
         # Partial model investigations and schema failures are quality failures,
@@ -341,7 +362,8 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         "tool_observations": [{"operation_id": e.payload.operation_id, "agent_id": e.payload.agent_id,
             "task_id": e.payload.task_id, "tool": e.payload.tool, "outcome": e.payload.outcome,
             "evidence_ref": e.payload.evidence_ref} for e in calls],
-        "findings": findings, "candidates": candidates, "gold": case["gold"], "evidence": records,
+        "findings": findings, "candidates": candidates, "quarantined_candidates": quarantined,
+        "gold": case["gold"], "evidence": records,
         "coverage": report.get("coverage", {}), "snapshot_id": snapshot.snapshot_id}
 
 

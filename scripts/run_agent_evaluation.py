@@ -21,6 +21,8 @@ def parser():
     mode.add_argument("--rescore", type=Path, help="Existing local results; no provider calls")
     result.add_argument("--output", type=Path, required=True, help="New result file; existing files are refused")
     result.add_argument("--mode", choices=("specialist", "full", "both"), default="both")
+    result.add_argument('--evidence-mode', choices=('autonomous','provided'), default='autonomous',
+                        help='Specialist source retrieval or supplied immutable source; acknowledgments remain required')
     result.add_argument("--case", action="append", choices=[case["case_id"] for case in load_corpus()])
     result.add_argument("--rates", type=Path, help="JSON model -> input_per_million/output_per_million USD; supply current rates")
     result.add_argument("--max-cost-usd", type=float, help="Conservative supplied-rate estimate cap, not a billing guarantee")
@@ -43,7 +45,8 @@ async def execute(args, provider, models, stream):
                 else:
                     current_provider = provider
                 row = await run_case(case, Path(runtime) / f"case-{index}-{mode}", mode=mode,
-                                     provider=current_provider, live=args.live, models=models)
+                                     provider=current_provider, live=args.live, models=models,
+                                     evidence_mode=args.evidence_mode)
                 key = case["case_id"] + ":" + mode
                 if key in judgments:
                     row = adjudicate_row(row, judgments[key])
@@ -68,6 +71,8 @@ async def execute(args, provider, models, stream):
 def main(argv=None):
     arguments = parser()
     args = arguments.parse_args(argv)
+    if args.evidence_mode=='provided' and args.mode!='specialist':
+        arguments.error('provided evidence requires --mode specialist')
     if args.output.exists():
         arguments.error("output already exists; choose a new file")
     provider, models = None, None
