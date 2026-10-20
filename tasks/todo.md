@@ -1,13 +1,82 @@
 # DevWatch seven-agent implementation checklist
 
-## Current milestone: M16 Specialist Reasoning Loop Reliability
+## Current follow-up: resolve M18 claims, then begin M19
 
-- [ ] Track goals/evidence and require acknowledged source before candidate admission.
-- [ ] Preserve partial findings and report incomplete coverage truthfully.
-- [ ] Bound repeated successful work across checkpoint restart/follow-up.
-- [ ] Verify SDK/full workflows, wire/frontend/backend/matrix and record A-H results.
+- [ ] Reproduce final unsupported exception/input-domain clauses and tighten phase guidance.
+- [ ] Pass fresh approved-fixture live checks with complete, narrow supported findings.
+- [ ] Verify focused/full regression, source integrity and shared budget receipts.
+- [ ] Begin M19 evidence-provided/autonomous specialist evaluation with held-out controls.
 
-No new provider spending planned. Carry cumulative US$0.95595150 of US$1.
+## Current milestone: M18 Prompt and Context Engineering - COMPLETE (scoped verification)
+
+- [x] Compact shared/seven role policies, progressive guidance and private prompt versions.
+- [x] Prioritize scoped evidence without losing paging or fabricating inspection.
+- [x] Verify SDK/recovery/full backend/matrix and review the M18-only diff.
+- [x] Live-test against retained M17 controls, inspect claims and record A-H results.
+- [ ] Establish broader semantic non-regression; two final secondary-domain overclaims remain.
+
+M18 Prompt and Context Engineering (2026-10-20), COMPLETE for engineering and
+scoped verification: versioned compact shared/seven role policies, conditional
+guidance and private provider revision metadata are implemented. Context prefers
+pending tool delivery, continuation pages, candidate refs and uninspected source
+without fabricating inspection or weakening scope. Final revision v2.3/context v2.
+Backend 571 passed (14 new cases); matrix 24/24 complete without failed coverage.
+All 155 frozen files match. Final five live reviews have complete source/goal
+coverage, no failed coverage and 4 TP/0 FP/0 FN; performance clean control passes.
+Final sample uses 22.86% fewer input tokens and 26.77% less known generation cost
+than retained M17 controls; different step counts limit causal/general claims.
+Two of four final findings contain unsupported secondary input-domain clauses;
+broader semantic non-regression is not established. All 26 attempts retained:
+raw 18 TP/0 FP/2 FN; 23 complete source/goal reviews without failed coverage.
+177 known stop responses and one HTTP 503; its US$0.04114425 unknown reservation
+remains charged. M18 total US$0.55952325, cumulative US$2.12967300 of US$4,
+remaining shared budget US$1.87032700. No commit/push/deployment or M19/M20 work.
+Report: [m18-prompt-context-report.md](m18-prompt-context-report.md).
+
+## Current milestone: M17 Dynamic Tool Selection - COMPLETE (scoped verification)
+
+- [x] Add stage-aware catalogue/action binding and private selection measurements.
+- [x] Filter unavailable runtime capabilities while preserving execution checks.
+- [x] Verify SDK/full backend/matrix and measure schema reduction and selections.
+- [x] Live-test paired catalogues, inspect quality, record cost and A-H results.
+
+Standing instruction: live-test every completed milestone. Shared cumulative cap
+US$4 (US$2 newly added); current charges US$1.57014975; remaining US$2.42985025.
+M17 charges US$0.33330675 within US$0.60 allocation. No commit/push/deployment.
+
+Backend 557 passed; matrix 24/24 complete. Initial paired live score 4 TP / 0 FP /
+0 FN per arm; catalogue text tokens fall 29.58%, generation cost rises 5.95% with
+more model steps. Three secondary semantic clauses remain flagged. All 13 paid
+attempts retained: 12 complete source/goal reviews, raw 10 TP / 0 FP / 1 FN,
+including one local pre-dispatch reservation refusal; fresh SQL recheck passes.
+No broader semantic non-regression or semantic-verifier fix is claimed.
+Report: [m17-dynamic-tool-selection-report.md](m17-dynamic-tool-selection-report.md).
+Next: M18 Prompt and Context Engineering (not started).
+
+## Current follow-up: M16 live verification - COMPLETE
+
+- [x] Rehearse all four M16 live controls offline; preserve frozen source hashes.
+- [x] Run authorized live fixture/control batch and inspect claim-level limits.
+- [x] Record live results and additional/cumulative cost under US$1/US$2 caps.
+
+Four controls pass; 11/12 full-review attempts have complete source/goal coverage
+without failed coverage. One initial local failure remains recorded; two targeted
+rechecks pass. All 89 API responses stop, with zero unknown usage or cap refusals.
+Raw core score: 9 TP / 0 FP / 1 FN; three unsupported secondary clauses remain.
+New estimated cost US$0.28089150; cumulative US$1.23684300 of expanded US$2 cap.
+
+## Current milestone: M16 Specialist Reasoning Loop Reliability - COMPLETE
+
+- [x] Track goals/evidence and require acknowledged source before candidate admission.
+- [x] Preserve partial findings and report incomplete coverage truthfully.
+- [x] Bound repeated successful work across checkpoint restart/follow-up.
+- [x] Verify SDK/full workflows, wire/frontend/backend/matrix and record A-H results.
+
+Backend: 543 passed (17 new cases); frontend: 50 passed and build succeeds.
+Matrix: 24/24 complete without failed coverage. All 147 frozen source/fixture
+hashes match. Initial engineering used no paid calls; current live charges are
+recorded in the completed follow-up above.
+Report: [m16-investigation-reliability-report.md](m16-investigation-reliability-report.md).
 
 ## Current milestone: M15 Tool Infrastructure Reliability - COMPLETE
 

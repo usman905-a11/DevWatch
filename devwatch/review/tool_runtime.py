@@ -109,7 +109,8 @@ class TrustedToolRuntime:
             raise PermissionError("Measurement artifact requires an explicit task grant and evidence reference")
         reference = arguments["evidence_ref"]
         record = self.repo.scoped_evidence(reference, task)
-        definition = self.commands.get(record.get("data", {}).get("command_id"))
+        measurement = record.get("data")
+        definition = self.commands.get(measurement.get("command_id")) if isinstance(measurement, dict) else None
         if (record.get("tool") not in {"profile", "benchmark"} or definition is None or not definition.produces_measurement_artifact
                 or not self.jobs.owns_tool_evidence(self.job.job_id, owner=self.job.owner, task_id=task.task_id, evidence_ref=reference)):
             raise PermissionError("Measurement evidence does not belong to the approved job/task")

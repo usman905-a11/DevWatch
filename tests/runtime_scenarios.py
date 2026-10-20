@@ -120,7 +120,12 @@ class ScenarioProvider:
                         "evidence_ref": private["evidence_refs"][0], "offset": 12000, "max_chars": 1000}}
                 else:
                     action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": path, "start_line": 1, "end_line": 2}}
-            elif not private["evidence_refs"] or (role == "bug_reliability" and self.mode == "budget"):
+            elif role == 'bug_reliability' and self.mode == 'budget' and private['evidence_refs']:
+                # Distinct page requests exercise the global iteration ceiling;
+                # an identical acknowledged source read stops as no_progress.
+                action = {'kind': 'call_tool', 'tool': 'read_evidence', 'arguments': {
+                    'evidence_ref': private['evidence_refs'][0], 'offset': step - 1, 'max_chars': 1}}
+            elif not private["evidence_refs"]:
                 action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": path}}
             else:
                 candidates = []

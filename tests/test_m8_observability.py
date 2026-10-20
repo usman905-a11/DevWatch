@@ -30,7 +30,7 @@ def test_each_actual_model_attempt_has_correlated_completion_and_usage():
         budget = BudgetManager()
         output = await AgentSubgraphs(provider, PermissionedTools(), budget, lambda state: {}, models=MODELS,
                                       emit=recorder(events)).run_specialist(task())
-        assert output["output"].stop_reason == "evidence_complete"
+        assert output["output"].stop_reason == "evidence_incomplete"
         starts = [p for kind, p in events if kind == "model_call_started"]
         ends = [p for kind, p in events if kind == "model_call_completed"]
         assert len(starts) == len(ends) == len(provider.requests) == 2
@@ -168,8 +168,9 @@ def test_full_timeline_tracks_publication_verification_and_final_acceptance(tmp_
         events = client.get(f"/api/jobs/{identity}/events?limit=1000", headers=ALICE).json()["events"]
         kinds = [e["kind"] for e in events]
         assert kinds.count("agent_started") == kinds.count("agent_completed") == 3
-        assert kinds.count("model_call_started") == kinds.count("model_call_completed") == 5
-        assert "candidate_submitted" in kinds and "verification_completed" in kinds
+        assert kinds.count("model_call_started") == kinds.count("model_call_completed") == (6 if invalid else 5)
+        assert ("candidate_submitted" in kinds) is (not invalid)
+        assert "verification_completed" in kinds
         assert kinds.count("finding_created") == (0 if invalid else 1)
         assert kinds.count("candidate_rejected") == (1 if invalid else 0)
         gate = [e for e in events if e["payload"].get("phase") == "structural_gate" and e["kind"].startswith("validation_")]

@@ -151,6 +151,17 @@ async def test_silent_specialist_is_false_negative_not_success(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_scripted_evaluator_inspects_every_assigned_file_before_completion(tmp_path):
+    from tests.evaluation_provider import EvaluationProvider
+    case = next(case for case in api('load_corpus')() if len(case['files']) > 1)
+    result = await api('run_case')(case, tmp_path, mode='full',
+        provider=EvaluationProvider(api('review_input')(case)), live=False)
+    assert result['metrics']['inspected_source_fraction'] == 1
+    # This deliberately narrow reviewer still misses the assertion-family defect.
+    assert result['failure_categories'] == ['model_reasoning']
+
+
+@pytest.mark.asyncio
 async def test_cost_guard_rejects_before_provider_call_and_keeps_unknown_charge():
     from devwatch.providers.base import LLMRequest
     class Provider:

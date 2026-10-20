@@ -26,8 +26,14 @@ class EvaluationProvider:
                                   "focus": self.public["contract"]} for role in roles],
                 "review_strategy": "Scripted harness coverage", "coverage_expectations": files}}
         elif role != "synthesizer_verifier":
-            if not private["evidence_refs"]:
-                action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": files[0]}}
+            delivered_sources = {page.get('source_file') for page in context['evidence'] if page['next_offset'] is None}
+            missing = sorted(set(state['investigation']['remaining_files']) - delivered_sources)
+            pending = next((page for page in context['evidence'] if page['next_offset'] is not None), None)
+            if pending:
+                action = {'kind': 'call_tool', 'tool': 'read_evidence', 'arguments': {
+                    'evidence_ref': pending['evidence_ref'], 'offset': pending['next_offset']}}
+            elif missing:
+                action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": missing[0]}}
             else:
                 candidates = []
                 delivered = " ".join(page["excerpt"] for page in context["evidence"])

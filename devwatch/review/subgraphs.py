@@ -23,7 +23,7 @@ from devwatch.review.budgets import BudgetExceeded, BudgetManager
 from devwatch.review.jobs import UnknownToolCompletion, safe_stop_reason
 from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, CommandArguments, describe_tool
 from devwatch.review.tool_errors import ToolFailure, diagnose, failure_identity, safe_arguments
-from devwatch.review import investigation
+from devwatch.review import investigation, tool_selection, prompts
 from devwatch.review.contracts import (
     AGENT_CONTRACTS, SPECIALISTS, AgentAction, AgentId, AgentPrivateState, AgentWorkItem,
     ContractModel, EvidenceProgress, ModelTier, ReviewPlan, ReviewTask, SpecialistResult, TokenUsage,
@@ -63,17 +63,20 @@ class PermissionedTools:
     def __init__(self):
         self._handlers: dict[str, ToolHandler] = {}
         self._arguments = dict(TOOL_ARGUMENTS)
+        self._availability = {}
         self._measurement_tasks: set[str] = set()
         self.validate_confirmation = None
         self.validate_candidate = None
 
-    def register(self, name: str, handler: ToolHandler, *, arguments_model=None) -> None:
+    def register(self, name: str, handler: ToolHandler, *, arguments_model=None, available=None) -> None:
         known = set().union(*(contract.allowed_tools for contract in AGENT_CONTRACTS.values())) | {"write_artifact"}
         if name not in known or name in self._handlers:
             raise ValueError("unknown or already registered tool")
         self._handlers[name] = handler
         if arguments_model is not None:
             self._arguments[name] = arguments_model
+        if available is not None:
+            self._availability[name] = available
 
     def catalogue(self, task) -> list[dict[str, Any]]:
         contract = AGENT_CONTRACTS[task.agent_id]
@@ -81,6 +84,17 @@ class PermissionedTools:
         if task.agent_id == AgentId.PERFORMANCE_SCALABILITY and task.task_id in self._measurement_tasks:
             allowed.add("write_artifact")
         return [describe_tool(name, self._arguments[name]) for name in sorted(allowed & self._handlers.keys())]
+
+    def for_model(self, state, context):
+        catalogue=self.catalogue(state['task'])
+        available=[tool for tool in catalogue if tool['name'] not in self._availability
+                   or self._availability[tool['name']](state['task'])]
+        stage,selected=tool_selection.select(available,state,context)
+        def size(tools):
+            return len(json.dumps(tools,ensure_ascii=False,allow_nan=False,separators=(',',':')).encode('utf-8'))
+        return selected,dict(stage=stage,selected_names=[tool['name'] for tool in selected],
+            role_tool_count=len(catalogue),selected_tool_count=len(selected),
+            role_catalogue_bytes=size(catalogue),selected_catalogue_bytes=size(selected))
 
     def grant_measurement_artifact(self, task: ReviewTask) -> None:
         # Operator/runtime API, never exposed as an agent action or planner field.
@@ -127,6 +141,9 @@ class AgentExecutionState(TypedDict, total=False):
     model_call_id: str
     provider_observation: dict[str, Any]
     provider_observations: list[dict[str, Any]]
+    tool_selection: dict[str, Any]
+    tool_selections: list[dict[str, Any]]
+    prompt_revision: dict[str, Any]
 
 
 class ModelRouter:
@@ -232,6 +249,11 @@ class AgentSubgraphs:
         task = state["task"]
         action = AgentAction.model_validate_json(raw)
         private = state["private_state"]
+        if action.kind in {'call_tool','request_context'} and state.get('tool_selections'):
+            name=action.tool or 'read_source'
+            selection=state['tool_selections'][-1]
+            selection.update(proposed_tool=name if name in TOOL_ARGUMENTS else 'unrecognized_tool',
+                             advertised=name in selection['selected_names'])
         for identity in action.inspected_evidence:
             receipt = private.evidence_progress.get(identity)
             if receipt is None or not receipt.delivered:
@@ -354,9 +376,16 @@ class AgentSubgraphs:
                         "assembly": "Return decisions only for the current candidates batch."}
         if large_synthesis:
             verified = {"decision_count": len(state["verification"].decisions), "assembly": "Runtime retains all recorded decisions and findings; return SynthesisSummary only."}
+        catalogue,selection=self.tools.for_model(state,selected_context)
+        state['tool_selection']=selection
+        skills,revision=prompts.guidance(task.agent_id.value,contract.system_prompt,
+                                        state.get('phase','investigation'),selected_context)
+        state['prompt_revision']=revision
         body = {
+            'prompt_revision':revision,
+            'policy_skills':skills,
             "task": task.model_dump(mode="json"),
-            "tool_catalogue": self.tools.catalogue(task),
+            "tool_catalogue": catalogue,
             "private_state": compact,
             "selected_context": selected_context,
             "action_schema": AgentAction.model_json_schema(),
@@ -375,6 +404,9 @@ class AgentSubgraphs:
             actions.discard("submit_synthesis")
         elif state.get("phase") == "synthesis":
             actions.difference_update({"submit_verification", "request_followup"})
+        if not catalogue:
+            actions.difference_update({'call_tool','request_context'})
+        body['action_schema']['properties']['tool']['enum']=[None,*selection['selected_names']]
         body["action_schema"]["properties"]["kind"]["enum"] = sorted(actions)
         # Bound the complete serialized request, keeping schemas, permissions and
         # individual candidate claims intact. Optional context can be retrieved.
@@ -438,6 +470,10 @@ class AgentSubgraphs:
         reserved = len(prompt.encode("utf-8")) + len(contract.system_prompt.encode("utf-8")) + 512 + max_output
         async with self.model_slots:
             ticket = self.budget.reserve_model(task.agent_id, reserved)
+            observation_limit = ((self.budget.limits.iterations_per_task + self.budget.limits.schema_repairs_per_task)
+                                 * (1 + self.budget.limits.transient_retries))
+            state['tool_selections']=(state.get('tool_selections',[])+[
+                {**state['tool_selection'],'operation_id':ticket}])[-observation_limit:]
             await self._save(state)
             state["model_call_id"] = ticket
             started = time.monotonic()
@@ -471,11 +507,10 @@ class AgentSubgraphs:
             finally:
                 self.budget.refresh_time()
             reported = response.usage
-            state["provider_observation"] = self._provider_observation(response, max_output)
+            state["provider_observation"] = {**self._provider_observation(response, max_output),
+                                             'prompt_revision':state['prompt_revision']}
             observations = state.get("provider_observations", []) + [
                 {**state["provider_observation"], "operation_id": ticket}]
-            observation_limit = ((self.budget.limits.iterations_per_task + self.budget.limits.schema_repairs_per_task)
-                                 * (1 + self.budget.limits.transient_retries))
             state["provider_observations"] = observations[-observation_limit:]
             prompt_tokens, completion_tokens = reported.prompt_tokens, reported.completion_tokens
             split_total = prompt_tokens + completion_tokens
@@ -585,6 +620,8 @@ class AgentSubgraphs:
                     except BudgetExceeded:
                         if isinstance(exc, investigation.EvidenceInspectionRequired):
                             private.quarantined_candidates.extend(item for item in exc.rejections if item not in private.quarantined_candidates)
+                            await self._event("candidate_rejected", state, count=len(exc.rejections),
+                                              error_code="invalid_schema", stop_reason="evidence_incomplete", outcome="failed")
                             return self._stop(state, "evidence_incomplete", explanation=str(exc))
                         return self._stop(state, "invalid_schema")
                     repair = True
@@ -820,6 +857,7 @@ class AgentSubgraphs:
             state["last_tool_error"] = restored_state.get("last_tool_error")
             state["validation_error"] = restored_state.get("validation_error", "")
             state["provider_observations"] = restored_state.get("provider_observations", [])
+            state['tool_selections']=restored_state.get('tool_selections',[])
         # Ambient SDK settings must not export graph state, prompts or source.
         # Optional observability uses a separate metadata-only integration.
         return await self._invoke(self.graphs[task.agent_id], state)
@@ -860,6 +898,7 @@ class AgentSubgraphs:
             state["last_tool_error"] = restored_state.get("last_tool_error")
             state["validation_error"] = restored_state.get("validation_error", "")
             state["provider_observations"] = restored_state.get("provider_observations", [])
+            state['tool_selections']=restored_state.get('tool_selections',[])
         return await self._invoke(self.control_graph, state)
 
     def _restored_retry(self, restored, private):

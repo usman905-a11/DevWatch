@@ -33,7 +33,7 @@ def test_recoverable_tool_failure_reaches_next_prompt_without_raw_details(error)
         engine = AgentSubgraphs(provider, tools, BudgetManager(), lambda state: {}, models=MODELS,
                                 persist=lambda state, ledger: saved.append(_serializable(state)))
         output = await engine.run_specialist(task())
-        assert output["output"].stop_reason == "evidence_complete"
+        assert output["output"].stop_reason == "evidence_incomplete"
         feedback = json.loads(provider.requests[1].prompt).get("last_tool_error")
         assert feedback == {"tool": "parse_ast", "code": "recoverable_tool_error"}
         assert saved[-1]["last_tool_error"] == feedback
@@ -55,7 +55,7 @@ def test_invalid_tool_arguments_can_be_corrected_without_executing_them():
             {"kind": "submit_candidates", "payload": result()},
         ])
         output = await AgentSubgraphs(provider, tools, BudgetManager(), lambda state: {}, models=MODELS).run_specialist(task())
-        assert output["output"].stop_reason == "evidence_complete"
+        assert output["output"].stop_reason == "evidence_incomplete"
         assert calls == [{"file_path": "service.py"}]
         assert json.loads(provider.requests[1].prompt).get("last_tool_error") == {
             "tool": "read_source", "code": "recoverable_tool_error"}
@@ -124,8 +124,11 @@ def test_successful_resume_removes_only_the_resolved_cancellation_marker(role):
             "kind": "submit_plan", "payload": plan_payload()}
         resumed = AgentSubgraphs(ScriptedProvider([action]), PermissionedTools(), budget, lambda state: {}, models=MODELS)
         output = await run(resumed, private_state=private, restored_state=checkpoint)
-        assert output["private_state"].stop_reason == "evidence_complete"
-        assert output["private_state"].coverage.failed == {"other-task": "invalid_evidence"}
+        assert output["private_state"].stop_reason == ("evidence_incomplete" if role == "specialist" else "evidence_complete")
+        expected_failures = {"other-task": "invalid_evidence"}
+        if role == "specialist":
+            expected_failures[identity] = "evidence_incomplete"
+        assert output["private_state"].coverage.failed == expected_failures
         assert budget.ledger.task_iterations[identity] == 2
         assert not budget.ledger.inflight
     asyncio.run(scenario())
@@ -312,7 +315,7 @@ def test_recoverable_tool_feedback_survives_explicit_resume():
         resumed = AgentSubgraphs(second, tools, budget, lambda state: {}, models=MODELS)
         output = await resumed.run_specialist(task(), private_state=AgentPrivateState.model_validate(saved[-1]["private_state"]),
                                               restored_state=saved[-1])
-        assert output["output"].stop_reason == "evidence_complete"
+        assert output["output"].stop_reason == "evidence_incomplete"
         assert json.loads(second.requests[0].prompt)["last_tool_error"] == {"tool": "parse_ast", "code": "recoverable_tool_error"}
         assert budget.ledger.task_tools == {"t1": 1}
         assert budget.ledger.task_iterations == {"t1": 3}

@@ -58,7 +58,7 @@ async def test_query_correction_keeps_sql_and_bindings_out_of_feedback_and_check
     feedback = json.loads(provider.requests[1].prompt)["tool_diagnostic"]
     assert feedback["code"] == "invalid_query" and feedback["recoverable"]
     assert feedback["arguments"] == {"database_id": "[redacted]", "query": "[redacted]", "parameters": "[redacted]"}
-    assert result["output"].stop_reason == "evidence_complete"
+    assert result["output"].stop_reason == "evidence_incomplete"
     assert result["private_state"].tool_call_count == 2
     assert len(result["private_state"].evidence_refs) == 1
     assert "private_missing_table" not in json.dumps(saved) and "private-binding" not in json.dumps(saved)

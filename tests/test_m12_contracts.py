@@ -64,18 +64,19 @@ async def test_legacy_narrative_stop_preserves_candidates_as_invalid_completion(
     legacy = SpecialistResult.model_validate(payload)
     assert legacy.stop_reason == "invalid_schema"
     assert legacy.stop_explanation == narrative
-    provider = ScriptedProvider([{"kind": "submit_candidates", "payload": payload}])
+    provider = ScriptedProvider([{"kind": "submit_candidates", "payload": payload, 'inspected_evidence': [ref]}])
     events = []
     state = await AgentSubgraphs(provider, repo.tools(), BudgetManager(), repo.context,
-        models=MODELS, emit=lambda kind, **data: events.append((kind, data))).run_specialist(task)
+        models=MODELS, emit=lambda kind, **data: events.append((kind, data))).run_specialist(
+            task, private_state=AgentPrivateState(evidence_refs=[ref]))
     output = state["output"]
     assert output.stop_reason == "invalid_schema"
     assert output.stop_explanation == narrative
     assert len(output.candidates) == 1
     assert len(output.quarantined) == 1
     assert output.coverage.failed[task.task_id] == "invalid_schema"
-    assert output.coverage.inspected_files == []
-    assert output.coverage.skipped["service.py"] == "not_inspected"
+    assert output.coverage.inspected_files == ['service.py']
+    assert output.coverage.skipped == {}
     board = SharedBlackboard(StructuralEvidenceGate(repo))
     board.publish(task, output)
     assert len(board.candidates) == 1

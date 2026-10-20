@@ -163,10 +163,20 @@ class RepositoryContext:
         work, private, action = state["task"], state["private_state"], state.get("action")
         if action is not None and action.kind == "request_context":
             return self._read_source(action.arguments, work)
+        pages = [self.evidence_page(identity, work, offset=private.evidence_cursors.get(identity, 0),
+                                   max_chars=private.evidence_page_sizes.get(identity, 1500))
+                 for identity in reversed(list(dict.fromkeys(work.evidence_refs + private.evidence_refs)))]
+        def priority(page):
+            identity = page['evidence_ref']
+            receipt = private.evidence_progress.get(identity)
+            complete = receipt is not None and receipt.fully_inspected()
+            pending = (private.evidence_refs and identity == private.evidence_refs[-1] and receipt is not None
+                       and receipt.processed and (page['offset'], page['end_offset']) not in receipt.delivered)
+            return (not pending, not (page['offset'] > 0 and not complete), identity not in work.evidence_refs,
+                    complete, page.get('source_file') is None)
+        pages.sort(key=priority)  # Stable ties preserve most-recent-first ordering.
         records, used, omitted = [], 0, 0
-        for identity in reversed(list(dict.fromkeys(work.evidence_refs + private.evidence_refs))):
-            record = self.evidence_page(identity, work, offset=private.evidence_cursors.get(identity, 0),
-                                        max_chars=private.evidence_page_sizes.get(identity, 1500))
+        for record in pages:
             size = len(_json(record).encode("utf-8"))
             if used + size > self.CONTEXT_BYTES:
                 omitted += 1
@@ -302,17 +312,23 @@ class RepositoryContext:
             async def command(name, arguments, work):
                 from devwatch.review.contracts import AgentAction
                 return await command_runtime.execute(work, AgentAction(kind="call_tool", tool=name, arguments=arguments))
+            def command_available(name, work):
+                return any(definition.tool == name and set(definition.files).issubset(work.files)
+                           for definition in command_runtime.commands.values())
             for name in COMMAND_TOOLS:
                 if database_runtime is None or name not in {"db_analyze", "query_analyze"}:
-                    tools.register(name, partial(command, name))
-            tools.register("write_artifact", command_runtime.write_measurement)
+                    tools.register(name, partial(command, name), available=partial(command_available, name))
+            tools.register("write_artifact", command_runtime.write_measurement, available=command_runtime.grants_measurement)
         if database_runtime is not None:
             from devwatch.review.tool_catalogue import DatabaseArguments, QueryArguments
             async def database(name, arguments, work):
                 from devwatch.review.contracts import AgentAction
                 return await database_runtime.execute(work, AgentAction(kind="call_tool", tool=name, arguments=arguments))
+            def database_available(work):
+                return any(database_runtime.job.owner in policy.owners for policy in database_runtime.policies.values())
             for name in ("db_analyze", "query_analyze"):
-                tools.register(name, partial(database, name), arguments_model=DatabaseArguments if name == "db_analyze" else QueryArguments)
+                tools.register(name, partial(database, name), available=database_available,
+                               arguments_model=DatabaseArguments if name == "db_analyze" else QueryArguments)
         return tools
 
 

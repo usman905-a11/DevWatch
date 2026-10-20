@@ -1,5 +1,67 @@
 # Execution ledger — plan: tasks/seven-agent-design.md
 
+M18 Prompt and Context Engineering (2026-10-20), COMPLETE for engineering and
+scoped verification: versioned compact shared/seven role policies, conditional
+guidance and private provider revision metadata are implemented. Context prefers
+pending tool delivery, continuation pages, candidate refs and uninspected source
+without fabricating inspection or weakening scope. Final revision v2.3/context v2.
+Backend 571 passed (14 new cases); matrix 24/24 complete without failed coverage.
+All 155 frozen files match. Final five live reviews have complete source/goal
+coverage, no failed coverage and 4 TP/0 FP/0 FN; performance clean control passes.
+Final sample uses 22.86% fewer input tokens and 26.77% less known generation cost
+than retained M17 controls; different step counts limit causal/general claims.
+Two of four final findings contain unsupported secondary input-domain clauses;
+broader semantic non-regression is not established. All 26 attempts retained:
+raw 18 TP/0 FP/2 FN; 23 complete source/goal reviews without failed coverage.
+177 known stop responses and one HTTP 503; its US$0.04114425 unknown reservation
+remains charged. M18 total US$0.55952325, cumulative US$2.12967300 of US$4,
+remaining shared budget US$1.87032700. No commit/push/deployment or M19/M20 work.
+Report: [m18-prompt-context-report.md](m18-prompt-context-report.md).
+
+M17 Dynamic Tool Selection (2026-10-20), COMPLETE for mechanism and scoped
+verification: stage/source filtering,
+trusted capability availability and bounded private per-call measurements are
+implemented. Execution permissions remain canonical. Fourteen new tests include
+actual SDK serialization, restart, owner/scope/grant revocation and verifier
+paging. Final focused gate: 33 passed. Inventory: all 24 tools; specialist first
+calls reduce catalogue bytes by 59.18-78.27%. Backend: 557 passed, zero failures/
+errors/skips, 950.87s. Matrix 24/24 complete, no failed coverage; narrow programmed
+full score unchanged at 1 TP / 0 FP / 5 FN. Initial approved-fixture live A/B:
+both arms 4 TP / 0 FP / 0 FN, no duplicates and complete source/goal coverage.
+Catalogue text tokens fall 29.58% across actual calls; generation cost rises
+5.95% with more model steps (34 versus 39). Three secondary semantic clauses
+remain flagged; broader semantic non-regression is not established. All attempts
+retained: 13 reviews, 12 complete source/goal reviews, raw 10 TP / 0 FP / 1 FN.
+The miss is a local pre-dispatch reservation refusal; fresh dynamic SQL recheck
+passes with narrower impact. All 91 API responses stop; 17 schema counts succeed,
+zero unknown consumption. All 151 source/fixture hashes remain frozen. New
+conservative charges US$0.33330675; cumulative US$1.57014975 of US$4, remaining
+US$2.42985025. No production/prompt change during live checks, later milestone
+or shipping action. Standing requirement: live-test each completed milestone.
+Report: [m17-dynamic-tool-selection-report.md](m17-dynamic-tool-selection-report.md).
+
+M16 Specialist Reasoning Loop Reliability (2026-10-19): private goals/required
+source, source-backed candidate admission, retained valid siblings and durable
+successful-request progress checks are implemented. Missing source requirements
+report evidence_incomplete; acknowledged repeats or consecutive stagnant reads
+report no_progress before another effect. Actual source pages alone contribute
+source coverage. Existing budgets, permissions and seven identities remain.
+Focused gate: 17 passed, including three actual SDK-to-report scenarios. Frontend:
+50 passed; build and generated-contract checks pass. COMPLETE: full backend 543
+passed (17 added cases), zero failures/errors/skips, 724.73s. Matrix 24/24 complete
+without failed coverage; programmed full-system score remains 1 TP / 0 FP / 5 FN.
+All 147 frozen source/fixture hashes match. Initial engineering used no paid calls.
+Requested live follow-up: four controls pass; 11/12 full attempts have complete
+source/goal coverage without failed coverage. One initial post-response local
+failure is retained; a Windows journal hazard is reproduced and two targeted
+assertion rechecks pass after local writer hardening. Original error attribution
+remains inferred. All 89 API responses stop with no unknown consumption/refusal.
+Raw full core score: 9 TP / 0 FP / 1 FN, retaining the unavailable attempt as a miss.
+Three secondary semantic clauses remain unsupported. New estimated cost:
+US$0.28089150; cumulative US$1.23684300 of expanded US$2 cap. No production changes
+or later milestone work during live follow-up.
+Report: [m16-investigation-reliability-report.md](m16-investigation-reliability-report.md).
+
 M15 Tool Infrastructure Reliability implementation (2026-10-19): source/evidence
 bounds, redacted private diagnostics, persistent duplicate-failure suppression,
 strict assigned-path/finite argument admission and all 24 tool descriptions are

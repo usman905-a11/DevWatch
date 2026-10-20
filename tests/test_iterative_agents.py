@@ -57,7 +57,9 @@ def test_specialist_investigates_with_tool_then_another_model_iteration():
         engine = api.AgentSubgraphs(provider, tools, budget, context,
                                     models={tier: tier.value + "-test" for tier in ModelTier})
         state = await engine.run_specialist(task())
-        assert state["output"].coverage.inspected_files == ["service.py"]
+        # Parsed facts support iteration, but cannot stand in for source inspection.
+        assert state["output"].coverage.inspected_files == []
+        assert state["output"].stop_reason == "evidence_incomplete"
         assert state["private_state"].evidence_refs == ["ev-ast"]
         assert state["private_state"].iteration_count == 2
         assert state["private_state"].tool_call_count == 1
@@ -169,7 +171,7 @@ def test_ambient_langsmith_tracing_cannot_export_review_data(monkeypatch):
                                     models={tier: tier.value for tier in ModelTier})
         with tracing_context(enabled=True, parent=False):
             state = await engine.run_specialist(task())
-        assert state["output"].stop_reason == "evidence_complete"
+        assert state["output"].stop_reason == "evidence_incomplete"
         assert json.loads(provider.requests[0].prompt)["selected_context"]["tracing_disabled"] is True
     asyncio.run(scenario())
 

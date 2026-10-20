@@ -81,11 +81,15 @@ async def test_unacknowledged_source_candidate_gets_one_repair_then_explicit_inc
     ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
     action=complete(task,[candidate(repo,ref)])
     provider=ScriptedProvider([action,action])
-    graph=engine(repo,provider)
+    events=[]
+    graph=engine(repo,provider,emit=lambda kind,**payload: events.append((kind,payload)))
     output=await graph.run_specialist(task,private_state=AgentPrivateState(evidence_refs=[ref]))
     assert output['output'].stop_reason=='evidence_incomplete'
     assert output['output'].candidates==[] and len(provider.requests)==2
     assert graph.budget.ledger.task_schema_repairs[task.task_id]==1
+    rejected=[payload for kind,payload in events if kind=='candidate_rejected']
+    assert len(rejected)==1 and rejected[0]['count']==1
+    assert not [kind for kind,_ in events if kind=='candidate_submitted']
 
 
 @pytest.mark.asyncio

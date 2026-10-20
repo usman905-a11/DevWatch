@@ -34,7 +34,10 @@ def test_catalogue_exposes_only_registered_role_tools_and_exact_arguments(tmp_pa
         else:
             await engine.run_specialist(work)
     asyncio.run(run())
-    assert json.loads(provider.requests[0].prompt)['tool_catalogue'] == catalogue
+    visible = json.loads(provider.requests[0].prompt)['tool_catalogue']
+    expected = ({'read_source'} if agent not in {AgentId.PLANNER, AgentId.SYNTHESIZER_VERIFIER}
+                else names - {'read_evidence'})
+    assert visible == [entry for entry in catalogue if entry['name'] in expected]
 
 
 @pytest.mark.parametrize('arguments', [

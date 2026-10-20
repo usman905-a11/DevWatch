@@ -35,7 +35,7 @@ def test_two_safe_retries_are_persisted_before_next_attempt(error):
         engine = AgentSubgraphs(provider, PermissionedTools(), budget, lambda state: {},
             models=MODELS, persist=persist, emit=lambda kind, **metadata: events.append((kind, metadata)))
         output = await engine.run_specialist(task())
-        assert output["output"].stop_reason == "evidence_complete"
+        assert output["output"].stop_reason == "evidence_incomplete"
         assert len(provider.requests) == 3
         assert budget.ledger.task_iterations == {"t1": 1}
         assert list(budget.ledger.operation_retries.values()) == [2]
@@ -144,7 +144,7 @@ def test_adapter_confirmed_rejections_remain_retryable(status):
         engine = AgentSubgraphs(provider, PermissionedTools(), budget, lambda state: {}, models=MODELS)
         output = await engine.run_specialist(task())
         assert len(provider.requests) == 2
-        assert output["output"].stop_reason == "evidence_complete"
+        assert output["output"].stop_reason == "evidence_incomplete"
     asyncio.run(scenario())
 
 
@@ -174,5 +174,5 @@ def test_retry_resume_preserves_schema_repair_phase():
         assert json.loads(second.requests[0].prompt)["repair"] is not None
         assert budget.ledger.task_schema_repairs == {"t1": 1}
         assert budget.ledger.task_iterations == {"t1": 1}
-        assert output["output"].stop_reason == "evidence_complete"
+        assert output["output"].stop_reason == "evidence_incomplete"
     asyncio.run(scenario())

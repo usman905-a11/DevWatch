@@ -28,9 +28,14 @@ def test_approved_command_is_available_inside_iterative_graph_and_accounted(tmp_
             elif role == "bug_reliability":
                 assert data["selected_context"]["approved_commands"][0]["command_id"] == "compile"
                 assert "argv" not in data["selected_context"]["approved_commands"][0]
-                action = ({"kind": "call_tool", "tool": "run_tests", "arguments": {"command_id": "compile"}}
-                    if not data["private_state"]["evidence_refs"] else {"kind": "submit_candidates", "payload": {
-                        "task_id": "bug-1", "agent_id": role, "candidates": [], "coverage": {}, "stop_reason": "evidence_complete"}})
+                refs = data['private_state']['evidence_refs']
+                if not refs:
+                    action = {"kind": "call_tool", "tool": "run_tests", "arguments": {"command_id": "compile"}}
+                elif len(refs) == 1:
+                    action = {'kind': 'call_tool', 'tool': 'read_source', 'arguments': {'file_path': 'service.py'}}
+                else:
+                    action = {"kind": "submit_candidates", "payload": {
+                        "task_id": "bug-1", "agent_id": role, "candidates": [], "coverage": {}, "stop_reason": "evidence_complete"}}
             else:
                 return await super().generate_completion(request)
             action["inspected_evidence"] = [page["evidence_ref"] for page in data["selected_context"].get("evidence", [])]
@@ -48,8 +53,8 @@ def test_approved_command_is_available_inside_iterative_graph_and_accounted(tmp_
             job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="command-graph")
             saved = await manager.wait(job.job_id, owner="alice")
             assert saved.status == "completed"
-            assert saved.ledger.task_tools["bug-1"] == 1
-            assert saved.ledger.task_iterations["bug-1"] == 2
+            assert saved.ledger.task_tools["bug-1"] == 2
+            assert saved.ledger.task_iterations["bug-1"] == 3
             report = json.loads(saved.result["json"])
             assert report["coverage"]["inspected_files"] == ["service.py"]
             assert not report["coverage"]["failed"]

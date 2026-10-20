@@ -65,10 +65,14 @@ class ContractProbeProvider:
                 "coverage_expectations": sorted(self.case["files"])}}
         elif role == "bug_reliability":
             by_tool = {record["tool"]: record for record in records}
+            sources = {record['file_path']: record for record in records if record['tool'] == 'read_source'}
+            unread_sources = sorted(set(task['files']) - sources.keys())
             if "parse_ast" not in by_tool:
                 action = {"kind": "call_tool", "tool": "parse_ast", "arguments": {"file_path": source}}
             elif "read_source" not in by_tool:
                 action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": source}}
+            elif unread_sources:
+                action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": unread_sources[0]}}
             elif "run_tests" not in by_tool:
                 action = {"kind": "call_tool", "tool": "run_tests", "arguments": {"command_id": "contract-probe"}}
             else:
@@ -81,7 +85,7 @@ class ContractProbeProvider:
                     candidates = [{"category": "bug", "title": "Executable behavior contract violated",
                         "description": self.case["contract"], "impact": "A supported input violates its explicit result or mutation contract.",
                         "confidence": .95, "location": {"snapshot_id": context["snapshot_id"], "file_path": source, "start_line": 2, "end_line": 2},
-                        "evidence_refs": [by_tool["read_source"]["evidence_ref"], by_tool["run_tests"]["evidence_ref"]]}]
+                        "evidence_refs": [sources[source]["evidence_ref"], by_tool["run_tests"]["evidence_ref"]]}]
                 action = {"kind": "submit_candidates", "payload": {"task_id": task["task_id"], "agent_id": role,
                     "candidates": candidates, "coverage": {}, "stop_reason": "evidence_complete"}}
         elif phase == "verification":

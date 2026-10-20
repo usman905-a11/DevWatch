@@ -4,7 +4,7 @@ Date: 2026-10-18. Baseline: M12 of the supplied Final Architecture and Reliabili
 Remediation Plan v2.0. This supplements [seven-agent-design.md](seven-agent-design.md)
 with the actual implementation map and the dependency-ordered M12–M23 work.
 It preserves the existing seven identities, transport and immutable-source design.
-The M13, M14 and M15 supplements below record subsequent changes; other later milestone
+The M13, M14, M15, M16, M17 and M18 supplements below record subsequent changes; other later milestone
 entries remain planned work, not claims of implementation.
 
 ## Installed implementation
@@ -386,3 +386,120 @@ duplicate suppression and integrity-stop controls pass. Five full fixture report
 complete after one query-only serial recheck; the initial reservation-limited query
 attempt remains recorded. Two secondary semantic claims remain overbroad. New cost
 US$0.18621000; cumulative US$0.95595150 of US$1. Broader live accuracy is unmeasured.
+
+## M16 specialist investigation supplement (2026-10-19)
+
+Specialists retain private goal, required-file, stage and bounded successful-action
+progress. The focused investigation module owns requirements, candidate retention
+and repeat detection; RepositoryContext validates source evidence. Source-file
+metadata comes only from actual read_source pages. Parser/search/graph scope no
+longer counts as source inspection. Each assigned file needs an acknowledged
+source artifact before evidence_complete; this is a minimum window requirement,
+not exhaustive line coverage. Missing requirements yield evidence_incomplete.
+
+New candidates require fully acknowledged immutable source covering their exact
+location. Existing response repair may guide retrieval/acknowledgment; valid
+siblings survive unsuccessful repair and later empty submissions. Terminal
+evidence rejection emits controlled metadata. Publication retains the existing
+invalid_evidence classification for quarantined candidates.
+
+Eight recent successful request identities and inspection-progress signatures
+survive restart/follow-up. An identical acknowledged artifact stops before another
+effect; two identical unacknowledged successes stop before a third effect. The
+controlled reason is no_progress, distinct from tool failure. Different requests
+and advancing offsets remain possible within unchanged cumulative budgets.
+Legacy private progress defaults to absent and initializes from the bound task;
+completed historical results are not retroactively re-reviewed.
+
+The two additive stop codes are generated into the frontend schema. No graph,
+framework, dependency, route or resource ceiling changes. SDK-to-report and
+frontend gates pass. COMPLETE for engineering/deterministic gates: 543 backend
+tests, 50 frontend tests/build, and 24/24 matrix runs without failed coverage.
+All 147 frozen source/fixture hashes match; scripted detection scores are unchanged.
+The requested live follow-up passes four runtime controls. Eleven of twelve full
+attempts have complete source/goal coverage without failure; one initial local
+post-response PermissionError remains recorded and two targeted rechecks pass.
+Windows journal write contention is reproduced and locally guarded; attribution
+of the original untraced exception remains inferred. All 89 API responses stop,
+with no unknown consumption/refusal. Three unsupported secondary semantic clauses
+remain despite correct core findings. New estimated cost US$0.28089150; cumulative
+US$1.23684300 of the expanded US$2 cap. No production changes during live follow-up.
+At M16 completion, M17/M18/M20 remained planned. Evidence and limits:
+[M16 report](m16-investigation-reliability-report.md).
+
+## M17 dynamic tool-selection supplement (2026-10-20)
+
+PermissionedTools.catalogue remains the complete registered-role inventory.
+for_model(state, context) returns a visible catalogue plus bounded measurement
+metadata. The separate tool_selection policy shows source retrieval before a
+specialist has trusted source, analysis after source is available, evidence
+paging when refs/pages exist, and no tools during synthesis. Candidate pages
+preserve paging access on the first verification call even without private refs.
+The custom JSON action schema binds its tool enum to the current visible names.
+
+Registration can supply a trusted availability callback. Repository bindings hide
+commands without scoped approved definitions, databases without owner grants and
+measurement serialization without its existing runtime/operator grants. These
+callbacks guide presentation; authorize/execute and the trusted runtime's command
+and grant methods are unchanged. Hidden but role-permitted actions still undergo
+normal execution enforcement and are counted as unadvertised. A non-measurement
+source record now rejects with PermissionError before nested measurement lookup.
+
+Private tool_selections checkpoints retain bounded stage/names/size/proposal
+metadata with existing history limits. They survive restart and do not enter
+prompts, public events or reports. No new framework, dependency, route or public
+wire contract. LangChain create_agent middleware is not compatible with this
+custom StateGraph loop; binding stays at the existing model-call seam.
+
+Engineering and scoped verification complete: backend 557 passed, 14 new cases;
+matrix 24/24 complete without failed coverage, programmed detection unchanged.
+Inventory covers 24 tools. Initial paired live reviews preserve 4 TP / 0 FP / 0 FN
+per arm, with full source/goal coverage. Summed standalone catalogue text tokens
+fall 29.58%, but generation cost rises 5.95% with 39 versus 34 model calls. Three
+secondary semantic clauses remain unsupported; broader semantic non-regression
+is not established. A fresh narrow SQL recheck passes after one retained local
+reservation-limited partial review. All 13 attempts remain: raw 10 TP / 0 FP /
+1 FN, 12 complete source/goal reviews, 91 known stop responses and 17 schema
+counts. No unknown API consumption. All 151 frozen source/fixture hashes match.
+
+New conservative M17 charges US$0.33330675; shared cumulative US$1.57014975 of
+US$4, leaving US$2.42985025. Live verification is required for subsequent
+completed milestones. M18 is next; M18/M20 and other later milestones are not
+implemented by this supplement. Evidence and limits:
+[M17 report](m17-dynamic-tool-selection-report.md).
+
+## M18 prompt/context supplement (2026-10-20)
+
+The pure prompts module owns compact common/seven role policies and curated
+completion, verification, synthesis and partial-evidence paging guidance. Stable
+system policy is separated from task/source data; unrelated phase/role guidance
+is absent. Explicit Planner consistency and candidate-field requirements remain
+after live compaction regressions. Version review-prompts-v2.3 and context version
+scoped-evidence-priority-v2 are recorded with a policy/guidance fingerprint in
+existing bounded private provider history. Finish/refusal/usage/reasoning counts
+are retained. No public wire schema, dependency or new agent framework changes.
+
+Repository context validates scoped immutable pages, prioritizing new undelivered
+tool pages, incomplete continuation offsets, active candidate refs and uninspected
+source before inspected/ancillary pages. Stable ties preserve recency. Selection
+cannot fabricate inspection, alter offsets or expand scope; existing budgets and
+authorization/evidence gates remain. Fingerprints exclude task/source data and
+do not establish exhaustive observation of unknown provider requests.
+
+M18 Prompt and Context Engineering (2026-10-20), COMPLETE for engineering and
+scoped verification: versioned compact shared/seven role policies, conditional
+guidance and private provider revision metadata are implemented. Context prefers
+pending tool delivery, continuation pages, candidate refs and uninspected source
+without fabricating inspection or weakening scope. Final revision v2.3/context v2.
+Backend 571 passed (14 new cases); matrix 24/24 complete without failed coverage.
+All 155 frozen files match. Final five live reviews have complete source/goal
+coverage, no failed coverage and 4 TP/0 FP/0 FN; performance clean control passes.
+Final sample uses 22.86% fewer input tokens and 26.77% less known generation cost
+than retained M17 controls; different step counts limit causal/general claims.
+Two of four final findings contain unsupported secondary input-domain clauses;
+broader semantic non-regression is not established. All 26 attempts retained:
+raw 18 TP/0 FP/2 FN; 23 complete source/goal reviews without failed coverage.
+177 known stop responses and one HTTP 503; its US$0.04114425 unknown reservation
+remains charged. M18 total US$0.55952325, cumulative US$2.12967300 of US$4,
+remaining shared budget US$1.87032700. No commit/push/deployment or M19/M20 work.
+Report: [m18-prompt-context-report.md](m18-prompt-context-report.md).

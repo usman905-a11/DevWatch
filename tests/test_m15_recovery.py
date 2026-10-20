@@ -31,7 +31,8 @@ def engine(repo, provider, *, budget=None, persist=None, emit=None):
 @pytest.mark.asyncio
 async def test_range_feedback_guides_correction_and_clears_only_active_error(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    provider = ScriptedProvider([read(), read(1), complete(task)])
+    ref = repo._read_source({'file_path': 'service.py'}, task).evidence_ref
+    provider = ScriptedProvider([read(), read(1), {**complete(task), 'inspected_evidence': [ref]}])
     output = await engine(repo, provider).run_specialist(task)
     feedback = json.loads(provider.requests[1].prompt).get("tool_diagnostic")
     assert feedback is not None, "range error has no actionable structured feedback"
@@ -153,13 +154,18 @@ async def test_page_that_cannot_fit_is_never_marked_delivered_or_inspected(tmp_p
     # Fit mandatory schemas and a small response, but not the actual 1,500-char
     # page. Compute the budget from this role's real schema instead of a magic
     # model-context number that could fail at Planner admission first.
-    context = {"snapshot_id": snapshot.snapshot_id, "scope": task.files, "evidence": []}
-    prompt, _ = graph._prepare_prompt({"task": task, "private_state": private}, context, repair=False)
+    # Source pages make the analysis catalogue relevant. Size that real request
+    # with its page removed, so the bound still isolates page delivery itself.
+    state = {"task": task, "private_state": private}
+    prompt, _ = graph._prepare_prompt(state, repo.context(state), repair=False)
+    body = json.loads(prompt)
+    body["selected_context"] = {"snapshot_id": snapshot.snapshot_id, "scope": task.files, "evidence": []}
+    prompt = json.dumps(body, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
     mandatory = len(prompt.encode()) + len(AGENT_CONTRACTS[task.agent_id].system_prompt.encode()) + 512
     graph.budget = BudgetManager(limits=BalancedLimits(model_context_tokens=mandatory + 700))
     private.iteration_count = 0
     result = await graph.run_specialist(task, private_state=private)
-    assert result["output"].stop_reason == "evidence_complete"
+    assert result["output"].stop_reason == "evidence_incomplete"
     request = provider.requests[0]
     body = json.loads(request.prompt)
     assert "evidence_page; retrieve via read_evidence" in body["context_omissions"]
