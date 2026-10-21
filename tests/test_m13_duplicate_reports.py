@@ -103,9 +103,11 @@ async def test_full_graph_preserves_duplicates_through_normal_and_partial_accept
     assert done.status == "completed" and not done.ledger.inflight
     report = json.loads(done.result["json"])
     assert len(report["uncertain_high_impact_candidates"]) == 1
-    assert bool(report["coverage"]["failed"]) == (mode != "normal")
+    assert bool(report["coverage"]["failed"]) == (mode == "inconsistent_draft")
     if mode == "synthesis_failure":
-        assert report["coverage"]["failed"]["__final"] == "invalid_schema"
+        # The malicious optional summary is never requested; both reviewed
+        # contributors and their verified merge still survive.
+        assert len(report['verification_audit']['decisions']) == 2
     elif mode == "inconsistent_draft":
         assert report["coverage"]["failed"] == {"earlier_task": "specialist_failed", "__final": "final_consistency_failure"}
         assert report["uncertain_high_impact_candidates"][0]["title"] == "Empty input raises"

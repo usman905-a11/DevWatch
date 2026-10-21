@@ -167,7 +167,7 @@ def test_final_iteration_exhaustion_returns_a_partial_uncertain_report(tmp_path)
         layout, artifacts, snapshot, jobs, events = stores(tmp_path)
         from devwatch.review.budgets import BudgetLedger
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="partial")
-        jobs.update_ledger(job.job_id, owner="alice", ledger=BudgetLedger(task_iterations={"__final": 7}))
+        jobs.update_ledger(job.job_id, owner="alice", ledger=BudgetLedger(task_iterations={"__final": 8}))
         provider = ReviewProvider()
         manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, provider))
         await manager.start()

@@ -45,8 +45,8 @@ async def test_real_role_requests_are_compact_versioned_and_checkpointed(tmp_pat
         assert list(body['policy_skills'])==expected
         assert revision['skills']==expected
     if role==AgentId.SYNTHESIZER_VERIFIER:
-        assert provider.requests[0].system_prompt==provider.requests[1].system_prompt
-        assert bodies[0]['prompt_revision']['policy_sha256']!=bodies[1]['prompt_revision']['policy_sha256']
+        assert len(provider.requests)==1
+        assert state['output'] is not None
 
 
 @pytest.mark.asyncio

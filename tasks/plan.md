@@ -1,5 +1,14 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: M21 Token, Cost, and Latency Optimization (2026-10-21)
+
+Execute [the M21 plan](m21-cost-latency-plan.md): remove redundant summary
+generation without losing verifier evidence, persist accurate work accounting,
+reduce measured prompt overhead, then compare completed reviews and live gates.
+Baseline is clean `a24ce50`. Shared remaining US$0.52963600; reserve at most
+US$0.40 for M21 within that total. Existing M20 limits and historical receipts
+remain intact. No M22, commit, push or deployment work.
+
 ## Current request: M20 Synthesizer/Verifier Correctness (2026-10-21)
 
 Implement [the M20 plan](m20-verifier-correctness-plan.md) in ordered test-first

@@ -507,6 +507,7 @@ def test_interrupted_graph_resumes_after_offline_cleanup(tmp_path):
     from devwatch.review.contracts import ModelTier
     from devwatch.review.workflow import CanonicalReviewExecutor
     from tests.test_canonical_workflow import ReviewProvider, stores
+    from tests.assembly_fixtures import held_assembly
 
     async def scenario():
         layout, artifacts, snapshot, jobs, events = stores(tmp_path)
@@ -520,11 +521,13 @@ def test_interrupted_graph_resumes_after_offline_cleanup(tmp_path):
                 return await super().generate_completion(request)
 
         models = {tier: tier.value for tier in ModelTier}
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events, Paused(), models=models)
+        first = Paused()
+        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events, first, models=models)
         manager = DurableJobManager(jobs, events, executor)
-        record = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="recover")
-        await asyncio.wait_for(entered.wait(), timeout=10)
-        await manager.close()
+        with held_assembly(first, entered):
+            record = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="recover")
+            await asyncio.wait_for(entered.wait(), timeout=10)
+            await manager.close()
         interrupted = jobs.get(record.job_id, owner="alice")
         assert interrupted.status == "interrupted"
         now = time.time()
@@ -540,8 +543,8 @@ def test_interrupted_graph_resumes_after_offline_cleanup(tmp_path):
             await resumed.resume(record.job_id, owner="alice")
             completed = await resumed.wait(record.job_id, owner="alice")
             assert completed.status == "completed"
-            assert [json.loads(request.prompt)["phase"] for request in provider.requests] == ["synthesis"]
-            assert completed.ledger.total_tokens == interrupted.ledger.total_tokens + 15
+            assert provider.requests == []
+            assert completed.ledger.total_tokens == interrupted.ledger.total_tokens
         finally:
             await resumed.close()
     asyncio.run(scenario())

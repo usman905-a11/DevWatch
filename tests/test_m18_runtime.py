@@ -48,16 +48,15 @@ async def test_sdk_phase_guidance_preserves_accepted_report_and_private_metadata
     assert done.status=='completed' and not done.ledger.inflight
     assert not report['coverage']['failed'] and report['coverage']['inspected_files']==['service.py']
     assert len(report['uncertain_high_impact_candidates'])==1
-    assert list(prompts[-2]['policy_skills'])==['verification']
-    assert list(prompts[-1]['policy_skills'])==['synthesis']
-    assert len(prompts)==5 and done.ledger.total_tokens==90
+    assert list(prompts[-1]['policy_skills'])==['verification']
+    assert len(prompts)==4 and done.ledger.total_tokens==72
     assert 'policy_sha256' not in done.result['json']
     from contextlib import closing
     import sqlite3
     with closing(sqlite3.connect(layout.checkpoints)) as db:
         states=[json.loads(row[0]) for row in db.execute('SELECT state FROM agent_progress')]
     observations=[item for state in states for item in state['provider_observations']]
-    assert len(observations)==5
+    assert len(observations)==4
     assert all(item['reported_reasoning_tokens']==3 and item['reported_total_tokens']==18
         and item['finish_reason']=='stop' and item['prompt_revision']['version'] for item in observations)
     jobs.dispatch_events(events)

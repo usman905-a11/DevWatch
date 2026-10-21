@@ -136,5 +136,5 @@ async def test_full_graph_preserves_findings_through_completion_and_verification
     assert report["coverage"]["failed"] == ({"logic-1": "invalid_schema"} if legacy else {})
     assert report["coverage"]["inspected_files"] == ["service.py"]
     assert provider.phase_counts["synthesizer_verifier:verification"] == 1
-    assert provider.phase_counts["synthesizer_verifier:synthesis"] == 1
-    assert finished.ledger.total_tokens == 75
+    assert provider.phase_counts.get("synthesizer_verifier:synthesis", 0) == 0
+    assert finished.ledger.total_tokens == 60

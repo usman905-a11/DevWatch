@@ -61,4 +61,4 @@ async def test_filtered_catalogues_cross_sdk_and_keep_source_backed_report(tmp_p
     assert report['coverage']['inspected_files']==['service.py']
     assert not report['coverage']['failed']
     assert len(report['uncertain_high_impact_candidates'])==1
-    assert len(prompts)==5 and all(client.is_closed for client in clients)
+    assert len(prompts)==4 and all(client.is_closed for client in clients)

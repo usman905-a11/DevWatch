@@ -168,7 +168,7 @@ def test_full_timeline_tracks_publication_verification_and_final_acceptance(tmp_
         events = client.get(f"/api/jobs/{identity}/events?limit=1000", headers=ALICE).json()["events"]
         kinds = [e["kind"] for e in events]
         assert kinds.count("agent_started") == kinds.count("agent_completed") == 3
-        assert kinds.count("model_call_started") == kinds.count("model_call_completed") == (6 if invalid else 5)
+        assert kinds.count("model_call_started") == kinds.count("model_call_completed") == (5 if invalid else 4)
         assert ("candidate_submitted" in kinds) is (not invalid)
         assert "verification_completed" in kinds
         assert kinds.count("finding_created") == (0 if invalid else 1)
@@ -423,5 +423,5 @@ def test_visible_model_completion_already_has_durable_cost_settlement(tmp_path, 
     with TestClient(app(tmp_path)) as client:
         identity, _ = submit(client)
         assert completed(client, identity)["status"] == "completed"
-    assert len(observed) == 5
+    assert len(observed) == 4
     assert all(not pending and charged >= consumed for pending, charged, consumed in observed)

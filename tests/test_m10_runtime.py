@@ -40,15 +40,15 @@ def test_normal_seven_agent_review_captures_source_and_publishes_verified_format
         assert roles == set(FILES) | {"planner", "synthesizer_verifier"}
         kinds = [event["kind"] for event in events]
         assert kinds.index("finding_created") < kinds.index("verification_completed") < kinds.index("report_render_started") < kinds.index("job_completed")
-        assert done.ledger.total_tokens == 225 and not done.ledger.inflight
+        assert done.ledger.total_tokens == 210 and not done.ledger.inflight
         assert len([event for event in events if event["kind"] == "tool_called"]) == 7
         assert [event["sequence"] for event in events] == list(range(1, len(events) + 1))
         assert "items[0]" not in json.dumps(events)
         own = client.evidence(done, finding["evidence_refs"][0])
         assert own["provenance"]["agent_id"] == "synthesizer_verifier"
         assert client.submit(snapshot.snapshot_id, idempotency_key="normal").job_id == done.job_id
-        assert client.status(done.job_id).ledger.total_tokens == 225
-        print(json.dumps({"scenario": "normal", "events": len(events), "model_calls": 15, "tool_calls": 7, "tokens": done.ledger.total_tokens}))
+        assert client.status(done.job_id).ledger.total_tokens == 210
+        print(json.dumps({"scenario": "normal", "events": len(events), "model_calls": 14, "tool_calls": 7, "tokens": done.ledger.total_tokens}))
 
 
 def configured_limits(monkeypatch, **fields):
@@ -108,8 +108,14 @@ def test_runtime_faults_preserve_verified_siblings_and_honest_coverage(tmp_path,
         done = client.wait(submitted.job_id, wait_seconds=25, poll_seconds=.02)
         assert done.status == "completed"
         report = json.loads(client.report(done, format="json"))
-        assert len(report["confirmed_defects"]) == 1
-        assert report["confirmed_defects"][0]["title"] == "Empty input raises"
+        if mode == 'final_repair_exhausted':
+            # This fault now omits a verifier decision, rather than a summary.
+            assert report['confirmed_defects'] == []
+            assert len(report['uncertain_high_impact_candidates']) == 1
+            assert report['uncertain_high_impact_candidates'][0]['confidence'] <= .5
+        else:
+            assert len(report["confirmed_defects"]) == 1
+            assert report["confirmed_defects"][0]["title"] == "Empty input raises"
         assert "logic.py" in report["coverage"]["inspected_files"]
         assert not done.ledger.inflight
         if failed_task is not None:
@@ -229,11 +235,11 @@ def test_service_restart_resumes_saved_verification_without_repeating_specialist
         cursor = before[-1]["sequence"]
         done = client.wait(client.resume(current.job_id).job_id, wait_seconds=20, poll_seconds=.02)
         assert done.status == "completed" and done.job_id == current.job_id and done.snapshot_id == snapshot.snapshot_id
-        assert done.ledger.total_tokens == interrupted.ledger.total_tokens + 15
+        assert done.ledger.total_tokens == interrupted.ledger.total_tokens
         report = json.loads(client.report(done, format="json"))
         assert len(report["confirmed_defects"]) == 1
         tail = [event for event in timeline(client, done.job_id) if event["sequence"] > cursor]
-        assert [event["payload"]["phase"] for event in tail if event["kind"] == "model_call_started"] == ["synthesis"]
+        assert [event["payload"]["phase"] for event in tail if event["kind"] == "model_call_started"] == []
         assert not any(event["kind"] == "tool_called" for event in tail)
         assert not done.ledger.inflight
         assert client.submit(snapshot.snapshot_id, idempotency_key="resume").job_id == done.job_id

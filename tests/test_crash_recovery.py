@@ -177,7 +177,9 @@ class HeldSynthesis(ReviewProvider):
             entered.set()
             await asyncio.Event().wait()
         return await super().generate_completion(request)
-with TestClient(app(root, HeldSynthesis())) as client:
+from tests.assembly_fixtures import held_assembly
+provider = HeldSynthesis()
+with held_assembly(provider, entered), TestClient(app(root, provider)) as client:
     identity, snapshot = submit(client, key="graph-crash")
     if not entered.wait(10):
         raise RuntimeError("Synthesis did not start")
@@ -209,15 +211,15 @@ def test_killed_service_resumes_saved_verification_snapshot_usage_and_replay(tmp
             assert client.post(prefix + "/resume", headers=ALICE).status_code == 202
             result = completed(client, identities["active"])
             assert result["status"] == "completed"
-            assert [json.loads(request.prompt)["phase"] for request in provider.requests] == ["synthesis"]
-            assert result["ledger"]["task_iterations"]["__final"] == 3
+            assert provider.requests == []
+            assert result["ledger"]["task_iterations"]["__final"] == 1
             assert result["ledger"]["elapsed_seconds"] >= saved["ledger"]["elapsed_seconds"]
             assert result["ledger"]["inflight"] == {}
             unknown = sum(item["tokens"] for item in saved["ledger"]["inflight"].values())
             final_before = saved["ledger"]["agent_usage"]["synthesizer_verifier"]
             final_after = result["ledger"]["agent_usage"]["synthesizer_verifier"]
             assert final_after["prompt_tokens"] + final_after["completion_tokens"] == (
-                final_before["prompt_tokens"] + final_before["completion_tokens"] + unknown + 15)
+                final_before["prompt_tokens"] + final_before["completion_tokens"] + unknown)
             source = client.get(prefix + "/source?file_path=service.py", headers=ALICE).json()
             assert "return items[0]" in source["data"]
             report = client.get(prefix + "/report", headers=ALICE).json()

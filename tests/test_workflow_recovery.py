@@ -8,6 +8,7 @@ from devwatch.review.jobs import DurableJobManager
 from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
+from tests.assembly_fixtures import held_assembly
 
 
 def test_resume_after_verification_continues_synthesis_without_reverifying(tmp_path):
@@ -24,9 +25,10 @@ def test_resume_after_verification_continues_synthesis_without_reverifying(tmp_p
         executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
                                           first, models={tier: tier.value for tier in ModelTier})
         manager = DurableJobManager(jobs, events, executor)
-        job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="resume")
-        await asyncio.wait_for(synthesis_entered.wait(), timeout=10)
-        await manager.close()
+        with held_assembly(first, synthesis_entered):
+            job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="resume")
+            await asyncio.wait_for(synthesis_entered.wait(), timeout=10)
+            await manager.close()
         interrupted = jobs.get(job.job_id, owner="alice")
         assert interrupted.status == "interrupted"
         tokens_before = interrupted.ledger.total_tokens
@@ -37,9 +39,9 @@ def test_resume_after_verification_continues_synthesis_without_reverifying(tmp_p
         await resumed.resume(job.job_id, owner="alice")
         completed = await resumed.wait(job.job_id, owner="alice")
         assert completed.status == "completed"
-        assert [json.loads(request.prompt)["phase"] for request in second.requests] == ["synthesis"]
-        assert completed.ledger.total_tokens == tokens_before + 15
-        assert completed.ledger.task_iterations["__final"] == 3
+        assert second.requests == []
+        assert completed.ledger.total_tokens == tokens_before
+        assert completed.ledger.task_iterations["__final"] == 1
         await resumed.close()
     asyncio.run(scenario())
 

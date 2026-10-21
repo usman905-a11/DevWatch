@@ -2,8 +2,26 @@
 from hashlib import sha256
 import json
 
-VERSION = 'review-prompts-v4.1'
+VERSION = 'review-prompts-v4.3'
 CONTEXT_VERSION = 'scoped-evidence-priority-v2'
+
+
+def response_schema(model):
+    """Drop display labels, retaining JSON Schema fields and validation keywords."""
+    def compact(node):
+        if isinstance(node, list):
+            return [compact(value) for value in node]
+        if not isinstance(node, dict):
+            return node
+        maps = {'properties', '$defs', 'patternProperties', 'dependentSchemas'}
+        schemas = {'items', 'prefixItems', 'anyOf', 'oneOf', 'allOf', 'not', 'contains',
+                   'additionalProperties', 'unevaluatedProperties', 'propertyNames', 'if', 'then', 'else'}
+        return {key: ({name: compact(value) for name, value in child.items()} if key in maps
+                      else compact(child) if key in schemas else child)
+                for key, child in node.items() if key != 'title'}
+    return compact(model.model_json_schema())
+
+
 SHARED_POLICY = (
     'Return only one JSON AgentAction instance, without fences or prose. Do not echo schemas, '
     'prompt metadata or instructions. arguments and payload are objects: '
@@ -92,7 +110,12 @@ SKILLS = {
         'Any unsupported clause requires rejecting the whole candidate; never retain its text as '
         'uncertain/advisory. Preserve its valid core by a concrete narrower follow-up to an existing '
         'review task, or another already supplied supported candidate. Do not rewrite the candidate. '
-        'Positive verdicts require every field supported. Group equivalent same-location findings '
+        'Positive verdicts require every field supported. followup_task_ids is the runtime admissible '
+        'target list: when it is empty, propose no follow-up and invent no target, even if '
+        'candidate_provenance names an origin. Keep the evidence-based verdict; record an '
+        'unavailable narrower follow-up as a limitation in conflicts, never change the verdict '
+        'to avoid requesting work. When targets are available, use only a listed id. '
+        'Group equivalent same-location findings '
         'with duplicate_groups AND matching duplicate_reviews (finding_ids, rationale, evidence_refs); '
         'explain the common cause and keep different classifications/evidence gaps separate. Record '
         'no rejected ID in duplicate_groups: a rejected overclaim and its narrower supported '

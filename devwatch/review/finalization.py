@@ -125,8 +125,9 @@ class FinalAcceptanceGate:
             raise AcceptanceError('Synthesis cannot alter verification audit or specialist provenance.')
         draft.verification_audit = audit
         draft.limitations.extend(note for note in audit.conflicts if note not in draft.limitations)
-        draft.limitations.extend('Unresolved disagreement: ' + item.rationale for item in audit.disagreements
-                                 if item.resolution == 'unresolved')
+        notes = ['Unresolved disagreement: ' + item.rationale for item in audit.disagreements
+                 if item.resolution == 'unresolved']
+        draft.limitations.extend(note for note in notes if note not in draft.limitations)
         draft.summary = report_summary(draft)
         return AcceptedReport(draft, _token=_ACCEPTANCE_TOKEN)
 

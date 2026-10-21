@@ -90,7 +90,7 @@ def test_full_graph_returns_an_accepted_report_and_persistent_agent_events(tmp_p
         assert len(report["uncertain_high_impact_candidates"]) == 1
         assert report["coverage"]["inspected_files"] == ["service.py"]
         assert report["coverage"]["skipped"]["skipped.ts"] == "not_inspected"
-        assert completed.ledger.total_tokens == 75
+        assert completed.ledger.total_tokens == 60
         jobs.dispatch_events(events)
         stream = events.replay(job.job_id)
         identities = {event.payload.agent_id for event in stream if event.kind == "agent_started"}
@@ -114,9 +114,9 @@ def test_one_followup_reuses_cumulative_agent_budgets_and_never_renders_early(tm
         assert completed.status == "completed"
         assert completed.ledger.review_round == 2
         assert provider.phase_counts["synthesizer_verifier:verification"] == 2
-        assert provider.phase_counts["synthesizer_verifier:synthesis"] == 2
+        assert provider.phase_counts.get("synthesizer_verifier:synthesis", 0) == 0
         assert completed.ledger.task_iterations["logic-1"] == 3
-        assert completed.ledger.task_iterations["__final"] == 4
+        assert completed.ledger.task_iterations["__final"] == 2
         assert json.loads(completed.result["json"])["limitations"]
         await manager.close()
     asyncio.run(scenario())

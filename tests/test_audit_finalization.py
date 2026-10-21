@@ -19,7 +19,7 @@ def payload(repo, ref):
 
 
 @pytest.mark.parametrize('damage',['missing','wrong_id','immutable','rationale','decision'])
-def test_inconsistent_synthesis_is_repaired_before_agent_completion(tmp_path,damage):
+def test_legacy_synthesis_still_cannot_alter_recorded_verification(tmp_path,damage):
     _, _, _, repo, task = setup_repository(tmp_path)
     ref = repo._read_source({'file_path':'service.py'},task).evidence_ref
     good = payload(repo,ref)
@@ -34,8 +34,10 @@ def test_inconsistent_synthesis_is_repaired_before_agent_completion(tmp_path,dam
         dict(kind='submit_synthesis',payload=bad),dict(kind='submit_synthesis',payload=good)])
     state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id,files=task.files,candidates={'f1':candidate(repo,ref)}))
     assert state['output'] is not None
-    assert len(provider.requests)==3
-    assert runtime.budget.ledger.task_schema_repairs['__final']==1
+    assert len(provider.requests)==1
+    with pytest.raises(ValueError):
+        runtime._parse_action(json.dumps(dict(kind='submit_synthesis', payload=bad)), state)
+    assert runtime._parse_action(json.dumps(dict(kind='submit_synthesis', payload=good)), state).kind == 'submit_synthesis'
 
 
 def test_compact_synthesis_assembles_verified_fields_deterministically(tmp_path):
@@ -75,7 +77,7 @@ def test_acceptance_requires_verifier_inspection_and_allows_verifier_evidence(tm
     assert accepted.draft.confirmed_defects[0].evidence_refs==[own]
 
 
-def test_failed_synthesis_repair_preserves_confirmed_findings_in_partial_report(tmp_path):
+def test_broken_optional_summary_cannot_discard_confirmed_findings_or_fail_coverage(tmp_path):
     from devwatch.review.jobs import DurableJobManager
     from devwatch.review.stores import RepoCache
     from devwatch.review.workflow import CanonicalReviewExecutor
@@ -106,17 +108,17 @@ def test_failed_synthesis_repair_preserves_confirmed_findings_in_partial_report(
         report=json.loads(done.result['json'])
         assert len(report['confirmed_defects'])==1
         assert report['confirmed_defects'][0]['title']=='Empty input raises'
-        assert 'Partial' in report['summary']
-        assert report['coverage']['failed']['__final']=='invalid_schema'
-        assert len([r for r in provider.requests if json.loads(r.prompt)['phase']=='synthesis'])==2
+        assert '__final' not in report['coverage']['failed']
+        assert len([r for r in provider.requests if json.loads(r.prompt)['phase']=='synthesis'])==0
     asyncio.run(run())
 
 
-def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path):
+def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path, monkeypatch):
     from devwatch.review.stores import RepoCache
     from devwatch.review.workflow import CanonicalReviewExecutor
     from tests.test_canonical_workflow import ReviewProvider, stores
     from tests.test_control_agents import MODELS
+    from devwatch.review.subgraphs import AgentSubgraphs
     class PausedSynthesis(ReviewProvider):
         def __init__(self):
             super().__init__()
@@ -136,6 +138,11 @@ def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path):
     async def run():
         layout,artifacts,snapshot,jobs,events=stores(tmp_path)
         provider=PausedSynthesis()
+        async def pause_assembly(engine, state):
+            await engine._save(state)
+            provider.entered.set()
+            await asyncio.Event().wait()
+        monkeypatch.setattr(AgentSubgraphs, '_assemble_verified', pause_assembly)
         executor=CanonicalReviewExecutor(layout,artifacts,RepoCache(layout.repo_cache),jobs,events,provider,models=MODELS)
         job=jobs.submit(owner='alice',request={'snapshot_id':snapshot.snapshot_id},idempotency_key='deadline-verified')
         jobs.transition(job.job_id,owner='alice',expected_status='queued',status='running')

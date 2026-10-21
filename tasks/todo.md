@@ -1,5 +1,14 @@
 # DevWatch seven-agent implementation checklist
 
+## Current milestone: M21 Token, Cost, and Latency Optimization - IN PROGRESS
+
+- [ ] Remove redundant model summary call with restored-state/source-quality gates intact.
+- [ ] Persist call/token/thinking/cache/source-size accounting and verify existing budgets.
+- [ ] Measure and reduce prompt overhead; evaluate caching/concurrency without weakened evidence.
+- [ ] Compare completed live reviews within shared cap; run full regression and publish local report.
+
+Plan: [m21-cost-latency-plan.md](m21-cost-latency-plan.md).
+
 ## Current milestone: M20 Synthesizer/Verifier Correctness - COMPLETE (scoped verification)
 
 - [x] Enforce candidate-bound causal/per-field semantic review with existing evidence gates.

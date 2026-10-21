@@ -59,8 +59,13 @@ async def test_synthesis_exposes_no_tools_but_verification_keeps_source_access(t
     _,_,_,repo,_=setup_repository(tmp_path)
     provider=ScriptedProvider([dict(kind='submit_verification',payload={'decisions':[]}),
                               dict(kind='submit_synthesis',payload={'summary':'No candidates','limitations':[]})])
-    result=await engine(repo,provider).run_final(snapshot_id=repo.snapshot_id,files=['service.py'],candidates={})
-    verify,synthesis=[json.loads(request.prompt) for request in provider.requests]
+    runtime=engine(repo,provider)
+    result=await runtime.run_final(snapshot_id=repo.snapshot_id,files=['service.py'],candidates={})
+    verify,=[json.loads(request.prompt) for request in provider.requests]
+    # Legacy synthesis preparation remains tool-free; normal execution now
+    # assembles the verified report without dispatching this request.
+    raw,_=runtime._prepare_prompt(result,repo.context(result),repair=False)
+    synthesis=json.loads(raw)
     assert 'read_source' in {tool['name'] for tool in verify['tool_catalogue']}
     assert synthesis['tool_catalogue']==[]
     assert synthesis['action_schema']['properties']['tool']['enum']==[None]

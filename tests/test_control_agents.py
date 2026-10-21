@@ -66,9 +66,9 @@ def test_final_agent_verifies_then_synthesizes_with_one_identity():
                                     dict(kind="submit_synthesis", payload=synthesis())])
         state = await engine.run_final(snapshot_id="snap-1", files=["service.py"], candidates={})
         assert state["output"].report_draft.snapshot_id == "snap-1"
-        assert [json.loads(request.prompt)["phase"] for request in provider.requests] == ["verification", "synthesis"]
+        assert [json.loads(request.prompt)["phase"] for request in provider.requests] == ["verification"]
         assert all("synthesizer_verifier" in request.system_prompt for request in provider.requests)
-        assert state["private_state"].usage.total_tokens == 30
+        assert state["private_state"].usage.total_tokens == 15
     asyncio.run(scenario())
 
 
@@ -89,8 +89,8 @@ def test_synthesis_cannot_change_recorded_verification_decisions():
         engine, _ = runtime([dict(kind="submit_verification", payload=verification()),
                              dict(kind="submit_synthesis", payload=changed), dict(kind="submit_synthesis", payload=changed)])
         state = await engine.run_final(snapshot_id="snap-1", files=["service.py"], candidates={})
-        assert state["output"] is None
-        assert state["private_state"].stop_reason == "invalid_schema"
+        with pytest.raises(ValueError):
+            engine._parse_action(json.dumps(dict(kind='submit_synthesis', payload=changed)), state)
     asyncio.run(scenario())
 
 

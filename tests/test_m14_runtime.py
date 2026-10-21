@@ -79,7 +79,7 @@ async def test_interruption_reuses_finished_worker_while_resuming_its_unfinished
         await resumed.close()
     assert done.status == "completed" and not done.ledger.inflight
     requested = [json.loads(request.prompt)["task"]["task_id"] for request in provider.requests]
-    assert Counter(requested) == {"logic-slow": 2, "__final": 2}
+    assert Counter(requested) == {"logic-slow": 2, "__final": 1}
     report = json.loads(done.result["json"])
     assert len(report["uncertain_high_impact_candidates"]) == 2
     assert not report["coverage"]["failed"]
@@ -152,4 +152,4 @@ async def test_invalid_worker_result_preserves_sibling_finding_through_finalizat
     assert len(report["uncertain_high_impact_candidates"]) == 1
     assert report["coverage"]["failed"] == {"logic-bad": "specialist_failed"}
     assert provider.phase_counts["synthesizer_verifier:verification"] == 1
-    assert provider.phase_counts["synthesizer_verifier:synthesis"] == 1
+    assert provider.phase_counts.get("synthesizer_verifier:synthesis", 0) == 0

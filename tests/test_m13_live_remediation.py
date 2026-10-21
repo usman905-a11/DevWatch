@@ -86,7 +86,7 @@ async def test_every_role_uses_json_actions_and_bounded_reasoning_through_sdk_fu
     assert done.status == "completed" and not done.ledger.inflight
     report = json.loads(done.result["json"])
     assert len(report["uncertain_high_impact_candidates"]) == 1 and not report["coverage"]["failed"]
-    assert len(requests) == 5
+    assert len(requests) == 4
     assert all(body["reasoning_effort"] == "low" for body in requests)
     assert all(body["response_format"] == {"type": "json_object"} for body in requests)
     for request in requests:

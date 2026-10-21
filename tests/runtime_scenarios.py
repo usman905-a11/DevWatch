@@ -1,7 +1,7 @@
 """M10 test utilities: real local HTTP/runtime, with only model output scripted."""
 import asyncio
 from collections import Counter
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import json
 import os
 import socket
@@ -18,6 +18,7 @@ from devwatch.review.client import ReviewClient, _NoRedirect
 from devwatch.review.contracts import ModelTier
 from devwatch.review.service import ServiceSettings, create_app
 from tests.verification_fixtures import reviewed
+from tests.assembly_fixtures import held_assembly
 
 
 KEY = "m10-local-fixture-key"
@@ -81,13 +82,11 @@ class ScenarioProvider:
         if role == "bug_reliability" and self.mode in {"malformed", "malformed_exhausted"}:
             if step == 1 or self.mode == "malformed_exhausted":
                 content = "{"
-        if phase == "synthesis" and self.mode in {"final_repair", "final_repair_exhausted"}:
+        if phase == "verification" and self.mode in {"final_repair", "final_repair_exhausted"}:
             if step == 1 or self.mode == "final_repair_exhausted":
-                # Schema-valid draft deliberately drops the recorded confirmed
-                # finding. Runtime consistency repair must preserve verification.
-                content = json.dumps({"kind": "submit_synthesis", "payload": {
-                    **body["verified"], "report_draft": {"snapshot_id": body["selected_context"]["snapshot_id"],
-                        "summary": "Dropped a recorded finding", "coverage": {}}, "coverage_summary": {}}})
+                # A schema-valid verifier response omits the known candidate.
+                # Completeness repair remains bounded after summary removal.
+                content = json.dumps({'kind':'submit_verification', 'payload':{'decisions':[]}})
         return LLMResponse(content=content,
             finish_reason="length" if self.mode == "truncated" and role == "bug_reliability" else "stop",
             provider="scripted", model=request.model, latency_ms=0,
@@ -171,6 +170,9 @@ def live_runtime(root, provider):
             errors.append(error)
 
     worker = threading.Thread(target=run, daemon=True)
+    assembly_guard = ExitStack()
+    if provider.mode in {'pause', 'deadline'}:
+        assembly_guard.enter_context(held_assembly(provider, provider.entered, provider.drained))
     worker.start()
     try:
         deadline = time.monotonic() + 10
@@ -187,6 +189,7 @@ def live_runtime(root, provider):
         server.should_exit = True
         worker.join(10)
         listener.close()
+        assembly_guard.close()
         assert not worker.is_alive(), "local fixture service failed to drain"
         if errors:
             raise errors[0]

@@ -63,7 +63,7 @@ def test_submit_is_idempotent_and_reports_are_deterministic(tmp_path):
         markdown = client.get(f"/api/jobs/{identity}/report?format=markdown", headers=ALICE)
         assert "text/markdown" in markdown.headers["content-type"]
         assert "Uncertain" in markdown.text
-        assert len(provider.requests) == 5
+        assert len(provider.requests) == 4
         assert len(list((tmp_path / "runtime").glob("*.sqlite"))) == 4
 
 

@@ -401,10 +401,11 @@ class AgentSubgraphs:
             "tool_catalogue": catalogue,
             "private_state": compact,
             "selected_context": selected_context,
-            "action_schema": AgentAction.model_json_schema(),
-            "result_schema": result_schema.model_json_schema(),
+            "action_schema": prompts.response_schema(AgentAction),
+            "result_schema": prompts.response_schema(result_schema),
             "phase": state.get("phase", "investigation"),
             "verified": verified, "candidates": active, "candidate_count": len(known),
+            "followup_task_ids": state.get('review_tasks') if state.get('phase') == 'verification' else None,
             "context_omissions": ["private_state_compacted"] if len(private.hypotheses) > 3 or private.local_findings else [],
             "repair": state.get("validation_error", "Previous response failed validation. Return one valid structured action.") if repair else None,
             "last_tool_error": state.get("last_tool_error"),
@@ -421,6 +422,10 @@ class AgentSubgraphs:
             actions.difference_update({'call_tool','request_context'})
         body['action_schema']['properties']['tool']['enum']=[None,*selection['selected_names']]
         body["action_schema"]["properties"]["kind"]["enum"] = sorted(actions)
+        # Schema constraints are stable across task ids and evidence pages. Keep
+        # this common prefix ahead of variable state for implicit provider caching.
+        body = {key: body[key] for key in ('result_schema', 'action_schema')} | {
+            key: value for key, value in body.items() if key not in {'result_schema', 'action_schema'}}
         # Bound the complete serialized request, keeping schemas, permissions and
         # individual candidate claims intact. Optional context can be retrieved.
         while True:
@@ -490,6 +495,14 @@ class AgentSubgraphs:
                                  * (1 + self.budget.limits.transient_retries))
             state['tool_selections']=(state.get('tool_selections',[])+[
                 {**state['tool_selection'],'operation_id':ticket}])[-observation_limit:]
+            call = dict(operation_id=ticket, status='reserved', reserved_tokens=reserved,
+                requested_model=self.models[state.get('model_tier', contract.model_policy.initial_tier)],
+                requested_output_tokens=max_output,
+                prompt_utf8_bytes=len(prompt.encode('utf-8')) + len(contract.system_prompt.encode('utf-8')),
+                source_page_utf8_bytes=sum(len(page.get('excerpt', '').encode('utf-8'))
+                    for page in selected_context.get('evidence', []) if page.get('source_file'))
+                    if isinstance(selected_context, dict) else 0)
+            state['provider_observations'] = (state.get('provider_observations', []) + [call])[-observation_limit:]
             await self._save(state)
             state["model_call_id"] = ticket
             started = time.monotonic()
@@ -510,6 +523,8 @@ class AgentSubgraphs:
                                            completion_tokens=private.usage.completion_tokens)
                 private.coverage.limitations.append("Provider completion unknown; reserved tokens charged conservatively.")
                 self.budget.record_model(ticket, prompt_tokens=reserved, completion_tokens=0)
+                call.update(status='unknown', charged_tokens=reserved, duration_seconds=time.monotonic() - started)
+                state['provider_observation'] = dict(call)
                 code = ("provider_authentication" if isinstance(exc, ProviderAuthenticationError) else
                         "provider_quota" if isinstance(exc, ProviderQuotaExhaustedError) else
                         "provider_rate_limit" if isinstance(exc, ProviderRateLimitError) else
@@ -523,11 +538,9 @@ class AgentSubgraphs:
             finally:
                 self.budget.refresh_time()
             reported = response.usage
-            state["provider_observation"] = {**self._provider_observation(response, max_output),
-                                             'prompt_revision':state['prompt_revision']}
-            observations = state.get("provider_observations", []) + [
-                {**state["provider_observation"], "operation_id": ticket}]
-            state["provider_observations"] = observations[-observation_limit:]
+            call.update(self._provider_observation(response, max_output), status='returned',
+                        prompt_revision=state['prompt_revision'], duration_seconds=time.monotonic() - started)
+            state['provider_observation'] = call
             prompt_tokens, completion_tokens = reported.prompt_tokens, reported.completion_tokens
             split_total = prompt_tokens + completion_tokens
             if min(prompt_tokens, completion_tokens, reported.total_tokens) < 0 or max(split_total, reported.total_tokens) == 0:
@@ -541,6 +554,7 @@ class AgentSubgraphs:
             private.usage = TokenUsage(
                 prompt_tokens=private.usage.prompt_tokens + prompt_tokens,
                 completion_tokens=private.usage.completion_tokens + completion_tokens)
+            call['charged_tokens'] = prompt_tokens + completion_tokens
             try:
                 self.budget.record_model(ticket, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
             finally:
@@ -585,11 +599,50 @@ class AgentSubgraphs:
                 "reported_prompt_tokens": response.usage.prompt_tokens,
                 "reported_completion_tokens": response.usage.completion_tokens,
                 "reported_total_tokens": response.usage.total_tokens,
-                "reported_reasoning_tokens": response.usage.reasoning_tokens}
+                "reported_reasoning_tokens": response.usage.reasoning_tokens,
+                "reported_cached_prompt_tokens": response.usage.cached_prompt_tokens}
+
+    async def _assemble_verified(self, state):
+        """Finish the combined final role without generating prose runtime replaces.
+
+        Revalidate persisted decisions and inspection on this path too. The outer
+        acceptance boundary stamps authoritative blackboard provenance later.
+        """
+        from devwatch.review.finalization import assemble_report, FinalAcceptanceGate
+        task, private = state['task'], state['private_state']
+        self.budget.timeout_for('command')
+        await self._save(state)
+        try:
+            verified = state['verification']
+            candidates = {key: FindingCandidate.model_validate(raw) for key, raw in state['candidates'].items()}
+            if verified is None:
+                raise ValueError('Recorded verification is required for assembly.')
+            if self.tools.validate_confirmation is not None:
+                for decision in verified.decisions:
+                    if decision.verdict != 'rejected':
+                        self.tools.validate_confirmation(state['candidates'][decision.finding_id], decision, task, private)
+            draft = assemble_report(state['snapshot_id'], candidates, verified.decisions,
+                summary='Recorded verification assembled by runtime.', coverage=private.coverage,
+                duplicate_groups=verified.duplicate_groups)
+            accepted = FinalAcceptanceGate(candidates,
+                evidence_refs={ref for claim in candidates.values() for ref in claim.evidence_refs} | set(private.evidence_refs),
+                inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
+                snapshot_id=state['snapshot_id'], duplicate_groups=verified.duplicate_groups,
+                verification=verified).accept(draft, verified.decisions)
+            draft.summary, draft.limitations = accepted.draft.summary, accepted.draft.limitations
+            state['output'] = VerificationSynthesisResult(**verified.model_dump(),
+                report_draft=draft, coverage_summary=draft.coverage)
+            self._stop(state, 'evidence_complete')
+        except (ValueError, KeyError, PermissionError, FileNotFoundError, ToolFailure):
+            self._stop(state, 'invalid_schema')
+        await self._save(state)
+        return state
 
     async def _investigate(self, state: AgentExecutionState) -> AgentExecutionState:
         task, private = state["task"], state["private_state"]
         try:
+            if task.agent_id == AgentId.SYNTHESIZER_VERIFIER and state.get('phase') == 'synthesis':
+                return await self._assemble_verified(state)
             if not state.get("retry_operation"):
                 self.budget.consume_iteration(task.task_id)
                 private.iteration_count += 1

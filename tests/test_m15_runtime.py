@@ -66,7 +66,7 @@ async def test_sdk_range_correction_preserves_delivery_accounting_through_report
          "output_tokens": request["max_tokens"]} for prompt, request in zip(prompts, requests)]
     # Retain the historical failed-call receipt even after successful correction.
     assert report["coverage"]["failed"] == {"logic-1:read_source": "recoverable_tool_error"}
-    assert len(requests) == 6
+    assert len(requests) == 5
     specialist = [prompt for prompt in prompts if prompt["task"]["agent_id"] == "logic_correctness"]
     assert specialist[-1]["tool_diagnostic"] is None
     assert specialist[-1]["selected_context"]["evidence"]

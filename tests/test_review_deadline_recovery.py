@@ -119,7 +119,7 @@ def test_explicit_cancel_never_invokes_deadline_recovery(tmp_path):
     asyncio.run(scenario())
 
 
-def test_deadline_after_empty_followup_retains_initial_candidate_and_completed_coverage(tmp_path):
+def test_deadline_after_empty_followup_retains_initial_candidate_and_completed_coverage(tmp_path, monkeypatch):
     from devwatch.providers.base import LLMResponse, LLMUsage
     class PausedAfterFollowup(ReviewProvider):
         def __init__(self):
@@ -144,6 +144,14 @@ def test_deadline_after_empty_followup_retains_initial_candidate_and_completed_c
     async def scenario():
         layout, artifacts, snapshot, jobs, events = stores(tmp_path)
         provider = PausedAfterFollowup()
+        from devwatch.review.subgraphs import AgentSubgraphs
+        original = AgentSubgraphs._run_control
+        async def after_completed_followup(runtime, agent, **kwargs):
+            if agent.value == 'synthesizer_verifier' and runtime.budget.ledger.review_round == 2:
+                provider.entered.set()
+                await asyncio.Event().wait()
+            return await original(runtime, agent, **kwargs)
+        monkeypatch.setattr(AgentSubgraphs, '_run_control', after_completed_followup)
         executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events, provider, models=MODELS)
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="followup-deadline")
         jobs.transition(job.job_id, owner="alice", expected_status="queued", status="running")
