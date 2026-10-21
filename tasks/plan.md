@@ -2,6 +2,14 @@
 
 ## Current request: M21 Token, Cost, and Latency Optimization (2026-10-21)
 
+**Completed for engineering and scoped comparable-cost verification.** Backend 655
+passed; frontend 53 passed and build passed; 173 frozen inputs match. Final eight
+verifier executions retain all quality gates, using 9 API calls versus 18 and
+26.1% lower estimated cost in this sample. All 24 paid attempts/failures remain.
+M21 US$0.27039375; cumulative US$3.74075775; shared remaining US$0.25924225.
+See [M21 report](m21-cost-latency-report.md) for scope and unproven cache/model/tool
+claims. M22 remains planned, not started.
+
 Execute [the M21 plan](m21-cost-latency-plan.md): remove redundant summary
 generation without losing verifier evidence, persist accurate work accounting,
 reduce measured prompt overhead, then compare completed reviews and live gates.

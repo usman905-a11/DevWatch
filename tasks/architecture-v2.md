@@ -4,7 +4,7 @@ Date: 2026-10-18. Baseline: M12 of the supplied Final Architecture and Reliabili
 Remediation Plan v2.0. This supplements [seven-agent-design.md](seven-agent-design.md)
 with the actual implementation map and the dependency-ordered M12–M23 work.
 It preserves the existing seven identities, transport and immutable-source design.
-The M13, M14, M15, M16, M17, M18, M19 and M20 supplements below record subsequent changes; other later milestone
+The M13, M14, M15, M16, M17, M18, M19, M20 and M21 supplements below record subsequent changes; other later milestone
 entries remain planned work, not claims of implementation.
 
 ## Installed implementation
@@ -562,6 +562,36 @@ logical supplied-candidate challenges in ten verifier executions. The arbitrary-
 pair twice exceeded the unchanged 30-second timeout; its candidates passed
 separately. This is not end-to-end specialist recall or paired latency evidence.
 All 20 paid attempts and full unknown holds remain. M20 conservative US$0.32216100;
-cumulative US$3.47036400; shared remaining US$0.52963600. M21 has not started.
+cumulative US$3.47036400; shared remaining US$0.52963600. At M20 close, M21 was not started.
 Report: [m20-verifier-correctness-report.md](m20-verifier-correctness-report.md).
+
+## M21 cost/latency supplement (2026-10-21)
+
+The combined final role assembles its report directly after complete verification,
+without a redundant model-generated summary. Restored assembly revalidates the
+same candidate-bound semantic, inspection, source and relation gates. Runtime
+coverage, follow-ups, conflicts and specialist provenance remain authoritative.
+Repeated acceptance retains one copy of each unresolved-disagreement limitation.
+
+Existing private checkpoints record every admitted model call before dispatch,
+then returned/unknown status, reservations, provider token splits, duration and
+request/source-page bytes. Cached input is a subset, not an extra token charge;
+absent cache usage is null. Unknown completions retain full reservation charges.
+Public wire contracts, orchestration and budget ceilings are unchanged.
+
+Prompt schema display titles are reduced while constraints, field names and data
+defaults remain. v4.4 exposes actual admissible follow-up ids and names known
+copied schema keys in safe repair. Inadmissible targets/extra fields remain
+rejected; one-repair allowance remains. A schema-first prefix experiment caused
+echo failures and was reverted. Existing owner/content-addressed cache and
+duplicate-progress guards stay intact. No paid cache resource or model downgrade.
+
+Final regression:655 backend tests; 53 frontend tests and build; 173 source/consumer
+inputs match. Eight completed live verifier executions pass unchanged quality
+gates, using 9 API calls instead of18 and 26.1% lower estimated sample cost. All 24
+paid attempts include superseded semantic/protocol failures. M21 US$0.27039375;
+cumulative US$3.74075775; shared remaining US$0.25924225; earlier holds remain.
+Alternative models, cache savings, source-tool-count reduction and production
+latency guarantees are not established. M22 remains planned.
+Report: [m21-cost-latency-report.md](m21-cost-latency-report.md).
 See [M19 report](m19-specialist-intelligence-report.md).

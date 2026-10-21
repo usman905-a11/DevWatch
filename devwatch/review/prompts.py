@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-VERSION = 'review-prompts-v4.3'
+VERSION = 'review-prompts-v4.4'
 CONTEXT_VERSION = 'scoped-evidence-priority-v2'
 
 

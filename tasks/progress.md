@@ -1,5 +1,24 @@
 # Execution ledger — plan: tasks/seven-agent-design.md
 
+M21 Token, Cost, and Latency Optimization (2026-10-21), COMPLETE for engineering
+and scoped comparable-cost verification. Removed redundant summary generation;
+assembly/recovery still revalidate exact causal reviews, source, inspection and
+relations. Persisted reserved/returned/unknown call metadata includes token
+subsets, duration and source-page bytes. Schema annotations reduced; schema-first
+ordering reverted after protocol failure. Actual follow-up task scope and safe
+known-key repair prevent avoidable drift without relaxed admission. Backend 655
+passed, no failures/errors/skips; 19 new cases. Frontend 53 passed and build passed;
+173 frozen inputs match; credential/authority checks pass. Final whole campaign
+passes 8/8 executions:9 versus 18 API calls and US$0.07511775 versus US$0.10169850,
+26.1% lower estimated cost in the declared sample. All 24 attempts retain one
+false confirmation and two protocol failures from superseded configurations.
+No new unknown usage/cap refusal. Total M21 US$0.27039375; cumulative US$3.74075775;
+shared remaining US$0.25924225, with earlier US$0.09968775 holds intact. No cache
+discount, alternate-model quality, source-tool decrease or population accuracy
+claim. No M22 work or agent commit/push/deployment. Shared HEAD advanced during
+work; full review remains against original a24ce50.
+Report: [m21-cost-latency-report.md](m21-cost-latency-report.md).
+
 M20 Synthesizer/Verifier Correctness (2026-10-21), COMPLETE for engineering and
 scoped verification: exact-candidate causal/per-field review, inspected positive
 and uncertain decisions, duplicate/disagreement validation, runtime specialist

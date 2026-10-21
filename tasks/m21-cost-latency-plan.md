@@ -1,6 +1,6 @@
 # M21 Token, Cost, and Latency Optimization
 
-Date: 2026-10-21. Baseline: clean commit `a24ce50` (M20). Status: in progress.
+Date: 2026-10-21. Baseline: clean commit `a24ce50` (M20). Status: complete for engineering and scoped comparable-cost verification.
 
 Objective: reduce cost per comparable successfully completed review while
 preserving source scope, causal review, inspection, classification and coverage.
@@ -79,3 +79,32 @@ counts and deterministic input measurements alongside billed estimates. Semantic
 reviews remain model judgments. Paired SQL completion is not established by this
 singleton comparison. Broader model-family comparison may remain unverified under
 the current shared cap; do not claim cross-model optimization without evidence.
+
+## Execution outcome
+
+All four slices are implemented and verified within the documented scope. Call
+records use the existing private checkpoint boundary; no new public ledger/wire
+shape was needed. Model summary generation is removed, with full source/causal
+revalidation on assembly and restore. Schema annotations are reduced without
+losing fields/constraints/default data. Actual admissible follow-up ids are
+explicit, and safe repair names copied schema keys. All ceilings remain intact.
+
+The schema-first prefix experiment was reverted after protocol regressions; no
+cache benefit is claimed. Earlier v4.2/v4.3 campaigns remain with their false
+confirmation/protocol failures and full charges. Final v4.4 reran the entire eight
+execution baseline set, passing all gates and manual author review. Its estimated
+cost is US$0.07511775 versus US$0.10169850, a 26.1% reduction; API calls fall 18 to 9.
+The comparison is verifier-stage evidence, not full-system recall. Alternative
+physical models and source-tool-count reductions are not established; existing
+source caching/duplicate guards remain and default concurrency 3 is retained.
+
+Full backend: 655 passed, no failures/errors/skips. Frontend: 53 passed and build
+passed. All 173 final source/consumer inputs match; eight authority methods and
+budget/contract/orchestrator ASTs are unchanged. Credential scan finds no leaks.
+
+All M21 usage, including failed experiments: US$0.27039375. Cumulative conservative
+total: US$3.74075775; shared remaining: US$0.25924225. Earlier US$0.09968775 unknown
+holds remain included; there is no new unknown usage or cap refusal. No further
+paid calls, M22 implementation, agent commit, push or deployment occurred.
+
+Report: [m21-cost-latency-report.md](m21-cost-latency-report.md).

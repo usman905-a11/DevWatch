@@ -1,5 +1,9 @@
 # M20 Synthesizer/Verifier Correctness
 
+Subsequent work: [M21](m21-cost-latency-report.md) removes the redundant summary
+generation and records a completed-review cost comparison. Historical M20 results
+and its paired SQL timeout limitation remain unchanged below.
+
 Date: 2026-10-21. Baseline: `98b3cd0`. Status: **Complete for engineering and scoped verification**. M21 has not started.
 
 ## A. Existing implementation

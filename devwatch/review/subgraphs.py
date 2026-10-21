@@ -422,10 +422,6 @@ class AgentSubgraphs:
             actions.difference_update({'call_tool','request_context'})
         body['action_schema']['properties']['tool']['enum']=[None,*selection['selected_names']]
         body["action_schema"]["properties"]["kind"]["enum"] = sorted(actions)
-        # Schema constraints are stable across task ids and evidence pages. Keep
-        # this common prefix ahead of variable state for implicit provider caching.
-        body = {key: body[key] for key in ('result_schema', 'action_schema')} | {
-            key: value for key, value in body.items() if key not in {'result_schema', 'action_schema'}}
         # Bound the complete serialized request, keeping schemas, permissions and
         # individual candidate claims intact. Optional context can be retrieved.
         while True:
@@ -679,7 +675,9 @@ class AgentSubgraphs:
                         fields = {field for schema in (AgentAction, ReviewPlan, SpecialistResult, FindingCandidate,
                             VerificationPhaseResult, VerificationDecision, CausalReview, ClaimAssessment,
                             DuplicateReview, Disagreement, SynthesisSummary) for field in schema.model_fields}
-                        fields.add('candidate_provenance')  # Known read-only context key, never arbitrary response text.
+                        # Known read-only request keys can be named safely when
+                        # a model echoes them; arbitrary response keys stay redacted.
+                        fields.update({'candidate_provenance', 'action_schema', 'result_schema', 'followup_task_ids'})
                         state["validation_error"] = "Return a JSON action with kind and payload. " + "; ".join(
                             ".".join(str(part) if isinstance(part, int) or part in fields else "field" for part in error["loc"])
                             + ":" + error["type"] for error in exc.errors())[:155]

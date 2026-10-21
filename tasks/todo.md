@@ -1,13 +1,21 @@
 # DevWatch seven-agent implementation checklist
 
-## Current milestone: M21 Token, Cost, and Latency Optimization - IN PROGRESS
+## Current milestone: M21 Token, Cost, and Latency Optimization - COMPLETE (scoped cost verification)
 
-- [ ] Remove redundant model summary call with restored-state/source-quality gates intact.
-- [ ] Persist call/token/thinking/cache/source-size accounting and verify existing budgets.
-- [ ] Measure and reduce prompt overhead; evaluate caching/concurrency without weakened evidence.
-- [ ] Compare completed live reviews within shared cap; run full regression and publish local report.
+- [x] Remove redundant model summary call with restored-state/source-quality gates intact.
+- [x] Persist call/token/thinking/cache/source-size accounting and verify existing budgets.
+- [x] Measure and reduce prompt overhead; evaluate caching/concurrency without weakened evidence.
+- [x] Compare completed live reviews within shared cap; run full regression and publish local report.
 
 Plan: [m21-cost-latency-plan.md](m21-cost-latency-plan.md).
+Report: [m21-cost-latency-report.md](m21-cost-latency-report.md).
+Final v4.4: 655 backend tests, 53 frontend tests and build pass; 173 frozen files
+match. Eight completed verifier executions retain all quality gates; API calls 18
+to9 and estimated cost US$0.10169850 to US$0.07511775 (26.1% lower in this sample).
+All 24 attempts and earlier failures retained. M21 total US$0.27039375; cumulative
+US$3.74075775; shared remaining US$0.25924225. No new unknown usage. Cache benefit,
+alternate-model quality and source-tool-count reduction are not demonstrated.
+M22 has not started.
 
 ## Current milestone: M20 Synthesizer/Verifier Correctness - COMPLETE (scoped verification)
 
@@ -195,7 +203,7 @@ Detailed module mapping and gates: [architecture-v2.md](architecture-v2.md).
 - [ ] M18: Prompt and Context Engineering.
 - [ ] M19: Specialist Functional Intelligence.
 - [ ] M20: Synthesizer/Verifier Correctness.
-- [ ] M21: Token, Cost, and Latency Optimization.
+- [x] M21: Token, Cost, and Latency Optimization (scoped comparable-cost verification; limitations in report).
 - [ ] M22: Streaming, Observability, and Recovery.
 - [ ] M23: Comprehensive Evaluation and Final Validation.
 

@@ -1,5 +1,6 @@
 """Request byte budgets and schema field integrity must hold together."""
 import json
+import pytest
 
 from devwatch.review.contracts import AgentPrivateState, AgentWorkItem, ReviewTask
 from tests.test_audit_evidence import engine
@@ -38,13 +39,21 @@ def test_compact_specialist_schema_preserves_title_property_and_validation_bound
     assert candidate['additionalProperties'] is False
 
 
-def test_stable_prefix_precedes_task_specific_state_for_repeated_requests(tmp_path):
-    repo, _, _, claim = setup(tmp_path)
-    runtime, _ = engine(repo, [])
-    first = prompt(runtime, repo, claim, identity='first-task')
-    second = prompt(runtime, repo, claim, identity='second-task')
-    common = next(index for index, (left,right) in enumerate(zip(first,second)) if left != right)
-    assert common > 3000
+@pytest.mark.parametrize('key,exposed', [('action_schema',True),('result_schema',True),
+    ('followup_task_ids',True),('SECRET_DO_NOT_ECHO',False)])
+def test_copied_request_metadata_is_rejected_with_safe_actionable_repair(tmp_path,key,exposed):
+    import asyncio
+    from tests.verification_fixtures import decision
+    repo, task, ref, claim=setup(tmp_path)
+    good=dict(kind='submit_verification',inspected_evidence=[ref],payload=dict(decisions=[decision(claim,[ref])]))
+    runtime,provider=engine(repo,[{**good,key:{'private':'do-not-reflect-this-value'}},good])
+    state=asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id,files=task.files,candidates={'f1':claim}))
+    assert state['private_state'].stop_reason=='evidence_complete'
+    assert len(provider.requests)==2
+    assert runtime.budget.ledger.task_schema_repairs['__final']==1
+    repair=json.loads(provider.requests[1].prompt)['repair']
+    assert (key in repair) is exposed
+    assert 'do-not-reflect-this-value' not in repair
 
 
 def test_schema_compaction_does_not_edit_data_defaults_named_title():
