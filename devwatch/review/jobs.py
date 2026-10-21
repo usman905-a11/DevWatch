@@ -50,6 +50,7 @@ EventKind = Literal[
     "evidence_retrieved", "evidence_delivered", "evidence_inspected", "candidate_submitted",
     "candidate_rejected", "verification_completed", "finalization_started", "finalization_completed",
     "report_render_started", "report_render_completed",
+    "graph_node_started", "graph_node_completed",
 ]
 
 def safe_stop_reason(value):
@@ -67,7 +68,11 @@ class EventPayload(ContractModel):
     evidence_ref: str | None = Field(default=None, max_length=128, pattern=r"^[\w.-]+$")
     error_code: Literal["execution_failed", "review_time_exhausted", "provider_authentication", "provider_quota",
         "provider_rate_limit", "provider_temporary", "provider_timeout", "provider_failure", "invalid_schema",
-        "recoverable_tool_error", "permission_denied", "unknown_tool_completion", "specialist_failed"] | None = None
+        "recoverable_tool_error", "permission_denied", "unknown_tool_completion", "specialist_failed",
+        "tool_timeout", "tool_execution_failed", "repeated_tool_failure", "evidence_integrity_failure",
+        "snapshot_integrity_failure", "invalid_source_range", "invalid_evidence_offset", "evidence_not_found",
+        "invalid_arguments", "tool_unavailable", "parser_unavailable", "invalid_configuration", "invalid_query",
+        "database_unavailable", "tool_read_failure"] | None = None
     duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     total_tokens: int | None = Field(default=None, ge=0)
     phase: Literal["planning", "investigation", "verification", "synthesis", "structural_gate",
@@ -84,6 +89,10 @@ class EventPayload(ContractModel):
     verdict: Literal["confirmed", "uncertain", "rejected", "advisory"] | None = None
     offset: int | None = Field(default=None, ge=0)
     end_offset: int | None = Field(default=None, ge=0)
+    graph_scope: Literal["review", "agent"] | None = None
+    node: Literal["repository_intelligence", "deterministic_analysis", "change_analyzer", "planner_agent",
+        "context_manager", "budget_manager", "deterministic_router", "specialist_subgraphs", "shared_blackboard",
+        "structural_evidence_gate", "completion_workflow", "investigate", "execute_action"] | None = None
 
 
 class PersistedEvent(ContractModel):
@@ -465,6 +474,28 @@ class EventStore(_SQLiteStore):
             events = [PersistedEvent.model_validate_json(row[0]) for row in rows]
             db.executemany("INSERT INTO telemetry_attempts VALUES(?, 'unknown')", [(event.event_id,) for event in events])
             return events
+
+    def trace_ancestors(self, event: PersistedEvent) -> list[PersistedEvent]:
+        """Random event IDs supply export ancestry; job/task/source IDs stay local.
+
+        Reconstruct from the durable journal, including across export batches and
+        worker restarts. Historical journals without a root retain flat export.
+        """
+        with self._transaction() as db:
+            root = db.execute("SELECT event FROM events WHERE job_id=? AND sequence<=? "
+                "AND json_extract(event,'$.kind')='job_queued' ORDER BY sequence LIMIT 1",
+                (event.job_id, event.sequence)).fetchone()
+            if root is None:
+                return []
+            ancestors = [PersistedEvent.model_validate_json(root[0])]
+            if event.payload.run_id and event.kind != "agent_started":
+                agent = db.execute("SELECT event FROM events WHERE job_id=? AND sequence<? "
+                    "AND json_extract(event,'$.kind')='agent_started' "
+                    "AND json_extract(event,'$.payload.run_id')=? ORDER BY sequence DESC LIMIT 1",
+                    (event.job_id, event.sequence, event.payload.run_id)).fetchone()
+                if agent:
+                    ancestors.append(PersistedEvent.model_validate_json(agent[0]))
+            return ancestors
 
     def complete_telemetry(self, event_id: str, outcome: str) -> None:
         if outcome not in {"sent", "failed"}:

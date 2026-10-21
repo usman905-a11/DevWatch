@@ -61,7 +61,8 @@ export interface PersistedEvent {
     phase?: string | null; iteration?: number | null; attempt?: number | null
     run_id?: string | null; operation_id?: string | null; outcome?: string | null
     stop_reason?: string | null; finish_reason?: string | null; count?: number | null
-    finding_id?: string | null; verdict?: string | null; offset?: number | null; end_offset?: number | null }
+    finding_id?: string | null; verdict?: string | null; offset?: number | null; end_offset?: number | null
+    graph_scope?: 'review' | 'agent' | null; node?: string | null }
 }
 export interface SourceExcerpt {
   snapshot_id: string; snapshot_hash: string; source_scope: string[]; tool: 'read_source'

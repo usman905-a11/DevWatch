@@ -187,9 +187,10 @@ class AgentSubgraphs:
         self.control_graph = self._build()
 
     def _build(self):
+        from devwatch.review.observability import observed_node
         builder = StateGraph(AgentExecutionState)
-        builder.add_node("investigate", self._investigate)
-        builder.add_node("execute_action", self._execute_action)
+        builder.add_node("investigate", observed_node("investigate", self._investigate, self._event, scope="agent"))
+        builder.add_node("execute_action", observed_node("execute_action", self._execute_action, self._event, scope="agent"))
         builder.add_edge(START, "investigate")
         builder.add_conditional_edges("investigate", lambda state: END if state["private_state"].stop_reason else "execute_action")
         builder.add_conditional_edges("execute_action", lambda state: END if state["private_state"].stop_reason else "investigate")

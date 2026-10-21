@@ -595,3 +595,31 @@ Alternative models, cache savings, source-tool-count reduction and production
 latency guarantees are not established. M22 remains planned.
 Report: [m21-cost-latency-report.md](m21-cost-latency-report.md).
 See [M19 report](m19-specialist-intelligence-report.md).
+
+## M22 observability/recovery supplement (2026-10-21)
+
+Actual root/private graph node entry and exit are recorded as bounded metadata,
+with random invocation IDs, outcome and duration. Private events retain existing
+task/role/run/phase/iteration correlation. Synchronous nodes stay off the event
+loop and drain before cancellation releases execution ownership. Node outcomes
+describe execution; model/tool/verifier outcomes remain distinct existing events.
+
+Optional LangSmith export reconstructs event-run ancestry from durable random
+review/agent event IDs across batches, exporter restarts and explicit job resumes.
+Job/task/evidence/source IDs, prompts, arguments and reasoning remain local.
+Inputs/outputs stay empty; ambient tracing remains disabled. Remote runs describe
+instantaneous events, with actual operation durations in metadata. Unknown exports
+remain non-retryable; the local journal remains authoritative. Historical journals
+without a queued root retain flat export. Existing private/root checkpoint formats
+and unknown-model accounting are unchanged.
+
+The additive event contract accepts every existing bounded tool diagnostic,
+including the previously rejected `tool_timeout`. Existing event names and old
+payloads stay supported. Browser activity displays node/outcome in its disclosure.
+All 682 backend tests in the repository `.venv`, 55 frontend tests, build, SDK,
+stream/recovery and browser checks pass. All 174 frozen source/consumer inputs match.
+One natural live canonical review resumes after verification with no additional
+calls/tokens; M22 US$0.01919550, cumulative US$3.75995325, shared remaining
+US$0.24004675 including all historical holds. No remote LangSmith ingestion or
+live abrupt-crash/accuracy/latency guarantee is claimed. M23 is not started.
+Report: [m22-observability-recovery-report.md](m22-observability-recovery-report.md).

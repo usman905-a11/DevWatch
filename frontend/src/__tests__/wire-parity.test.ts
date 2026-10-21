@@ -28,6 +28,17 @@ describe('backend/browser canonical wire parity', () => {
     expect(report.coverage.failed).toEqual({ 'security.': 'tool_unavailable', con: 'tool_unavailable' })
     expect(report.uncertain_high_impact_candidates.length).toBe(1)
   })
+  it('accepts bounded graph-node events and tool timeout diagnostics', () => {
+    const original = fixture.events[0]
+    const event = { ...original, kind: 'graph_node_completed', payload: { ...original.payload,
+      node: 'execute_action', graph_scope: 'agent', operation_id: 'a'.repeat(32),
+      task_id: 'logic-1', outcome: 'succeeded', error_code: 'tool_timeout' } }
+    const parsed = parseEvent({ id: String(event.sequence), kind: event.kind, data: JSON.stringify(event) }, fixture.job.job_id)
+    expect(parsed.payload.node).toBe('execute_action')
+    expect(parsed.payload.error_code).toBe('tool_timeout')
+    const invalid = { ...event, payload: { ...event.payload, node: 'private source content' } }
+    expect(() => parseEvent({ id: String(invalid.sequence), kind: invalid.kind, data: JSON.stringify(invalid) }, fixture.job.job_id)).toThrow()
+  })
   it('consumes actual finalized report and ownership-bound source schemas', () => {
     expect(parseJob(fixture.job).status).toBe('completed')
     const report = parseReport(fixture.report, fixture.snapshot.snapshot_id)

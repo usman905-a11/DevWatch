@@ -21,6 +21,8 @@ export function JobActivity({ events, job, connection, onEvidence }: { events: P
     <details><summary>Recent events ({events.length}; up to 200 retained here)</summary><ol>{events.map(event => <li key={event.event_id}>
       <strong>{event.payload.agent_id ? agentNames[event.payload.agent_id] : 'Review service'}</strong> {event.kind}
       {event.payload.task_id && <span> · Task: {event.payload.task_id}</span>}
+      {event.payload.node && <span> · Node: {event.payload.node}</span>}
+      {event.payload.outcome && <span> · Outcome: {event.payload.outcome}</span>}
       {event.payload.tool && <span> · Tool: {event.payload.tool}</span>}
       {event.payload.error_code && <span> · Error: {event.payload.error_code}</span>}
       {event.payload.duration_seconds != null && <span> · {event.payload.duration_seconds}s</span>}

@@ -1,5 +1,17 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: M22 Streaming, Observability, and Recovery (2026-10-21)
+
+Complete for engineering and scoped live recovery: 682 backend tests pass in the
+repository `.venv`; 55 frontend tests, build and browser check pass. Follow
+[the M22 plan](m22-observability-recovery-plan.md) and
+[M22 report](m22-observability-recovery-report.md). Baseline is clean `1dac4bc`.
+Root/private node events, durable metadata export ancestry and bounded tool
+diagnostics preserve existing authority and acceptance gates. Live canonical
+review resumes after verification with no repeated calls/tokens. M22 cost
+US$0.01919550; cumulative US$3.75995325; shared remaining US$0.24004675. Existing
+unknown holds remain charged. No M23, commit, push, PR or deployment work.
+
 ## Current request: M21 Token, Cost, and Latency Optimization (2026-10-21)
 
 **Completed for engineering and scoped comparable-cost verification.** Backend 655

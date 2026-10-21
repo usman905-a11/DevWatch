@@ -1,5 +1,23 @@
 # Execution ledger — plan: tasks/seven-agent-design.md
 
+M22 Streaming, Observability, and Recovery (2026-10-21), COMPLETE for engineering
+and scoped canonical live recovery verification.
+Root/private nodes record paired events and bounded outcomes; synchronous workers
+drain on cancellation. Optional metadata export reconstructs durable review/agent
+ancestry without private identifiers or model content. Every bounded tool failure
+code remains observable, including a reproduced tool-timeout schema bug. Nested
+WebSocket/SSE replay, explicit resume, private observations, real SDK serialization
+and browser wire/activity are tested. Frontend 55 tests/build pass; real browser
+component check covers four widths and keyboard disclosure. Full regression in
+the repository `.venv` passes 682 tests with no failures/errors/skips after
+diagnosing missing shell-environment JS parsers. All 174 frozen files match;
+14 authority/accounting methods remain unchanged and credential/static checks pass.
+Live natural canonical review: five API calls, interrupted at a real saved
+verification checkpoint, then completion with zero additional calls/tokens.
+M22 US$0.01919550; cumulative US$3.75995325; shared remaining US$0.24004675, with
+all earlier unknown holds preserved. No new unknown usage, M23 or shipping work.
+Report: [m22-observability-recovery-report.md](m22-observability-recovery-report.md).
+
 M21 Token, Cost, and Latency Optimization (2026-10-21), COMPLETE for engineering
 and scoped comparable-cost verification. Removed redundant summary generation;
 assembly/recovery still revalidate exact causal reviews, source, inspection and

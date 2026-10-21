@@ -4,8 +4,18 @@ import fixture from './fixtures/canonical-wire.json'
 import { ReportPanel } from '../review/ReportPanel'
 import { JobActivity } from '../review/JobActivity'
 import { SnapshotSource } from '../review/SnapshotSource'
+import { PersistedEvent } from '../review/wire'
 
 describe('canonical review presentation', () => {
+  it('shows graph progress and completion outcomes in the existing activity panel', () => {
+    const event: PersistedEvent = { ...fixture.events[0], kind: 'graph_node_completed',
+      payload: { ...fixture.events[0].payload, status: null, agent_id: 'logic_correctness',
+        task_id: 'logic-1', graph_scope: 'agent', node: 'execute_action', outcome: 'succeeded' } }
+    const html = renderToStaticMarkup(<JobActivity events={[event]} job={null} connection="connected" />)
+    expect(html).toContain('Node: execute_action')
+    expect(html).toContain('Outcome: succeeded')
+    expect(html).toContain('Task: logic-1')
+  })
   it('keeps confirmed, uncertain and advisory outputs separate with explicit coverage', () => {
     const candidate = fixture.report.uncertain_high_impact_candidates[0]
     const report = { ...fixture.report, confirmed_defects: [{ ...candidate, kind: 'defect' as const, finding_id: 'confirmed', confidence: .9 }],

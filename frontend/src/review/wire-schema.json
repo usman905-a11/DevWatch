@@ -544,7 +544,22 @@
                 "recoverable_tool_error",
                 "permission_denied",
                 "unknown_tool_completion",
-                "specialist_failed"
+                "specialist_failed",
+                "tool_timeout",
+                "tool_execution_failed",
+                "repeated_tool_failure",
+                "evidence_integrity_failure",
+                "snapshot_integrity_failure",
+                "invalid_source_range",
+                "invalid_evidence_offset",
+                "evidence_not_found",
+                "invalid_arguments",
+                "tool_unavailable",
+                "parser_unavailable",
+                "invalid_configuration",
+                "invalid_query",
+                "database_unavailable",
+                "tool_read_failure"
               ],
               "type": "string"
             },
@@ -601,6 +616,22 @@
           "default": null,
           "title": "Finish Reason"
         },
+        "graph_scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "review",
+                "agent"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Graph Scope"
+        },
         "iteration": {
           "anyOf": [
             {
@@ -613,6 +644,33 @@
           ],
           "default": null,
           "title": "Iteration"
+        },
+        "node": {
+          "anyOf": [
+            {
+              "enum": [
+                "repository_intelligence",
+                "deterministic_analysis",
+                "change_analyzer",
+                "planner_agent",
+                "context_manager",
+                "budget_manager",
+                "deterministic_router",
+                "specialist_subgraphs",
+                "shared_blackboard",
+                "structural_evidence_gate",
+                "completion_workflow",
+                "investigate",
+                "execute_action"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Node"
         },
         "offset": {
           "anyOf": [
@@ -1016,7 +1074,9 @@
             "finalization_started",
             "finalization_completed",
             "report_render_started",
-            "report_render_completed"
+            "report_render_completed",
+            "graph_node_started",
+            "graph_node_completed"
           ],
           "title": "Kind",
           "type": "string"

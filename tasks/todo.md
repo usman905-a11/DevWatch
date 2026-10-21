@@ -1,5 +1,21 @@
 # DevWatch seven-agent implementation checklist
 
+## Current milestone: M22 Streaming, Observability, and Recovery - COMPLETE (scoped verification)
+
+- [x] Record correlated root/private graph node entry/exit without exposing state.
+- [x] Reconstruct opt-in LangSmith event ancestry and preserve bounded failure diagnostics.
+- [x] Verify nested stream/replay, checkpoint resume, historical wire and browser activity.
+- [x] Finish full repository-venv regression and evidence/author review closure.
+
+Plan: [m22-observability-recovery-plan.md](m22-observability-recovery-plan.md).
+Report: [m22-observability-recovery-report.md](m22-observability-recovery-report.md).
+Backend 682 tests, frontend 55 tests/build and real browser check pass; all 174
+frozen source/consumer inputs match. Author review has no required finding. One natural
+Gemini canonical review completes after interruption with five API calls both
+before/after resume and 17,758 tokens both times. M22 US$0.01919550; cumulative
+US$3.75995325; shared remaining US$0.24004675. Earlier unknown holds intact.
+M23 is not started.
+
 ## Current milestone: M21 Token, Cost, and Latency Optimization - COMPLETE (scoped cost verification)
 
 - [x] Remove redundant model summary call with restored-state/source-quality gates intact.

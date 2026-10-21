@@ -306,6 +306,7 @@ class _ReviewSession:
         return AgentPrivateState.model_validate(checkpoint["state"]["private_state"]) if checkpoint else None
 
     def compile(self, saver):
+        from devwatch.review.observability import observed_node
         builder = StateGraph(ReviewGraphState)
         nodes = {"repository_intelligence": self.intelligence, "deterministic_analysis": self.deterministic,
                  "change_analyzer": self.change_analysis, "planner_agent": self.planner,
@@ -314,8 +315,10 @@ class _ReviewSession:
                  "shared_blackboard": self.blackboard, "structural_evidence_gate": self.structural_gate,
                  "completion_workflow": self.finalize}
         previous = START
+        def emit_node(kind, state, **payload):
+            self.emit(kind, **payload)
         for name, node in nodes.items():
-            builder.add_node(name, node)
+            builder.add_node(name, observed_node(name, node, emit_node, scope="review"))
             builder.add_edge(previous, name)
             previous = name
         builder.add_edge(previous, END)
