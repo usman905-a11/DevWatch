@@ -19,8 +19,9 @@ from langsmith import tracing_context
 from devwatch.review.budgets import BudgetManager
 from devwatch.review.contracts import (
     AgentId, Coverage, FindingCandidate, FollowupRequest, ReportDraft, ReportFinding, ReviewTask,
-    VerificationDecision, VerificationSynthesisResult,
+    VerificationDecision, VerificationSynthesisResult, VerificationAudit, VerificationPhaseResult,
 )
+from devwatch.review.verification import validate_decision, validate_relations
 
 
 class AcceptanceError(ValueError):
@@ -47,12 +48,16 @@ class AcceptedReport:
 class FinalAcceptanceGate:
     def __init__(self, candidates: dict[str, FindingCandidate], *, evidence_refs: set[str] | None = None,
                  inspected_evidence: set[str] | None = None, snapshot_id: str | None = None,
-                 duplicate_groups=()):
+                 duplicate_groups=(), verification=None, provenance=None, allow_unreviewed=False):
         self.candidates = {key: value.model_copy(deep=True) for key, value in candidates.items()}
         self.evidence_refs = frozenset(evidence_refs or ())
         self.inspected_evidence = frozenset(inspected_evidence or ())
         self.snapshot_id = snapshot_id
         self.duplicate_groups = tuple(tuple(group) for group in duplicate_groups)
+        self.verification = (VerificationPhaseResult(**{field: getattr(verification, field)
+            for field in VerificationPhaseResult.model_fields}) if verification is not None else None)
+        self.provenance = dict(provenance or {})
+        self.allow_unreviewed = allow_unreviewed
 
     def accept(self, draft: ReportDraft, decisions: list[VerificationDecision]) -> AcceptedReport:
         draft = ReportDraft.model_validate(draft.model_dump())
@@ -66,10 +71,16 @@ class FinalAcceptanceGate:
         if set(by_id) != set(self.candidates):
             raise AcceptanceError("every candidate must receive a verification decision")
         for decision in decisions:
+            try:
+                validate_decision(self.candidates[decision.finding_id], decision,
+                                  allow_unreviewed=self.allow_unreviewed)
+            except ValueError as exc:
+                raise AcceptanceError(str(exc)) from exc
             if decision.verdict != "rejected" and (not decision.evidence_refs or not set(decision.evidence_refs).issubset(self.evidence_refs)):
                 raise AcceptanceError("decision cites unknown evidence")
-            if decision.verdict == "confirmed" and not set(decision.evidence_refs).issubset(self.inspected_evidence):
-                raise AcceptanceError("confirmed decision lacks verifier inspection")
+            if (decision.verdict != 'rejected' and decision.causal_review is not None
+                    and not set(decision.evidence_refs).issubset(self.inspected_evidence)):
+                raise AcceptanceError("reviewed decision lacks verifier inspection")
         seen = set()
         buckets = (
             (draft.confirmed_defects, "confirmed", "defect"),
@@ -102,7 +113,34 @@ class FinalAcceptanceGate:
         expected = _report_ids(self.candidates, decisions, self.duplicate_groups)
         if seen != expected:
             raise AcceptanceError("draft dropped a non-rejected verification decision or retained a verified duplicate")
+        metadata = self.verification.model_dump() if self.verification is not None else {}
+        metadata.update(decisions=decisions, duplicate_groups=[list(group) for group in self.duplicate_groups],
+                        provenance=self.provenance)
+        audit = VerificationAudit.model_validate(metadata)
+        try:
+            validate_relations(self.candidates, audit, self.inspected_evidence)
+        except ValueError as exc:
+            raise AcceptanceError(str(exc)) from exc
+        if draft.verification_audit is not None and draft.verification_audit != audit:
+            raise AcceptanceError('Synthesis cannot alter verification audit or specialist provenance.')
+        draft.verification_audit = audit
+        draft.limitations.extend(note for note in audit.conflicts if note not in draft.limitations)
+        draft.limitations.extend('Unresolved disagreement: ' + item.rationale for item in audit.disagreements
+                                 if item.resolution == 'unresolved')
+        draft.summary = report_summary(draft)
         return AcceptedReport(draft, _token=_ACCEPTANCE_TOKEN)
+
+
+def report_summary(draft):
+    partial = bool(draft.coverage.skipped or draft.coverage.failed or draft.coverage.limitations
+                   or draft.limitations or draft.uncertain_high_impact_candidates)
+    return (('Partial review: ' if partial else 'Scoped review: ')
+            + f'{len(draft.confirmed_defects)} confirmed defect(s), '
+              f'{len(draft.uncertain_high_impact_candidates)} uncertain candidate(s), '
+              f'{len(draft.advisories)} advisory finding(s). '
+              f'{len(draft.coverage.inspected_files)} captured source file(s) inspected; '
+              f'{len(draft.coverage.skipped)} skipped and {len(draft.coverage.failed)} failed coverage entry/entries. '
+              'Coverage applies only to the captured source and recorded evidence.')
 
 
 def _report_ids(candidates, decisions, duplicate_groups):
@@ -191,6 +229,20 @@ def render_accepted_report(report: AcceptedReport) -> dict[str, str]:
     for label, entries in (("Skipped", draft.coverage.skipped), ("Failed", draft.coverage.failed)):
         for path, reason in sorted(entries.items()):
             lines.append(f"- {label}: {_markdown_text(path)} — {_markdown_text(reason)}")
+    if draft.verification_audit is not None:
+        lines.extend(['', '## Verification audit', ''])
+        for decision in draft.verification_audit.decisions:
+            origin = draft.verification_audit.provenance.get(decision.finding_id)
+            contributor = f'{origin.agent_id.value}/{origin.task_id}' if origin else 'origin not recorded'
+            lines.append(_markdown_text(f'{decision.finding_id}: {decision.verdict}; {contributor}; {decision.rationale}'))
+            if decision.causal_review is not None:
+                lines.append(_markdown_text(decision.causal_review.causal_basis))
+                lines.extend(_markdown_text(f'{item.field}: {item.status}; {item.explanation}')
+                             for item in decision.causal_review.assessments)
+        for group in draft.verification_audit.duplicate_reviews:
+            lines.append(_markdown_text(f'Equivalent findings: {", ".join(group.finding_ids)}; {group.rationale}'))
+        for conflict in draft.verification_audit.disagreements:
+            lines.append(_markdown_text(f'Disagreement {conflict.resolution}: {", ".join(conflict.finding_ids)}; {conflict.rationale}'))
     limitations = sorted(set(draft.limitations + draft.coverage.limitations))
     if limitations:
         lines.extend(["", "## Limitations", ""])

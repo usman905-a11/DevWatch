@@ -253,6 +253,85 @@
       "title": "CaptureCoverage",
       "type": "object"
     },
+    "CausalReview": {
+      "additionalProperties": false,
+      "properties": {
+        "assessments": {
+          "items": {
+            "$ref": "#/$defs/ClaimAssessment"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Assessments",
+          "type": "array"
+        },
+        "candidate_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Digest",
+          "type": "string"
+        },
+        "causal_basis": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Causal Basis",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assessments",
+        "candidate_digest",
+        "causal_basis"
+      ],
+      "title": "CausalReview",
+      "type": "object"
+    },
+    "ClaimAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "explanation": {
+          "maxLength": 400,
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "title",
+            "description",
+            "impact",
+            "remediation"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "unsupported",
+            "uncertain"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_refs",
+        "explanation",
+        "field",
+        "status"
+      ],
+      "title": "ClaimAssessment",
+      "type": "object"
+    },
     "Coverage": {
       "additionalProperties": false,
       "properties": {
@@ -300,6 +379,87 @@
         "skipped"
       ],
       "title": "Coverage",
+      "type": "object"
+    },
+    "Disagreement": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "finding_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 2,
+          "title": "Finding Ids",
+          "type": "array"
+        },
+        "rationale": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "resolution": {
+          "enum": [
+            "resolved",
+            "unresolved"
+          ],
+          "title": "Resolution",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_refs",
+        "finding_ids",
+        "rationale",
+        "resolution"
+      ],
+      "title": "Disagreement",
+      "type": "object"
+    },
+    "DuplicateReview": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "finding_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 2,
+          "title": "Finding Ids",
+          "type": "array"
+        },
+        "rationale": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_refs",
+        "finding_ids",
+        "rationale"
+      ],
+      "title": "DuplicateReview",
       "type": "object"
     },
     "EventPayload": {
@@ -661,6 +821,33 @@
       "title": "EventPayload",
       "type": "object"
     },
+    "FollowupRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_needed": {
+          "minLength": 1,
+          "title": "Evidence Needed",
+          "type": "string"
+        },
+        "question": {
+          "minLength": 1,
+          "title": "Question",
+          "type": "string"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_needed",
+        "question",
+        "task_id"
+      ],
+      "title": "FollowupRequest",
+      "type": "object"
+    },
     "GitMetadata": {
       "additionalProperties": false,
       "properties": {
@@ -901,6 +1088,17 @@
           },
           "title": "Uncertain High Impact Candidates",
           "type": "array"
+        },
+        "verification_audit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VerificationAudit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1112,6 +1310,25 @@
       "title": "SourceLocation",
       "type": "object"
     },
+    "SpecialistProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "task_id": {
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agent_id",
+        "task_id"
+      ],
+      "title": "SpecialistProvenance",
+      "type": "object"
+    },
     "TokenUsage": {
       "additionalProperties": false,
       "properties": {
@@ -1133,6 +1350,135 @@
         "prompt_tokens"
       ],
       "title": "TokenUsage",
+      "type": "object"
+    },
+    "VerificationAudit": {
+      "additionalProperties": false,
+      "properties": {
+        "conflicts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Conflicts",
+          "type": "array"
+        },
+        "decisions": {
+          "items": {
+            "$ref": "#/$defs/VerificationDecision"
+          },
+          "title": "Decisions",
+          "type": "array"
+        },
+        "disagreements": {
+          "items": {
+            "$ref": "#/$defs/Disagreement"
+          },
+          "title": "Disagreements",
+          "type": "array"
+        },
+        "duplicate_groups": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Duplicate Groups",
+          "type": "array"
+        },
+        "duplicate_reviews": {
+          "items": {
+            "$ref": "#/$defs/DuplicateReview"
+          },
+          "title": "Duplicate Reviews",
+          "type": "array"
+        },
+        "followup_requests": {
+          "items": {
+            "$ref": "#/$defs/FollowupRequest"
+          },
+          "title": "Followup Requests",
+          "type": "array"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SpecialistProvenance"
+          },
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "required": [
+        "conflicts",
+        "decisions",
+        "disagreements",
+        "duplicate_groups",
+        "duplicate_reviews",
+        "followup_requests",
+        "provenance"
+      ],
+      "title": "VerificationAudit",
+      "type": "object"
+    },
+    "VerificationDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "causal_review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CausalReview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "finding_id": {
+          "minLength": 1,
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "rationale": {
+          "maxLength": 600,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "confirmed",
+            "uncertain",
+            "rejected",
+            "advisory"
+          ],
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "required": [
+        "causal_review",
+        "confidence",
+        "evidence_refs",
+        "finding_id",
+        "rationale",
+        "verdict"
+      ],
+      "title": "VerificationDecision",
       "type": "object"
     }
   }

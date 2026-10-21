@@ -1,0 +1,105 @@
+{
+  "snapshot_id": "471c5050bfec452dbc8667c364c17ca8",
+  "report": {
+    "advisories": [],
+    "confirmed_defects": [],
+    "coverage": {
+      "failed": {},
+      "inspected_files": [
+        "service.py"
+      ],
+      "inspected_symbols": [],
+      "limitations": [],
+      "skipped": {
+        "skipped.ts": "not_inspected"
+      }
+    },
+    "limitations": [],
+    "snapshot_id": "471c5050bfec452dbc8667c364c17ca8",
+    "summary": "Partial review: 0 confirmed defect(s), 1 uncertain candidate(s), 0 advisory finding(s). 1 captured source file(s) inspected; 1 skipped and 0 failed coverage entry/entries. Coverage applies only to the captured source and recorded evidence.",
+    "uncertain_high_impact_candidates": [
+      {
+        "category": "logic",
+        "confidence": 0.7,
+        "description": "The first item is indexed without an empty check",
+        "evidence_refs": [
+          "evidence-e621e7a257c24dc6e12d19c7868688318d4d52ac6fb0e4366e38ccc8c7c0cc47"
+        ],
+        "finding_id": "finding-92538e54e826603c201cc3cf",
+        "impact": "Request can fail",
+        "kind": "high_impact_candidate",
+        "location": {
+          "end_line": 2,
+          "file_path": "service.py",
+          "snapshot_id": "471c5050bfec452dbc8667c364c17ca8",
+          "start_line": 2
+        },
+        "remediation": "",
+        "title": "Empty input raises",
+        "verification_rationale": "Boundary failure follows syntactically; caller contract is unknown"
+      }
+    ],
+    "verification_audit": {
+      "conflicts": [],
+      "decisions": [
+        {
+          "causal_review": {
+            "assessments": [
+              {
+                "evidence_refs": [
+                  "evidence-e621e7a257c24dc6e12d19c7868688318d4d52ac6fb0e4366e38ccc8c7c0cc47"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "title",
+                "status": "supported"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-e621e7a257c24dc6e12d19c7868688318d4d52ac6fb0e4366e38ccc8c7c0cc47"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "description",
+                "status": "supported"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-e621e7a257c24dc6e12d19c7868688318d4d52ac6fb0e4366e38ccc8c7c0cc47"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "impact",
+                "status": "uncertain"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-e621e7a257c24dc6e12d19c7868688318d4d52ac6fb0e4366e38ccc8c7c0cc47"
+                ],
+                "explanation": "No additional remediation claim.",
+                "field": "remediation",
+                "status": "supported"
+              }
+            ],
+            "candidate_digest": "8748dcbe7bbf7ffed334dd3871a15be092b80491e0943161e956e8490d7da92d",
+            "causal_basis": "For items=[], indexing element zero raises IndexError before a value can be returned."
+          },
+          "confidence": 0.7,
+          "evidence_refs": [
+            "evidence-e621e7a257c24dc6e12d19c7868688318d4d52ac6fb0e4366e38ccc8c7c0cc47"
+          ],
+          "finding_id": "finding-92538e54e826603c201cc3cf",
+          "rationale": "Boundary failure follows syntactically; caller contract is unknown",
+          "verdict": "uncertain"
+        }
+      ],
+      "disagreements": [],
+      "duplicate_groups": [],
+      "duplicate_reviews": [],
+      "followup_requests": [],
+      "provenance": {
+        "finding-92538e54e826603c201cc3cf": {
+          "agent_id": "logic_correctness",
+          "task_id": "logic-1"
+        }
+      }
+    }
+  }
+}

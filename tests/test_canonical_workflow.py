@@ -11,6 +11,7 @@ from devwatch.review.contracts import AgentId, ModelTier
 from devwatch.review.jobs import DurableJobManager, EventStore, JobStore
 from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
 from tests.test_control_agents import plan_payload
+from tests.verification_fixtures import reviewed
 
 
 def workflow_api():
@@ -46,7 +47,8 @@ class ReviewProvider:
                     candidates=[candidate], coverage={}, stop_reason="evidence_complete"))
         elif phase == "verification":
             decisions = [dict(finding_id=identity, verdict="uncertain", confidence=0.7,
-                              rationale="Boundary failure follows syntactically; caller contract is unknown", evidence_refs=candidate["evidence_refs"])
+                              rationale="Boundary failure follows syntactically; caller contract is unknown", evidence_refs=candidate["evidence_refs"],
+                              causal_review=reviewed(candidate, candidate['evidence_refs'], statuses={'impact': 'uncertain'}))
                          for identity, candidate in data["candidates"].items()]
             requests = [dict(task_id="logic-1", question="Is empty input allowed?", evidence_needed="caller contract")] if self.followup else []
             action = dict(kind="submit_verification", payload=dict(decisions=decisions, followup_requests=requests))

@@ -2,6 +2,11 @@
 
 Date: 2026-10-20. Status: **Complete for M19 engineering and scoped live detection/classification verification**.
 
+Subsequent follow-up (2026-10-21): [M20](m20-verifier-correctness-report.md) adds
+candidate-bound field review and rejects the three flagged extended impacts in
+fresh scoped verifier checks while preserving narrower valid findings. Historical
+M19 results and limitations below remain unchanged.
+
 ## A. Existing implementation
 
 The five specialists already used canonical source-scoped action loops, bounded

@@ -5,6 +5,7 @@ import importlib
 import json
 
 import pytest
+from tests.verification_fixtures import reviewed
 
 from devwatch.review.budgets import BudgetManager
 from devwatch.review.contracts import (
@@ -88,7 +89,7 @@ def test_acceptance_requires_known_candidates_verified_evidence_and_confidence()
     candidate = finding()
     report = report_with(candidate)
     decision = VerificationDecision(finding_id="f1", verdict="confirmed", confidence=0.9,
-                                    rationale="Reproduced failure", evidence_refs=["ev1"])
+                                    rationale="Reproduced failure", evidence_refs=["ev1"], causal_review=reviewed(candidate, ['ev1']))
     gate = api.FinalAcceptanceGate({"f1": candidate}, evidence_refs={"ev1"}, inspected_evidence={"ev1"})
     assert gate.accept(report, [decision]).draft.confirmed_defects[0].finding_id == "f1"
     for invalid in (
@@ -109,7 +110,7 @@ def test_renderer_accepts_only_gate_output_and_escapes_model_text():
     candidate = finding()
     report = report_with(candidate)
     decision = VerificationDecision(finding_id="f1", verdict="confirmed", confidence=0.9,
-                                    rationale="Reproduced failure", evidence_refs=["ev1"])
+                                    rationale="Reproduced failure", evidence_refs=["ev1"], causal_review=reviewed(candidate, ['ev1']))
     with pytest.raises(TypeError):
         api.render_accepted_report(report)
     accepted = api.FinalAcceptanceGate({"f1": candidate}, evidence_refs={"ev1"}, inspected_evidence={"ev1"}).accept(report, [decision])
@@ -124,7 +125,7 @@ def test_acceptance_cannot_drop_verified_or_undecided_candidates():
     api = finalization()
     gate = api.FinalAcceptanceGate({"f1": finding()}, evidence_refs={"ev1"}, inspected_evidence={"ev1"})
     decision = VerificationDecision(finding_id="f1", verdict="confirmed", confidence=0.9,
-                                    rationale="Reproduced failure", evidence_refs=["ev1"])
+                                    rationale="Reproduced failure", evidence_refs=["ev1"], causal_review=reviewed(finding(), ['ev1']))
     with pytest.raises(api.AcceptanceError):
         gate.accept(draft(), [decision])
     with pytest.raises(api.AcceptanceError):
@@ -179,7 +180,7 @@ def test_markdown_preserves_escaped_causal_description():
     candidate.description = "Empty input <script>crashes</script> when indexing [0]."
     accepted = api.FinalAcceptanceGate({"f1": candidate}, evidence_refs={"ev1"}, inspected_evidence={"ev1"}).accept(report_with(candidate), [
         VerificationDecision(finding_id="f1", verdict="confirmed", confidence=0.9,
-                             rationale="Reproduced failure", evidence_refs=["ev1"])])
+                             rationale="Reproduced failure", evidence_refs=["ev1"], causal_review=reviewed(candidate, ['ev1']))])
     rendered = api.render_accepted_report(accepted)["markdown"]
     assert "Empty input &lt;script&gt;crashes&lt;/script&gt; when indexing \\[0\\]" in rendered
     assert "<script>" not in rendered

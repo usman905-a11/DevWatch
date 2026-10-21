@@ -35,6 +35,23 @@ export interface ReportDraft {
   snapshot_id: string; summary: string; confirmed_defects: ReportFinding[]
   uncertain_high_impact_candidates: ReportFinding[]; advisories: ReportFinding[]
   coverage: Coverage; limitations: string[]
+  verification_audit?: VerificationAudit | null
+}
+export interface CausalReview {
+  candidate_digest: string; causal_basis: string
+  assessments: { field: 'title' | 'description' | 'impact' | 'remediation'
+    status: 'supported' | 'unsupported' | 'uncertain'; explanation: string; evidence_refs: string[] }[]
+}
+export interface VerificationDecision {
+  finding_id: string; verdict: 'confirmed' | 'uncertain' | 'rejected' | 'advisory'
+  confidence: number; rationale: string; evidence_refs: string[]; causal_review: CausalReview | null
+}
+export interface VerificationAudit {
+  decisions: VerificationDecision[]; duplicate_groups: string[][]; conflicts: string[]
+  duplicate_reviews: { finding_ids: string[]; rationale: string; evidence_refs: string[] }[]
+  disagreements: { finding_ids: string[]; resolution: 'resolved' | 'unresolved'; rationale: string; evidence_refs: string[] }[]
+  followup_requests: { task_id: string; question: string; evidence_needed: string }[]
+  provenance: Record<string, { task_id: string; agent_id: AgentId }>
 }
 export interface PersistedEvent {
   event_id: string; job_id: string; sequence: number; kind: string; timestamp: number

@@ -1,6 +1,22 @@
 # DevWatch seven-agent implementation checklist
 
-## Current milestone: M19 Specialist Functional Intelligence - COMPLETE (scoped verification)
+## Current milestone: M20 Synthesizer/Verifier Correctness - COMPLETE (scoped verification)
+
+- [x] Enforce candidate-bound causal/per-field semantic review with existing evidence gates.
+- [x] Validate duplicates/disagreements, preserve specialist provenance and safe partial recovery.
+- [x] Verify report/browser compatibility, full regression, source integrity and code review.
+- [x] Complete approved-input live checks and report every attempt under US$0.55 of the shared cap.
+
+Plan: [m20-verifier-correctness-plan.md](m20-verifier-correctness-plan.md).
+Report: [m20-verifier-correctness-report.md](m20-verifier-correctness-report.md).
+Backend 636 passed; frontend 53 passed and build passed; 168 frozen inputs match.
+Latest live selection: nine logical challenges, ten verifier executions, all
+selected gates pass. SQL arbitrary-execution candidates passed separately after
+two paired timeouts; paired latency remains unverified. All 20 attempts retained.
+M20 conservative US$0.32216100; cumulative US$3.47036400; shared remaining
+US$0.52963600, with all unknown holds included. M21 is not started.
+
+## Historical milestone: M19 Specialist Functional Intelligence - COMPLETE (scoped verification)
 
 - [x] Add provided/autonomous source evaluation without fabricated inspection.
 - [x] Add five role reasoning policies and frozen paired held-out cases.
@@ -11,7 +27,7 @@
 
 Latest live selection: 44 reviews, 22 TP / 0 FP / 0 FN, all matched kinds correct.
 All 148 attempts retained. M19 US$0.76228725; cumulative US$3.14820300 of shared
-US$4; remaining US$0.85179700. Backend 596 passed; no credential leaks. M20 is not started.
+US$4; remaining US$0.85179700. Backend 596 passed; no credential leaks. At M19 close, M20 was not started.
 Report: [m19-specialist-intelligence-report.md](m19-specialist-intelligence-report.md).
 
 ## Current follow-up: resolve M18 claims, then begin M19

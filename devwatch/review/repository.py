@@ -401,6 +401,10 @@ class SharedBlackboard:
             result.coverage.limitations = sorted(set(previous_result.coverage.limitations + result.coverage.limitations))
         self.results[task.task_id] = result.model_copy(deep=True)
 
+    def provenance(self):
+        return {identity: {'task_id': task_id, 'agent_id': self.results[task_id].agent_id.value}
+                for identity, task_id in self.candidate_tasks.items()}
+
     def coverage(self) -> Coverage:
         capture = self.gate.repository.manifest.capture_coverage
         output = Coverage(skipped=dict(capture.skipped), failed=dict(capture.failed),

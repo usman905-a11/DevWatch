@@ -98,7 +98,15 @@ class ContractProbeProvider:
                 confirmed = any(data["exit_code"] != 0 and not data["timed_out"] and not data["truncated"] for data in commands)
                 decisions = [{"finding_id": identity, "verdict": "confirmed" if confirmed else "rejected", "confidence": .95,
                     "rationale": "Independent executable probe reproduces the documented contract violation against immutable source." if confirmed else "No reproducible contract violation.",
-                    "evidence_refs": candidate["evidence_refs"]} for identity, candidate in state["candidates"].items()]
+                    "evidence_refs": candidate["evidence_refs"],
+                    # Programmed protocol fixture, not a live semantic judgment.
+                    "causal_review": {"candidate_digest": state['candidate_digests'][identity],
+                        "causal_basis": "The independent executable contract probe fails against the inspected immutable source, rather than producing the documented result/state.",
+                        "assessments": [{"field": field, "status": "supported",
+                            "explanation": "Immutable source and the trusted contract-probe failure establish this field.",
+                            "evidence_refs": candidate['evidence_refs']}
+                            for field in ('title','description','impact','remediation')]} if confirmed else None}
+                    for identity, candidate in state["candidates"].items()]
                 action = {"kind": "submit_verification", "payload": {"decisions": decisions}}
         else:
             verified = state["verified"]

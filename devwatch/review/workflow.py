@@ -30,6 +30,7 @@ from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
 from devwatch.review.subgraphs import AgentSubgraphs
 from devwatch.review.tool_runtime import TrustedToolRuntime
 from devwatch.review.database_tools import DatabaseTools
+from devwatch.review.verification import validate_decision, validate_relations
 
 
 class ReviewExecutionError(RuntimeError):
@@ -180,8 +181,9 @@ class CanonicalReviewExecutor:
         refs.update(ref for decision in result.decisions for ref in decision.evidence_refs)
         def accept(draft, decisions):
             return FinalAcceptanceGate(session.board.candidates, evidence_refs=refs,
-                inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.inspected},
-                snapshot_id=repository.snapshot_id, duplicate_groups=result.duplicate_groups).accept(draft, decisions)
+                inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
+                snapshot_id=repository.snapshot_id, duplicate_groups=result.duplicate_groups, verification=result,
+                provenance=session.board.provenance(), allow_unreviewed=True).accept(draft, decisions)
         workflow = FinalizationWorkflow(partial, no_followup, accept, budget=budget, tasks=tasks,
                                         renderer=lambda accepted: self.render_report(job, accepted), emit=session.emit)
         return (await workflow.run())["rendered"]
@@ -296,6 +298,7 @@ class _ReviewSession:
             selected["review_tasks"] = {identity: {"files": task.files, "symbols": task.symbols, "focus": task.focus[:200]}
                                         for identity, task in self.review_tasks.items()}
             selected["candidate_tasks"] = dict(self.board.candidate_tasks)
+            selected['candidate_provenance'] = self.board.provenance()
         return selected
 
     def private(self, identity):
@@ -531,7 +534,7 @@ class _ReviewSession:
             self.executor.jobs.complete_followup(self.job.job_id, owner=self.job.owner)
         def accept(draft, decisions):
             private = self.private("__final") or AgentPrivateState()
-            inspected = {ref for ref, receipt in private.evidence_progress.items() if receipt.inspected}
+            inspected = {ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()}
             checkpoint = self.executor.checkpoints.load(self.thread_id, "__final")
             recorded = None
             current = {key: candidate.model_dump(mode="json") for key, candidate in self.board.candidates.items()}
@@ -539,20 +542,27 @@ class _ReviewSession:
                     and checkpoint["state"].get("candidates") == current
                     and checkpoint["state"].get("verification") is not None):
                 recorded = VerificationPhaseResult.model_validate(checkpoint["state"]["verification"])
-            def gate_for(records, groups):
+            def gate_for(records, groups, *, verification=None, allow_unreviewed=False):
                 refs = {ref for candidate in self.board.candidates.values() for ref in candidate.evidence_refs}
+                work = AgentWorkItem(task_id='__final', agent_id=AgentId.SYNTHESIZER_VERIFIER,
+                    files=list(self.repository.manifest.entries), focus='Revalidate final evidence')
                 for decision in records:
                     for ref in decision.evidence_refs:
-                        self.repository.evidence(ref)
+                        self.repository.scoped_evidence(ref, work)
                         refs.add(ref)
+                    if decision.verdict != 'rejected' and decision.causal_review is not None:
+                        self.repository.validate_confirmation(self.board.candidates[decision.finding_id].model_dump(),
+                                                              decision, work, private)
                 return FinalAcceptanceGate(self.board.candidates, evidence_refs=refs, inspected_evidence=inspected,
-                                           snapshot_id=self.repository.snapshot_id, duplicate_groups=groups)
+                    snapshot_id=self.repository.snapshot_id, duplicate_groups=groups, verification=verification,
+                    provenance=self.board.provenance(), allow_unreviewed=allow_unreviewed)
             try:
                 same_decisions = (recorded is not None and len(recorded.decisions) == len(decisions)
                                   and {item.finding_id: item for item in recorded.decisions}
                                   == {item.finding_id: item for item in decisions})
                 groups = recorded.duplicate_groups if same_decisions else []
-                return gate_for(decisions, groups).accept(draft, decisions)
+                return gate_for(decisions, groups, verification=recorded if same_decisions else None,
+                    allow_unreviewed=private.stop_reason != 'evidence_complete').accept(draft, decisions)
             except (ValueError, KeyError, FileNotFoundError, PermissionError):
                 # One deterministic repair uses authoritative recorded decisions,
                 # revalidating inspection and preserving the remaining claims as uncertain.
@@ -563,7 +573,8 @@ class _ReviewSession:
                 safe.report_draft.coverage = draft.coverage.model_copy(deep=True)
                 safe.report_draft.coverage.failed.setdefault("__final", "final_consistency_failure")
                 safe.report_draft.limitations.append("Inconsistent synthesis replaced by deterministic verified findings.")
-                return gate_for(safe.decisions, safe.duplicate_groups).accept(safe.report_draft, safe.decisions)
+                return gate_for(safe.decisions, safe.duplicate_groups, verification=safe,
+                    allow_unreviewed=True).accept(safe.report_draft, safe.decisions)
         async def admit(request, ledger):
             self.executor.jobs.update_ledger(self.job.job_id, owner=self.job.owner, ledger=ledger, followup=request)
         workflow = FinalizationWorkflow(synthesize, followup, accept, budget=self.budget,
@@ -584,11 +595,16 @@ class _ReviewSession:
             if identity in preserved:
                 decision = preserved[identity]
                 try:
+                    if decision.causal_review is not None and any(
+                            item.status == 'unsupported' for item in decision.causal_review.assessments):
+                        decision = decision.model_copy(update={'verdict': 'rejected',
+                            'rationale': 'Rejected: recorded causal review identifies an unsupported clause.'})
+                    validate_decision(candidate, decision)
                     for ref in decision.evidence_refs:
                         self.repository.scoped_evidence(ref, work)
-                    if decision.verdict == "confirmed":
-                        if decision.confidence < .8 or not decision.evidence_refs or any(
-                            ref not in private.evidence_progress or not private.evidence_progress[ref].inspected
+                    if decision.verdict != 'rejected':
+                        if (decision.verdict == 'confirmed' and decision.confidence < .8) or not decision.evidence_refs or any(
+                            ref not in private.evidence_progress or not private.evidence_progress[ref].fully_inspected()
                             for ref in decision.evidence_refs):
                             raise ValueError("persisted confirmation lacks inspection receipts")
                         self.repository.validate_confirmation(candidate.model_dump(), decision, work, private)
@@ -598,14 +614,25 @@ class _ReviewSession:
                     continue
                 except (ValueError, KeyError, FileNotFoundError, PermissionError):
                     pass  # Retain the candidate below without asserting verification.
-            advisory = candidate.kind == "advisory"
             confidence = min(candidate.confidence, 0.5)
-            decisions.append(VerificationDecision(finding_id=identity, verdict="advisory" if advisory else "uncertain",
+            decisions.append(VerificationDecision(finding_id=identity, verdict='uncertain',
                 confidence=confidence, rationale=rationale, evidence_refs=candidate.evidence_refs))
-        groups = verification.duplicate_groups if verification else []
+        metadata = VerificationPhaseResult(**{field: getattr(verification, field)
+            for field in VerificationPhaseResult.model_fields}) if verification else VerificationPhaseResult(decisions=[])
+        metadata.decisions = decisions
+        relation_limitations = []
+        try:
+            validate_relations(self.board.candidates, metadata,
+                {ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()})
+        except ValueError:
+            relation_limitations = ['Unvalidated duplicate/disagreement relations were not reused.']
+            relation_limitations.extend('Unresolved relation: ' + item.rationale for item in metadata.disagreements)
+            metadata.duplicate_groups, metadata.duplicate_reviews, metadata.disagreements = [], [], []
+        coverage = self.board.coverage()
+        coverage.failed['__planner' if phase == 'planner' else '__final'] = reason
         draft = assemble_report(self.repository.snapshot_id, self.board.candidates, decisions,
-            summary=f"Partial review: {phase} stopped ({reason})", coverage=self.board.coverage(),
-            duplicate_groups=groups,
-            limitations=[f"Partial result: {phase} stopped ({reason}); recorded verification preserved; remaining claims unverified."])
-        return VerificationSynthesisResult(decisions=decisions, duplicate_groups=groups,
-                                           report_draft=draft, coverage_summary=draft.coverage)
+            summary=f"Partial review: {phase} stopped ({reason})", coverage=coverage,
+            duplicate_groups=metadata.duplicate_groups,
+            limitations=[f"Partial result: {phase} stopped ({reason}); recorded verification preserved; remaining claims unverified.",
+                         *relation_limitations])
+        return VerificationSynthesisResult(**metadata.model_dump(), report_draft=draft, coverage_summary=draft.coverage)

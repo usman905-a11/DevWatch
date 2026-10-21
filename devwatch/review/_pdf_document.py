@@ -69,6 +69,21 @@ def _build_document(draft: dict) -> bytes:
                                  ("Verification", finding["verification_rationale"]),
                                  ("Confidence", f"{finding['confidence']:.2f}"), ("Remediation", finding["remediation"])):
                 add(f"{field}: {value}")
+    audit = draft.get('verification_audit')
+    if audit:
+        add('Verification audit', heading)
+        for decision in audit['decisions']:
+            origin = audit['provenance'].get(decision['finding_id'])
+            contributor = f"{origin['agent_id']}/{origin['task_id']}" if origin else 'origin not recorded'
+            add(f"{decision['finding_id']}: {decision['verdict']}; {contributor}; {decision['rationale']}")
+            if decision['causal_review'] is not None:
+                add(decision['causal_review']['causal_basis'])
+                for item in decision['causal_review']['assessments']:
+                    add(f"{item['field']}: {item['status']}; {item['explanation']}")
+        for group in audit['duplicate_reviews']:
+            add(f"Equivalent findings: {', '.join(group['finding_ids'])}; {group['rationale']}")
+        for conflict in audit['disagreements']:
+            add(f"Disagreement {conflict['resolution']}: {', '.join(conflict['finding_ids'])}; {conflict['rationale']}")
     add("Coverage", heading)
     coverage = draft["coverage"]
     add(f"Files inspected: {len(coverage['inspected_files'])}; symbols inspected: {len(coverage['inspected_symbols'])}")

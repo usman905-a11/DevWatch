@@ -1,0 +1,33 @@
+{
+  "challenges": [
+    {
+      "challenge_id": "supported-complexity-advisory",
+      "approved_fixture": "membership-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def unique(items):\n    result = []\n    for value in items:\n        if value not in result:\n            result.append(value)\n    return result\n"
+        },
+        "contract": "Find unique integers in encounter order. Input can contain millions of distinct integers. Report unmeasured complexity as an advisory.",
+        "candidates": [
+          {
+            "category": "complexity",
+            "kind": "advisory",
+            "title": "Quadratic membership search during encounter-order deduplication",
+            "description": "In subject.py, unique(items) performs linear search `if value not in result:` on a list that grows up to n elements. For an input iterable with n distinct items, iteration i inspects up to i elements, resulting in Theta(n^2) value comparisons. A linear alternative using an auxiliary seen set (`seen = set()`, checking `if value not in seen:` and performing `seen.add(value)`) or `list(dict.fromkeys(items))` reduces comparisons to O(n) hash operations while preserving encounter order and returning a materialized list of unique elements.",
+            "impact": "Repeated scanning across the accumulating result list yields quadratic comparison growth rather than linear growth for distinct integers, scaling poorly as input size reaches millions of items.",
+            "confidence": 0.95,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 6
+            },
+            "remediation": "Track visited values in an auxiliary set (`seen = set()`) alongside `result`, checking `if value not in seen: seen.add(value); result.append(value)`, or return `list(dict.fromkeys(items))` to deduplicate in linear time while preserving encounter order."
+          }
+        ]
+      },
+      "source_agents": [
+        "performance_scalability"
+      ]
+    }
+  ]
+}

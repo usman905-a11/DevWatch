@@ -9,6 +9,7 @@ from devwatch.review.subgraphs import AgentSubgraphs
 from tests.test_repository_context import setup_repository
 from tests.test_iterative_agents import ScriptedProvider
 from tests.test_audit_evidence import candidate
+from tests.verification_fixtures import reviewed
 
 
 @pytest.mark.parametrize('count',[0,5,24])
@@ -20,8 +21,10 @@ def test_small_medium_and_large_reviews_verify_in_bounded_batches_without_loss(t
         async def generate_completion(self,request):
             data=json.loads(request.prompt)
             if data['phase']=='verification':
-                action=dict(kind='submit_verification',payload={'decisions':[
-                    dict(finding_id=identity,verdict='uncertain',confidence=.6,rationale='Caller contract unknown',evidence_refs=[ref])
+                action=dict(kind='submit_verification',inspected_evidence=[page['evidence_ref']
+                    for page in data['selected_context']['evidence']],payload={'decisions':[
+                    dict(finding_id=identity,verdict='uncertain',confidence=.6,rationale='Caller contract unknown',evidence_refs=[ref],
+                         causal_review=reviewed(data['candidates'][identity], [ref], statuses={'impact':'uncertain'}))
                     for identity in data['candidates']]})
             else:
                 action=dict(kind='submit_synthesis',payload={'summary':'Review assembled','limitations':[]})

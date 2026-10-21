@@ -6,6 +6,7 @@ import json
 
 from devwatch.providers.base import LLMResponse, LLMUsage
 from devwatch.review.contracts import SPECIALISTS
+from tests.verification_fixtures import reviewed
 
 
 class EvaluationProvider:
@@ -53,7 +54,9 @@ class EvaluationProvider:
             else:
                 action = {"kind": "submit_verification", "payload": {"decisions": [{"finding_id": identity,
                     "verdict": "confirmed", "confidence": .9, "rationale": "Literal index zero is unguarded for empty input",
-                    "evidence_refs": private["evidence_refs"]} for identity in state["candidates"]]}}
+                    "evidence_refs": private["evidence_refs"],
+                    "causal_review": reviewed(state['candidates'][identity], private['evidence_refs'])}
+                    for identity in state["candidates"]]}}
         else:
             action = {"kind": "submit_synthesis", "payload": {"summary": "Scripted evaluator integration check", "limitations": []}}
         action["inspected_evidence"] = [page["evidence_ref"] for page in context["evidence"]]

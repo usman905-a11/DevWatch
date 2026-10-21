@@ -219,12 +219,54 @@ class SpecialistResult(ContractModel):
         return ReviewTask.specialist_only(value)
 
 
+class ClaimAssessment(ContractModel):
+    field: Literal['title', 'description', 'impact', 'remediation']
+    status: Literal['supported', 'unsupported', 'uncertain']
+    explanation: str = Field(min_length=1, max_length=400)
+    evidence_refs: list[str] = Field(min_length=1, max_length=8)
+
+
+class CausalReview(ContractModel):
+    candidate_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
+    causal_basis: str = Field(min_length=1, max_length=1000)
+    assessments: list[ClaimAssessment] = Field(min_length=1, max_length=4)
+
+
 class VerificationDecision(ContractModel):
     finding_id: str = Field(min_length=1)
     verdict: Literal["confirmed", "uncertain", "rejected", "advisory"]
     confidence: float = Field(ge=0, le=1)
     rationale: str = Field(min_length=1, max_length=600)
     evidence_refs: list[str] = Field(default_factory=list, max_length=8)
+    causal_review: CausalReview | None = None
+
+
+class DuplicateReview(ContractModel):
+    finding_ids: list[str] = Field(min_length=2, max_length=64)
+    rationale: str = Field(min_length=1, max_length=600)
+    evidence_refs: list[str] = Field(min_length=1, max_length=8)
+
+
+class Disagreement(DuplicateReview):
+    resolution: Literal['resolved', 'unresolved']
+
+
+class VerificationPhaseResult(ContractModel):
+    decisions: list[VerificationDecision]
+    duplicate_groups: list[list[str]] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    followup_requests: list['FollowupRequest'] = Field(default_factory=list)
+    duplicate_reviews: list[DuplicateReview] = Field(default_factory=list)
+    disagreements: list[Disagreement] = Field(default_factory=list)
+
+
+class SpecialistProvenance(ContractModel):
+    task_id: str = Field(min_length=1)
+    agent_id: AgentId
+
+
+class VerificationAudit(VerificationPhaseResult):
+    provenance: dict[str, SpecialistProvenance] = Field(default_factory=dict)
 
 
 class ReportFinding(FindingCandidate):
@@ -240,6 +282,7 @@ class ReportDraft(ContractModel):
     advisories: list[ReportFinding] = Field(default_factory=list)
     coverage: Coverage
     limitations: list[str] = Field(default_factory=list)
+    verification_audit: VerificationAudit | None = None
 
 
 class FollowupRequest(ContractModel):
@@ -253,15 +296,10 @@ class VerificationSynthesisResult(ContractModel):
     duplicate_groups: list[list[str]] = Field(default_factory=list)
     conflicts: list[str] = Field(default_factory=list)
     followup_requests: list[FollowupRequest] = Field(default_factory=list)
+    duplicate_reviews: list[DuplicateReview] = Field(default_factory=list)
+    disagreements: list[Disagreement] = Field(default_factory=list)
     report_draft: ReportDraft
     coverage_summary: Coverage
-
-
-class VerificationPhaseResult(ContractModel):
-    decisions: list[VerificationDecision]
-    duplicate_groups: list[list[str]] = Field(default_factory=list)
-    conflicts: list[str] = Field(default_factory=list)
-    followup_requests: list[FollowupRequest] = Field(default_factory=list)
 
 
 class SynthesisSummary(ContractModel):

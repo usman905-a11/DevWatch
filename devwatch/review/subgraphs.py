@@ -24,10 +24,12 @@ from devwatch.review.jobs import UnknownToolCompletion, safe_stop_reason
 from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, CommandArguments, describe_tool
 from devwatch.review.tool_errors import ToolFailure, diagnose, failure_identity, safe_arguments
 from devwatch.review import investigation, tool_selection, prompts
+from devwatch.review import verification as semantic_verification
 from devwatch.review.contracts import (
     AGENT_CONTRACTS, SPECIALISTS, AgentAction, AgentId, AgentPrivateState, AgentWorkItem,
     ContractModel, EvidenceProgress, ModelTier, ReviewPlan, ReviewTask, SpecialistResult, TokenUsage,
     SynthesisSummary, VerificationPhaseResult, VerificationSynthesisResult,
+    VerificationDecision, CausalReview, ClaimAssessment, DuplicateReview, Disagreement, FindingCandidate,
 )
 
 
@@ -310,21 +312,24 @@ class AgentSubgraphs:
             if {d.finding_id for d in result.decisions} != set(known) or len(result.decisions) != len(known):
                 raise ValueError("every known candidate requires exactly one decision")
             for decision in result.decisions:
+                semantic_verification.validate_decision(known[decision.finding_id], decision)
                 allowed = set(known[decision.finding_id]["evidence_refs"]) | set(private.evidence_refs)
                 if not set(decision.evidence_refs).issubset(allowed):
                     raise ValueError("verification cites unknown evidence")
                 if decision.verdict != "rejected" and not decision.evidence_refs:
                     raise ValueError("non-rejected decisions require evidence")
-                if decision.verdict == "confirmed":
-                    if decision.confidence < .8 or any(
-                        not private.evidence_progress.get(ref, EvidenceProgress()).inspected for ref in decision.evidence_refs
-                    ):
+                if decision.verdict != 'rejected':
+                    if (decision.verdict == 'confirmed' and decision.confidence < .8) or any(
+                        not private.evidence_progress.get(ref, EvidenceProgress()).fully_inspected() for ref in decision.evidence_refs):
                         raise ValueError("confirmation requires delivered and inspected evidence with confidence >=0.8")
                     if self.tools.validate_confirmation is not None:
                         self.tools.validate_confirmation(known[decision.finding_id], decision, task, private)
             if any(len(group) < 2 or len(group) != len(set(group)) or not set(group).issubset(state["candidates"])
                    for group in result.duplicate_groups):
                 raise ValueError("duplicate groups contain unknown candidates")
+            semantic_verification.validate_relations(state['candidates'],
+                semantic_verification.combine_verification(state.get('verification'), result),
+                {ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()})
             if state.get("review_tasks") is not None and any(request.task_id not in state["review_tasks"] for request in result.followup_requests):
                 raise ValueError("follow-up must target an existing review task")
         elif action.kind == "submit_synthesis":
@@ -344,11 +349,10 @@ class AgentSubgraphs:
                 field: getattr(result, field) for field in VerificationPhaseResult.model_fields})
             if verification != state["verification"] or result.report_draft.snapshot_id != state["snapshot_id"]:
                 raise ValueError("synthesis cannot change verification or snapshot identity")
-            from devwatch.review.contracts import FindingCandidate
             FinalAcceptanceGate({key: FindingCandidate.model_validate(raw) for key, raw in state["candidates"].items()},
                 evidence_refs={ref for decision in verification.decisions for ref in decision.evidence_refs},
-                inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.inspected},
-                snapshot_id=state["snapshot_id"], duplicate_groups=verification.duplicate_groups
+                inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
+                snapshot_id=state["snapshot_id"], duplicate_groups=verification.duplicate_groups, verification=verification
                 ).accept(result.report_draft, verification.decisions)
         elif action.kind == "request_followup":
             # Follow-up proposals belong to the verification output; runtime
@@ -420,6 +424,9 @@ class AgentSubgraphs:
         # Bound the complete serialized request, keeping schemas, permissions and
         # individual candidate claims intact. Optional context can be retrieved.
         while True:
+            if state.get('phase') == 'verification':
+                body['candidate_digests'] = {identity: semantic_verification.candidate_digest(claim)
+                                             for identity, claim in active.items()}
             max_output = (min(8192, 2048 + 1024 * len(active)) if task.agent_id == AgentId.SYNTHESIZER_VERIFIER
                           else self.budget.limits.planner_output_tokens if task.agent_id == AgentId.PLANNER else 8192)
             prompt = json.dumps(body, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
@@ -616,7 +623,10 @@ class AgentSubgraphs:
                     if isinstance(exc, ValidationError):
                         # Error inputs may contain private content; field paths
                         # and error types alone provide useful repair guidance.
-                        fields = set(AgentAction.model_fields) | set(ReviewPlan.model_fields) | {"agent_id", "task_id", "files", "focus", "evidence_refs"}
+                        fields = {field for schema in (AgentAction, ReviewPlan, SpecialistResult, FindingCandidate,
+                            VerificationPhaseResult, VerificationDecision, CausalReview, ClaimAssessment,
+                            DuplicateReview, Disagreement, SynthesisSummary) for field in schema.model_fields}
+                        fields.add('candidate_provenance')  # Known read-only context key, never arbitrary response text.
                         state["validation_error"] = "Return a JSON action with kind and payload. " + "; ".join(
                             ".".join(str(part) if isinstance(part, int) or part in fields else "field" for part in error["loc"])
                             + ":" + error["type"] for error in exc.errors())[:155]
@@ -751,11 +761,7 @@ class AgentSubgraphs:
             elif action.kind == "submit_verification":
                 verified = VerificationPhaseResult.model_validate(action.payload)
                 previous = state.get("verification")
-                if previous is not None:
-                    verified.decisions = previous.decisions + verified.decisions
-                    verified.duplicate_groups = previous.duplicate_groups + verified.duplicate_groups
-                    verified.conflicts = previous.conflicts + verified.conflicts
-                    verified.followup_requests = previous.followup_requests + verified.followup_requests
+                verified = semantic_verification.combine_verification(previous, verified)
                 proposed = state.get("proposed_followups", [])
                 # A proposal is never a dispatch or a separate agent.
                 verified.followup_requests.extend(proposed)

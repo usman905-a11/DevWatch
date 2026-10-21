@@ -21,6 +21,7 @@ def test_pdf_requires_acceptance_and_preserves_literal_model_text():
                         coverage=Coverage(inspected_files=["service.py"], inspected_symbols=["first"],
                                           skipped={"generated.js": "excluded_source"}, failed={"task": "tool_unavailable"}),
                         limitations=["Tests did not run"])
+    draft.limitations.append(draft.summary)  # Free model prose is preserved literally as a limitation, not a completeness claim.
     with pytest.raises(TypeError):
         render(draft)
     accepted = FinalAcceptanceGate({}).accept(draft, [])
@@ -74,7 +75,7 @@ def test_concurrent_mixed_glyph_documents_do_not_share_mutating_font_state(monke
                 active -= 1
     monkeypatch.setattr(SimpleDocTemplate, "build", observed_build)
     reports = [FinalAcceptanceGate({}).accept(ReportDraft(snapshot_id=f"mixed-{index}",
-        summary=text, coverage=Coverage()), []) for index, text in enumerate(["café", "naïve", "£ coût", "你好"])]
+        summary=text, limitations=[text], coverage=Coverage()), []) for index, text in enumerate(["café", "naïve", "£ coût", "你好"])]
     with ThreadPoolExecutor(max_workers=4) as pool:
         documents = list(pool.map(render, reports))
     assert peak == 1, "Shared TTFont builds overlapped"
@@ -85,7 +86,7 @@ def test_concurrent_mixed_glyph_documents_do_not_share_mutating_font_state(monke
 
 def test_significant_spaces_in_report_string_literals_are_preserved():
     accepted = FinalAcceptanceGate({}).accept(ReportDraft(snapshot_id="spaces", summary='Expected input is "a  b"; actual input is "a b".',
-                                                         coverage=Coverage()), [])
+        limitations=['Expected input is "a  b"; actual input is "a b".'], coverage=Coverage()), [])
     with pymupdf.open(stream=renderer()(accepted), filetype="pdf") as document:
         text = "".join(page.get_text() for page in document)
         assert '"a  b"' in text and '"a b"' in text

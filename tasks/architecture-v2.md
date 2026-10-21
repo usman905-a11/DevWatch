@@ -4,7 +4,7 @@ Date: 2026-10-18. Baseline: M12 of the supplied Final Architecture and Reliabili
 Remediation Plan v2.0. This supplements [seven-agent-design.md](seven-agent-design.md)
 with the actual implementation map and the dependency-ordered M12–M23 work.
 It preserves the existing seven identities, transport and immutable-source design.
-The M13, M14, M15, M16, M17, M18 and M19 supplements below record subsequent changes; other later milestone
+The M13, M14, M15, M16, M17, M18, M19 and M20 supplements below record subsequent changes; other later milestone
 entries remain planned work, not claims of implementation.
 
 ## Installed implementation
@@ -527,5 +527,41 @@ source/goal/runtime/quarantine gates pass. Held-out kind accuracy improves 80% t
 remain flagged; direct specialist checks do not prove final synthesis correctness.
 No held-out outcomes select corrections and all 148 attempts remain in evidence.
 Backend 596 passed, zero failures/errors/skips; all 159 frozen inputs match,
-with zero credential leaks. M20 remains planned.
+with zero credential leaks. At the M19 close, M20 remained planned.
+
+## M20 verifier-correctness supplement (2026-10-21)
+
+`review/verification.py` owns shared semantic-review admission and relation
+validation, used by subgraphs, final acceptance and recovery. Model-authored
+causal reviews bind to the full normalized candidate SHA256 and assess title,
+description, impact and remediation. Positive verdicts require support for all
+fields; unsupported fields require whole-candidate rejection. Genuine evidence
+gaps may remain uncertain. Every reviewed non-rejected decision, including
+advisories, needs fully inspected evidence and the existing repository source gate.
+These checks enforce judgment completeness/consistency, not semantic truth itself.
+
+`VerificationAudit` preserves decisions, causal duplicate reviews, structured
+resolved/unresolved disagreements and runtime blackboard task/specialist origins.
+The synthesizer cannot alter this audit or candidate text. Equivalent findings
+retain all contributor decisions; unresolved disagreements remain uncertain and
+visible. Runtime summaries count findings and actual coverage. Partial recovery
+can retain missing legacy/interrupted reviews only as explicitly unverified
+low-confidence candidates with failed coverage; valid bound unsupported reviews
+are rejected. Planner failures are attributed to the planner.
+
+Markdown and the isolated PDF worker render the audit. Optional public wire audit
+metadata is accepted by the updated browser alongside older persisted reports.
+v4.1 safe validation repair exposes only known schema paths and static read-only
+keys. Existing performance-cost guidance is reused for source-delivered verifier
+context with actual performance-origin candidates. No agent, permission, scope,
+deadline, repair allowance, dependency or model tier was added or broadened.
+
+Verification: 636 backend tests; 53 frontend tests and production build; 168 frozen
+inputs match; eight authority methods unchanged. Final live selection passes nine
+logical supplied-candidate challenges in ten verifier executions. The arbitrary-SQL
+pair twice exceeded the unchanged 30-second timeout; its candidates passed
+separately. This is not end-to-end specialist recall or paired latency evidence.
+All 20 paid attempts and full unknown holds remain. M20 conservative US$0.32216100;
+cumulative US$3.47036400; shared remaining US$0.52963600. M21 has not started.
+Report: [m20-verifier-correctness-report.md](m20-verifier-correctness-report.md).
 See [M19 report](m19-specialist-intelligence-report.md).

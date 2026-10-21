@@ -7,11 +7,13 @@ from devwatch.review.contracts import Coverage, FindingCandidate, ReportDraft, R
 from devwatch.review.finalization import AcceptanceError, FinalAcceptanceGate
 from tests.test_audit_evidence import engine, candidate
 from tests.test_repository_context import setup_repository
+from tests.verification_fixtures import reviewed
 
 
 def payload(repo, ref):
     claim = candidate(repo,ref)
-    decision = dict(finding_id='f1',verdict='confirmed',confidence=.9,rationale='Source inspected',evidence_refs=[ref])
+    decision = dict(finding_id='f1',verdict='confirmed',confidence=.9,rationale='Source inspected',evidence_refs=[ref],
+                    causal_review=reviewed(claim, [ref]))
     finding = dict(**claim,finding_id='f1',verification_rationale='Source inspected')
     return dict(decisions=[decision],report_draft=dict(snapshot_id=repo.snapshot_id,summary='Review',coverage={},confirmed_defects=[finding]),coverage_summary={})
 
@@ -51,6 +53,7 @@ def test_verifier_may_raise_confidence_after_inspecting_new_evidence(tmp_path):
     ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
     good=payload(repo,ref)
     claim={**candidate(repo,ref),'confidence':.6}
+    good['decisions'][0]['causal_review']=reviewed(claim,[ref])
     runtime,_=engine(repo,[dict(kind='submit_verification',inspected_evidence=[ref],payload={'decisions':good['decisions']}),
         dict(kind='submit_synthesis',payload={'summary':'Verified','limitations':[]})])
     state=asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id,files=task.files,candidates={'f1':claim}))
@@ -65,6 +68,7 @@ def test_acceptance_requires_verifier_inspection_and_allows_verifier_evidence(tm
     draft=ReportDraft.model_validate(raw['report_draft'])
     decisions=[VerificationDecision.model_validate(raw['decisions'][0])]
     claim=FindingCandidate.model_validate(candidate(repo,ref))
+    decisions[0].causal_review=reviewed(claim,[own])
     with pytest.raises(AcceptanceError,match='inspect'):
         FinalAcceptanceGate({'f1':claim},evidence_refs={ref,own}).accept(draft,decisions)
     accepted=FinalAcceptanceGate({'f1':claim},evidence_refs={ref,own},inspected_evidence={own}).accept(draft,decisions)
@@ -85,6 +89,7 @@ def test_failed_synthesis_repair_preserves_confirmed_findings_in_partial_report(
             if data['phase']=='verification':
                 for decision in action['payload']['decisions']:
                     decision.update(verdict='confirmed',confidence=.9)
+                    for assessment in decision['causal_review']['assessments']: assessment['status']='supported'
             elif data['phase']=='synthesis':
                 action['payload']['report_draft']['uncertain_high_impact_candidates']=[]
                 action['payload']['report_draft']['confirmed_defects']=[]
@@ -123,7 +128,9 @@ def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path):
             response=await super().generate_completion(request)
             if json.loads(request.prompt)['phase']=='verification':
                 action=json.loads(response.content)
-                for decision in action['payload']['decisions']: decision.update(verdict='confirmed',confidence=.9)
+                for decision in action['payload']['decisions']:
+                    decision.update(verdict='confirmed',confidence=.9)
+                    for assessment in decision['causal_review']['assessments']: assessment['status']='supported'
                 response=response.model_copy(update={'content':json.dumps(action)})
             return response
     async def run():
@@ -162,7 +169,7 @@ def test_partial_recovery_downgrades_a_confirmation_without_inspection_receipts(
     result=_ReviewSession.partial_result(session,AgentPrivateState(stop_reason='invalid_schema'),verification=verification)
     assert not result.report_draft.confirmed_defects
     assert len(result.report_draft.uncertain_high_impact_candidates)==1
-    assert FinalAcceptanceGate(board.candidates,evidence_refs={ref}).accept(result.report_draft,result.decisions)
+    assert FinalAcceptanceGate(board.candidates,evidence_refs={ref},allow_unreviewed=True).accept(result.report_draft,result.decisions)
 
 
 def test_inconsistent_persisted_synthesis_recovers_from_recorded_verification(tmp_path):

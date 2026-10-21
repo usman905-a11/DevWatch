@@ -1,10 +1,27 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: M20 Synthesizer/Verifier Correctness (2026-10-21)
+
+Implement [the M20 plan](m20-verifier-correctness-plan.md) in ordered test-first
+slices: semantic admission, acceptance/recovery and duplicate/conflict provenance,
+consumer compatibility, then bounded live verification. Preserve historical plans
+and receipts. Shared remaining budget starts at US$0.851797; M20 allocation is at
+most US$0.55 within that total. No M21, commit, push or deployment work.
+
+**Completed for engineering and scoped verification.** Backend 636 passed;
+frontend 53 passed and build passed; 168 frozen inputs match. Latest live selection
+passes nine logical challenges in ten verifier executions, including two SQL
+singletons after paired timeouts. All 20 attempts and unknown holds remain.
+M20 US$0.32216100; cumulative US$3.47036400; remaining shared US$0.52963600.
+Limitations and full evidence: [M20 report](m20-verifier-correctness-report.md).
+M21 remains planned, not started.
+
 M18 observed-claim follow-up and M19 scoped implementation/verification are
 complete. Backend 596 passed; latest 44 live reviews find 22 targets with no
 false positives or misses. Three secondary impact extensions remain explicit
-M20 follow-up. Shared remaining budget: US$0.85179700.
-See [M19 report](m19-specialist-intelligence-report.md). M20 is not started.
+M20 follow-up at the M19 close. Shared remaining budget then: US$0.85179700.
+See [M19 report](m19-specialist-intelligence-report.md). The M20 section above
+records the subsequent implementation and current accounting.
 
 ## Current request: fix M18 secondary claims, then start M19 (2026-10-20)
 

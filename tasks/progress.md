@@ -1,5 +1,23 @@
 # Execution ledger — plan: tasks/seven-agent-design.md
 
+M20 Synthesizer/Verifier Correctness (2026-10-21), COMPLETE for engineering and
+scoped verification: exact-candidate causal/per-field review, inspected positive
+and uncertain decisions, duplicate/disagreement validation, runtime specialist
+provenance, report audit, honest coverage and recovery are implemented. Browser
+wire remains compatible with older persisted reports. Backend 636 passed, zero
+failures/errors/skips; 40 new tests. Frontend 53 passed and build passed. All 168
+frozen inputs match; static checks and credential scan pass. Latest live selection
+covers nine logical challenges across ten verifier executions with all selected
+gates passing; manual author review finds no additional material issue in eight
+published findings. All 20 attempts retained, including two paired SQL timeouts,
+one schema exhaustion and one false memory advisory. SQL candidates subsequently
+passed separately; paired latency is not established. Source/labels/permissions
+and repair/timeout budgets remain intact. M20 conservative US$0.32216100;
+cumulative US$3.47036400; shared remaining US$0.52963600, including all unknown
+holds. No universal semantic, held-out accuracy or full-system recall claim.
+No M21/commit/push/deployment work.
+Report: [m20-verifier-correctness-report.md](m20-verifier-correctness-report.md).
+
 M19 Specialist Functional Intelligence (2026-10-20), COMPLETE for engineering
 and scoped detection/classification verification:
 provided/autonomous source evaluation, five role policies, source-stage cost

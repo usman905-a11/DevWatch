@@ -8,6 +8,7 @@ from devwatch.review.contracts import AgentAction, AgentId, AgentPrivateState, M
 from devwatch.review.subgraphs import AgentSubgraphs
 from tests.test_iterative_agents import ScriptedProvider
 from tests.test_repository_context import setup_repository
+from tests.verification_fixtures import reviewed
 
 
 def engine(repo, responses):
@@ -71,7 +72,8 @@ def test_confirmation_requires_delivered_acknowledged_evidence(tmp_path, inspect
     _, _, _, repo, task = setup_repository(tmp_path)
     ref = repo._read_source({'file_path':'service.py'}, task).evidence_ref
     action = dict(kind='submit_verification', payload=dict(decisions=[dict(finding_id='f1', verdict='confirmed',
-        confidence=.9, rationale='Index access raises on empty input', evidence_refs=[ref])]))
+        confidence=.9, rationale='Index access raises on empty input', evidence_refs=[ref],
+        causal_review=reviewed(candidate(repo, ref), [ref]))]))
     if inspect_evidence:
         action['inspected_evidence'] = [ref]
     runtime, _ = engine(repo, [action, {'kind':'finish'}] if inspect_evidence else [action, action])
@@ -95,7 +97,8 @@ def test_verifier_can_cite_its_own_scoped_evidence_with_provenance(tmp_path):
             else:
                 own = data['private_state']['evidence_refs'][0]
                 self.responses = iter([dict(kind='submit_verification', inspected_evidence=[own], payload=dict(decisions=[
-                    dict(finding_id='f1',verdict='confirmed',confidence=.9,rationale='Checked source',evidence_refs=[own])]))
+                    dict(finding_id='f1',verdict='confirmed',confidence=.9,rationale='Checked source',evidence_refs=[own],
+                         causal_review=reviewed(data['candidates']['f1'], [own]))]))
                     if data['phase']=='verification' else dict(kind='finish')])
             return await super().generate_completion(request)
     provider = Provider([])

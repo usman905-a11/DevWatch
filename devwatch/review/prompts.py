@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-VERSION = 'review-prompts-v3.3'
+VERSION = 'review-prompts-v4.1'
 CONTEXT_VERSION = 'scoped-evidence-priority-v2'
 SHARED_POLICY = (
     'Return only one JSON AgentAction instance, without fences or prose. Do not echo schemas, '
@@ -76,13 +76,31 @@ SKILLS = {
         'each candidate needs acknowledged read_source covering its location, not parsed facts alone. '
         'Do not use finish or a bare result. Preserve uncertainty/failures in coverage.',
     'verification': 'Return kind=submit_verification with VerificationPhaseResult in payload; decide '
-        'every current candidate exactly once (decisions=[] when empty). Confirm only after reading '
-        'and acknowledging relevant source/contracts. Audit the full description, impact and '
-        'remediation sentence by sentence, including parentheses, against the documented input '
-        'domain and demonstrated effects. A rationale proving only the title/core is insufficient. '
-        'If any clause lacks support, reject or request a narrower candidate through concrete '
-        'follow-up; do not confirm the whole candidate or carry its unsupported text as uncertainty. '
-        'Preserve the valid core through that follow-up. Never use finish.',
+        'every current candidate exactly once (decisions=[] when empty). Read and acknowledge '
+        'relevant source/contracts before any non-rejected decision, including advisories. '
+        'Provide causal_review: copy candidate_digests[id] into candidate_digest; causal_basis '
+        'and assessments are its only other keys. candidate_provenance and task metadata are '
+        'read-only context: never copy them into a decision or causal_review. The causal basis '
+        'must trace a documented input/condition through the operation to expected versus actual '
+        'behavior. Assess title, description, impact and remediation exactly once in assessments: '
+        'field, status (supported/unsupported/uncertain), explanation and evidence_refs. Judge each '
+        'ENTIRE field, every sentence and parenthesis, not just its core. Mark supported only when '
+        'all assertions follow from inspected evidence and documented capabilities. An unspecified '
+        'handle type does not prove OS/file resources; query manipulation does not establish arbitrary '
+        'statements, privileges, authorization or actual disclosure. Distinguish a plausible evidence '
+        'gap (uncertain, confidence below .8) from an unjustified added assertion (unsupported). '
+        'Any unsupported clause requires rejecting the whole candidate; never retain its text as '
+        'uncertain/advisory. Preserve its valid core by a concrete narrower follow-up to an existing '
+        'review task, or another already supplied supported candidate. Do not rewrite the candidate. '
+        'Positive verdicts require every field supported. Group equivalent same-location findings '
+        'with duplicate_groups AND matching duplicate_reviews (finding_ids, rationale, evidence_refs); '
+        'explain the common cause and keep different classifications/evidence gaps separate. Record '
+        'no rejected ID in duplicate_groups: a rejected overclaim and its narrower supported '
+        'alternative are not equivalent whole claims. Record '
+        'incompatible candidates in disagreements (finding_ids, resolution, rationale, evidence_refs). '
+        'Resolved disagreements retain one supported position and reject alternatives; unresolved '
+        'ones remain uncertain, never confirmed or merged away. Cite inspected decision evidence '
+        'for every field/group/disagreement. Never use finish.',
     'synthesis': 'Return kind=submit_synthesis with SynthesisSummary in payload: summary and limitations. '
         'Runtime assembles findings from recorded decisions. Do not recreate findings/report_draft '
         'or add unverified consequences. Never use finish or verification actions.',
@@ -99,7 +117,11 @@ def system_policy(role, responsibility):
 def guidance(role, system_prompt, phase, context):
     names = (['verification' if phase == 'verification' else 'synthesis']
              if role == 'synthesizer_verifier' else [] if role == 'planner' else ['specialist_completion'])
-    if role == 'performance_scalability' and isinstance(context, dict) and any(
+    origins = context.get('candidate_provenance', {}) if isinstance(context, dict) else {}
+    performance_verification = (role == 'synthesizer_verifier' and phase == 'verification'
+        and isinstance(origins, dict) and any(isinstance(origin, dict)
+            and origin.get('agent_id') == 'performance_scalability' for origin in origins.values()))
+    if (role == 'performance_scalability' or performance_verification) and isinstance(context, dict) and any(
             page.get('source_file') for page in context.get('evidence', []) if isinstance(page, dict)):
         names.append('performance_cost')
     if phase != 'synthesis' and isinstance(context, dict) and any(

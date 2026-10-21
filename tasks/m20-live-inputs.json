@@ -1,0 +1,342 @@
+{
+  "scope": "Previously approved synthetic source/contracts and fixture-derived verifier challenges only.",
+  "challenges": [
+    {
+      "challenge_id": "handle-type-extension",
+      "approved_fixture": "cleanup-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def load(handle, decode):\n    value = decode(handle.read())\n    handle.close()\n    return value\n"
+        },
+        "contract": "Read and decode the acquired handle. Close it exactly once on success and when decode raises; propagate the decode exception.",
+        "candidates": [
+          {
+            "category": "resource_lifecycle",
+            "kind": "defect",
+            "title": "Handle is not closed when decode raises",
+            "description": "In `load(handle, decode)`, `handle.close()` is only invoked after `decode(handle.read())` returns successfully. When `decode` raises an exception, execution leaves `load` without reaching line 3 (`handle.close()`), leaving the handle unclosed contrary to the contract requirement to close it exactly once on success and when decode raises.",
+            "impact": "If `decode` raises an exception, `handle` is not closed, leading to resource leakage or unreleased file handles.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 4
+            },
+            "remediation": "Wrap the decode operation in a try...finally block ensuring `handle.close()` is executed in the `finally` clause, or manage `handle` with a context manager / try...finally so `handle.close()` is called exactly once when `decode` succeeds or raises."
+          },
+          {
+            "category": "resource_lifecycle",
+            "kind": "defect",
+            "title": "Handle is not closed when decode raises",
+            "description": "In `load(handle, decode)`, `handle.close()` is only invoked after `decode(handle.read())` returns successfully. When `decode` raises an exception, execution leaves `load` without reaching line 3 (`handle.close()`), leaving the handle unclosed contrary to the contract requirement to close it exactly once on success and when decode raises.",
+            "impact": "If decode raises, the acquired handle is not closed.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 4
+            },
+            "remediation": "Wrap the read/decode operation in try/finally and call handle.close() in finally."
+          }
+        ]
+      },
+      "source_agents": [
+        "bug_reliability",
+        "bug_reliability"
+      ]
+    },
+    {
+      "challenge_id": "sql-privilege-extension",
+      "approved_fixture": "indirect_query-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def lookup(db, request):\n    name = request[\"query\"]\n    statement = \"SELECT id FROM users WHERE name = '\" + name + \"'\"\n    return db.execute(statement).fetchone()\n"
+        },
+        "contract": "request is a mapping whose query value is untrusted text. Look up a user by that name and keep SQL data separate from query syntax.",
+        "candidates": [
+          {
+            "category": "security",
+            "kind": "defect",
+            "title": "SQL injection via unescaped string concatenation in lookup",
+            "description": "In lookup (subject.py:1-4), untrusted input request[\"query\"] is directly concatenated into the SQL statement string: `\"SELECT id FROM users WHERE name = '\" + name + \"'\"` instead of passing data via parameterized execution. For an input witness where request[\"query\"] is \"' OR '1'='1\", the resulting SQL command becomes `SELECT id FROM users WHERE name = '' OR '1'='1'`, modifying the query structure rather than comparing against a literal string.",
+            "impact": "Untrusted query text can alter the constructed SELECT predicate instead of being matched as a literal name.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 4
+            },
+            "remediation": "Use parameterized queries, separating SQL data from syntax, e.g., db.execute(\"SELECT id FROM users WHERE name = ?\", (name,)).fetchone() or the appropriate parameter placeholder for the database driver."
+          },
+          {
+            "category": "security",
+            "kind": "defect",
+            "title": "SQL injection via unescaped string concatenation in lookup",
+            "description": "In lookup (subject.py:1-4), untrusted input request[\"query\"] is directly concatenated into the SQL statement string: `\"SELECT id FROM users WHERE name = '\" + name + \"'\"` instead of passing data via parameterized execution. For an input witness where request[\"query\"] is \"' OR '1'='1\", the resulting SQL command becomes `SELECT id FROM users WHERE name = '' OR '1'='1'`, modifying the query structure rather than comparing against a literal string.",
+            "impact": "Untrusted input modifies the SQL query syntax, allowing unauthorized database queries and data exposure beyond the intended user record lookup.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 4
+            },
+            "remediation": "Use parameterized queries, separating SQL data from syntax, e.g., db.execute(\"SELECT id FROM users WHERE name = ?\", (name,)).fetchone() or the appropriate parameter placeholder for the database driver."
+          }
+        ]
+      },
+      "source_agents": [
+        "architecture_security",
+        "architecture_security"
+      ]
+    },
+    {
+      "challenge_id": "sql-arbitrary-execution",
+      "approved_fixture": "indirect_query-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def lookup(db, request):\n    name = request[\"query\"]\n    statement = \"SELECT id FROM users WHERE name = '\" + name + \"'\"\n    return db.execute(statement).fetchone()\n"
+        },
+        "contract": "request is a mapping whose query value is untrusted text. Look up a user by that name and keep SQL data separate from query syntax.",
+        "candidates": [
+          {
+            "category": "injection",
+            "kind": "defect",
+            "title": "SQL Injection via string concatenation in lookup",
+            "description": "In lookup(db, request), untrusted input request[\"query\"] is directly concatenated into the SQL statement string: statement = \"SELECT id FROM users WHERE name = '\" + name + \"'\".",
+            "impact": "An input containing single quotes alters query syntax instead of being bound as data, allowing arbitrary SQL execution against db.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 4
+            },
+            "remediation": "Use parameterized queries to pass untrusted input separately from SQL syntax, e.g. db.execute(\"SELECT id FROM users WHERE name = ?\", (name,))."
+          },
+          {
+            "category": "injection",
+            "kind": "defect",
+            "title": "SQL Injection via string concatenation in lookup",
+            "description": "In lookup(db, request), untrusted input request[\"query\"] is directly concatenated into the SQL statement string: statement = \"SELECT id FROM users WHERE name = '\" + name + \"'\".",
+            "impact": "Untrusted query text can alter the constructed SELECT predicate instead of being matched as a literal name.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 4
+            },
+            "remediation": "Use parameterized queries to pass untrusted input separately from SQL syntax, e.g. db.execute(\"SELECT id FROM users WHERE name = ?\", (name,))."
+          }
+        ]
+      },
+      "source_agents": [
+        "architecture_security",
+        "architecture_security"
+      ]
+    },
+    {
+      "challenge_id": "empty-input-domain-extension",
+      "approved_fixture": "empty-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def first(items):\n    return items[0]\n"
+        },
+        "contract": "Return the first item, or None for empty input.",
+        "candidates": [
+          {
+            "category": "unhandled_exception",
+            "kind": "defect",
+            "title": "Empty sequence causes IndexError instead of returning None",
+            "description": "The function `first(items)` performs `return items[0]` without checking if `items` is empty. When passed an empty sequence such as `[]`, an `IndexError` is raised instead of returning `None` as required by the specification.",
+            "impact": "Calling `first([])` raises an uncaught `IndexError` instead of returning `None`.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 2
+            },
+            "remediation": "Check whether `items` is empty before indexing, or use `return items[0] if items else None`."
+          },
+          {
+            "category": "unhandled_exception",
+            "kind": "defect",
+            "title": "Empty sequence causes IndexError instead of returning None",
+            "description": "The function `first(items)` performs `return items[0]` without checking if `items` is empty. When passed an empty sequence such as `[]`, an `IndexError` is raised instead of returning `None` as required by the specification.",
+            "impact": "Calling `first([])` raises an uncaught `IndexError` instead of returning `None`. Dictionary inputs also raise KeyError and arbitrary non-sequences raise TypeError.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 2
+            },
+            "remediation": "Check whether `items` is empty before indexing, or use `return items[0] if items else None`."
+          }
+        ]
+      },
+      "source_agents": [
+        "bug_reliability",
+        "bug_reliability"
+      ]
+    },
+    {
+      "challenge_id": "mutation-domain-extension",
+      "approved_fixture": "mutation-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def ordered(items):\n    items.sort()\n    return items\n"
+        },
+        "contract": "Return sorted values without modifying the caller's input.",
+        "candidates": [
+          {
+            "category": "logic_error",
+            "kind": "defect",
+            "title": "Function `ordered` mutates caller's input list in place",
+            "description": "The function `ordered` mutates the caller's input list in place via `items.sort()` instead of creating and returning a new sorted collection. When called with `a = [2, 1]`, `ordered(a)` modifies `a` so that `a == [1, 2]`, violating the requirement to return sorted values without modifying the caller's input.",
+            "impact": "Callers passing a mutable list to `ordered` have their original list unexpectedly mutated in place. Tuple inputs also raise AttributeError before returning.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 3
+            },
+            "remediation": "Return `sorted(items)` instead of calling `items.sort()` in place."
+          },
+          {
+            "category": "logic_error",
+            "kind": "defect",
+            "title": "Function `ordered` mutates caller's input list in place",
+            "description": "The function `ordered` mutates the caller's input list in place via `items.sort()` instead of creating and returning a new sorted collection. When called with `a = [2, 1]`, `ordered(a)` modifies `a` so that `a == [1, 2]`, violating the requirement to return sorted values without modifying the caller's input.",
+            "impact": "Callers passing a mutable list to `ordered` have their original list unexpectedly mutated in place.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 3
+            },
+            "remediation": "Return `sorted(items)` instead of calling `items.sort()` in place."
+          }
+        ]
+      },
+      "source_agents": [
+        "logic_correctness",
+        "logic_correctness"
+      ]
+    },
+    {
+      "challenge_id": "unproved-memory-saving",
+      "approved_fixture": "membership-clean",
+      "payload": {
+        "files": {
+          "subject.py": "def unique(items):\n    result, seen = [], set()\n    for value in items:\n        if value not in seen:\n            seen.add(value)\n            result.append(value)\n    return result\n"
+        },
+        "contract": "Find unique integers in encounter order. Input can contain millions of distinct integers. Report unmeasured complexity as an advisory.",
+        "candidates": [
+          {
+            "category": "complexity_scaling",
+            "kind": "advisory",
+            "title": "Redundant auxiliary set allocation during encounter-order deduplication",
+            "description": "The unique() function tracks encountered items using both an auxiliary list `result` and an auxiliary set `seen`. For an input iterable containing N distinct integers, both `result` and `seen` store references to all N items simultaneously, doubling the auxiliary container storage overhead for tracking seen items and result materialization. In Python 3.7+, standard `dict` preserves insertion order, allowing `list(dict.fromkeys(items))` to deduplicate items in encounter order with a single hash table instead of maintaining both an independent set and an incremental list.",
+            "impact": "For inputs with millions of distinct items, maintaining both `seen` (a set) and `result` (a list) creates redundant hash table and pointer storage overhead during traversal compared to single-container insertion-ordered deduplication.",
+            "confidence": 0.95,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 7
+            },
+            "remediation": "Replace the explicit loop, `set()`, and `list.append()` calls with `return list(dict.fromkeys(items))` to preserve encounter order while avoiding the redundant `seen` set allocation."
+          }
+        ]
+      },
+      "source_agents": [
+        "performance_scalability"
+      ]
+    },
+    {
+      "challenge_id": "equivalent-contributors",
+      "approved_fixture": "empty-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def first(items):\n    return items[0]\n"
+        },
+        "contract": "Return the first item, or None for empty input.",
+        "candidates": [
+          {
+            "category": "unhandled_exception",
+            "kind": "defect",
+            "title": "Empty sequence causes IndexError instead of returning None",
+            "description": "The function `first(items)` performs `return items[0]` without checking if `items` is empty. When passed an empty sequence such as `[]`, an `IndexError` is raised instead of returning `None` as required by the specification.",
+            "impact": "Calling `first([])` raises an uncaught `IndexError` instead of returning `None`.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 2
+            },
+            "remediation": "Check whether `items` is empty before indexing, or use `return items[0] if items else None`."
+          },
+          {
+            "category": "unhandled_exception",
+            "kind": "defect",
+            "title": "Unguarded index zero fails for an empty list",
+            "description": "The function `first(items)` performs `return items[0]` without checking if `items` is empty. When passed an empty sequence such as `[]`, an `IndexError` is raised instead of returning `None` as required by the specification.",
+            "impact": "Calling `first([])` raises an uncaught `IndexError` instead of returning `None`.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 2
+            },
+            "remediation": "Check whether `items` is empty before indexing, or use `return items[0] if items else None`."
+          }
+        ]
+      },
+      "source_agents": [
+        "bug_reliability",
+        "logic_correctness"
+      ]
+    },
+    {
+      "challenge_id": "contradicting-positions",
+      "approved_fixture": "empty-defect",
+      "payload": {
+        "files": {
+          "subject.py": "def first(items):\n    return items[0]\n"
+        },
+        "contract": "Return the first item, or None for empty input.",
+        "candidates": [
+          {
+            "category": "unhandled_exception",
+            "kind": "defect",
+            "title": "Empty input is safely handled",
+            "description": "For items=[], first returns None without raising.",
+            "impact": "The documented empty-input result is produced without an exception.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 2
+            },
+            "remediation": "No change is required for empty input."
+          },
+          {
+            "category": "unhandled_exception",
+            "kind": "defect",
+            "title": "Empty sequence causes IndexError instead of returning None",
+            "description": "The function `first(items)` performs `return items[0]` without checking if `items` is empty. When passed an empty sequence such as `[]`, an `IndexError` is raised instead of returning `None` as required by the specification.",
+            "impact": "Calling `first([])` raises an uncaught `IndexError` instead of returning `None`.",
+            "confidence": 1.0,
+            "location": {
+              "file_path": "subject.py",
+              "start_line": 1,
+              "end_line": 2
+            },
+            "remediation": "Check whether `items` is empty before indexing, or use `return items[0] if items else None`."
+          }
+        ]
+      },
+      "source_agents": [
+        "logic_correctness",
+        "bug_reliability"
+      ]
+    }
+  ]
+}

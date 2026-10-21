@@ -18,4 +18,5 @@ def test_empty_change_selection_finishes_through_gate_without_model_calls(tmp_pa
         assert not provider.requests
         assert not report["coverage"]["inspected_files"]
         assert not report["confirmed_defects"]
-        assert "not inspected" in report["summary"]
+        assert '0 captured source file(s) inspected' in report['summary']
+        assert 'Empty change selection; no AI investigation requested.' in report['limitations']

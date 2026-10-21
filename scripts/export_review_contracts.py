@@ -26,6 +26,9 @@ def export() -> str:
                 # M13 adds an optional policy knob. Older job views remain
                 # readable; the service fills its default on restored jobs.
                 definition["required"].remove("planner_output_tokens")
+            if name == 'ReportDraft':
+                # M20 audit metadata is additive; older persisted reports remain readable.
+                definition['required'].remove('verification_audit')
     return json.dumps(schema, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 
 

@@ -4,24 +4,29 @@ import json
 
 import pytest
 
-from devwatch.review.contracts import VerificationDecision
+from devwatch.review.contracts import VerificationDecision, VerificationPhaseResult
 from devwatch.review.finalization import AcceptanceError, FinalAcceptanceGate, FinalizationWorkflow, assemble_report
 from devwatch.review.jobs import DurableJobManager
 from tests.test_finalization_workflow import finding
 from tests.test_m14_runtime import MultipleTasksProvider, executor_for, stores
+from tests.verification_fixtures import reviewed
 
 
 def claims():
     candidates = {identity: finding() for identity in ("a", "b", "c")}
     decisions = [VerificationDecision(finding_id=identity, verdict="confirmed", confidence=confidence,
-        rationale="Source and contract establish the failure", evidence_refs=["ev1"])
+        rationale="Source and contract establish the failure", evidence_refs=["ev1"],
+        causal_review=reviewed(candidates[identity], ['ev1']))
         for identity, confidence in (("a", .8), ("b", .95), ("c", .9))]
     return candidates, decisions
 
 
 def gate(candidates, groups=()):
+    verification = VerificationPhaseResult(decisions=[], duplicate_groups=groups,
+        duplicate_reviews=[dict(finding_ids=group, rationale='Same empty-index cause and source location.',
+            evidence_refs=['ev1']) for group in groups])
     return FinalAcceptanceGate(candidates, evidence_refs={"ev1"}, inspected_evidence={"ev1"},
-                               snapshot_id="snapshot-1", duplicate_groups=groups)
+                               snapshot_id="snapshot-1", duplicate_groups=groups, verification=verification)
 
 
 def test_transitive_verified_duplicates_choose_strongest_claim_without_rewriting_it():
@@ -30,19 +35,20 @@ def test_transitive_verified_duplicates_choose_strongest_claim_without_rewriting
     report = assemble_report("snapshot-1", candidates, decisions, summary="Reviewed", duplicate_groups=groups)
     assert [item.finding_id for item in report.confirmed_defects] == ["b"]
     assert report.confirmed_defects[0].description == candidates["b"].description
-    assert gate(candidates, list(reversed(groups))).accept(report, decisions).draft == report
+    assert gate(candidates, list(reversed(groups))).accept(report, decisions).draft.confirmed_defects == report.confirmed_defects
     assert len(decisions) == 3  # Publication never erases verification records.
     with pytest.raises(AcceptanceError):
         gate(candidates).accept(report, decisions)
 
 
-def test_duplicate_priority_prefers_confirmation_over_higher_uncertain_confidence():
+def test_duplicate_group_cannot_hide_a_disagreement_in_verification():
     candidates, decisions = claims()
     decisions[1].verdict = "uncertain"
     report = assemble_report("snapshot-1", candidates, decisions, summary="Reviewed", duplicate_groups=[["a", "b"]])
     assert [item.finding_id for item in report.confirmed_defects] == ["a", "c"]
     assert not report.uncertain_high_impact_candidates
-    gate(candidates, [["a", "b"]]).accept(report, decisions)
+    with pytest.raises(AcceptanceError):
+        gate(candidates, [["a", "b"]]).accept(report, decisions)
 
 
 @pytest.mark.parametrize("group", [["a", "unknown"], ["a", "a"], ["a"]])
@@ -78,6 +84,9 @@ async def test_full_graph_preserves_duplicates_through_normal_and_partial_accept
             action = json.loads(response.content)
             if body["phase"] == "verification":
                 action["payload"]["duplicate_groups"] = [list(body["candidates"])]
+                action['payload']['duplicate_reviews'] = [dict(finding_ids=list(body['candidates']),
+                    rationale='Same unguarded empty index and caller-contract evidence gap.',
+                    evidence_refs=next(iter(body['candidates'].values()))['evidence_refs'])]
             elif body["phase"] == "synthesis":
                 action = {"kind": "submit_synthesis", "payload": {"summary": "One issue", "limitations": []}}
                 if mode == "synthesis_failure":

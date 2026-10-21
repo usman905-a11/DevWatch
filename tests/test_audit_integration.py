@@ -8,6 +8,7 @@ from devwatch.review.jobs import DurableJobManager
 from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
+from tests.verification_fixtures import reviewed
 
 
 def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepted_report(tmp_path):
@@ -49,7 +50,8 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
                     own=private['evidence_refs'][-1]
                     action=dict(kind='submit_verification',payload={'decisions':[
                         dict(finding_id=identity,verdict='confirmed',confidence=.9,rationale='Scoped source inspection establishes the boundary failure',
-                             evidence_refs=[own]) for identity in state['candidates']]})
+                             evidence_refs=[own], causal_review=reviewed(state['candidates'][identity], [own]))
+                        for identity in state['candidates']]})
             else:
                 action=dict(kind='submit_synthesis',payload={'summary':'One evidence-backed defect','limitations':[]})
             action['inspected_evidence']=[page['evidence_ref'] for page in pages]

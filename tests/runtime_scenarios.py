@@ -17,6 +17,7 @@ from devwatch.review.capture import capture_source
 from devwatch.review.client import ReviewClient, _NoRedirect
 from devwatch.review.contracts import ModelTier
 from devwatch.review.service import ServiceSettings, create_app
+from tests.verification_fixtures import reviewed
 
 
 KEY = "m10-local-fixture-key"
@@ -142,7 +143,9 @@ class ScenarioProvider:
                 action = {"kind": "submit_verification", "payload": {"decisions": [{
                     "finding_id": identity, "verdict": "confirmed", "confidence": .9,
                     "rationale": "Scoped source inspection establishes direct indexing of possibly empty input",
-                    "evidence_refs": [private["evidence_refs"][-1]]} for identity in body["candidates"]]}}
+                    "evidence_refs": [private["evidence_refs"][-1]],
+                    "causal_review": reviewed(body['candidates'][identity], [private['evidence_refs'][-1]])}
+                    for identity in body["candidates"]]}}
         else:
             action = {"kind": "submit_synthesis", "payload": {"summary": "One source-backed boundary defect", "limitations": []}}
         action["inspected_evidence"] = [page["evidence_ref"] for page in body["selected_context"].get("evidence", [])]
