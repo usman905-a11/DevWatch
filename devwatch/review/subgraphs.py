@@ -191,13 +191,14 @@ class AgentSubgraphs:
                  context: Callable[[AgentExecutionState], Any], *, models: dict[ModelTier, str],
                  persist: Callable[[AgentExecutionState, dict[str, Any]], Any] | None = None,
                  model_slots: asyncio.Semaphore | None = None, emit: Callable | None = None,
-                 require_verification_challenge: bool = False):
+                 require_verification_challenge: bool = False, require_independent_support: bool = False):
         if set(models) != set(ModelTier) or any(not name.strip() for name in models.values()):
             raise ValueError("explicit small, medium and strong model names are required")
         self.provider, self.tools, self.budget, self.context = provider, tools, budget, context
         self.models, self.persist = dict(models), persist
         self.emit = emit
         self.require_verification_challenge = require_verification_challenge
+        self.require_independent_support = require_independent_support
         self.budget.begin_execution()
         self.model_slots = model_slots or asyncio.Semaphore(budget.limits.concurrent_model_calls)
         self.graphs = {agent: self._build() for agent in SPECIALISTS}
@@ -309,6 +310,9 @@ class AgentSubgraphs:
                 if not output.candidates and output.quarantined:
                     raise CandidateSchemaError(output.quarantined, action.payload.get('candidates', []))
                 output = investigation.admit(task, private, output, self.tools.validate_candidate)
+                missing = investigation.remaining(private)
+                if output.stop_reason == 'evidence_complete' and output.candidates and missing:
+                    raise investigation.RequiredInspectionIncomplete(missing)
                 action.payload = output.model_dump(mode="json")
         elif action.kind == "submit_plan":
             plan = ReviewPlan.model_validate(action.payload)
@@ -341,7 +345,7 @@ class AgentSubgraphs:
                     raise ValueError("verification cites unknown evidence")
                 if decision.verdict != "rejected" and not decision.evidence_refs:
                     raise ValueError("non-rejected decisions require evidence")
-                if decision.verdict != 'rejected':
+                if decision.verdict != 'rejected' or self.require_independent_support:
                     if (decision.verdict == 'confirmed' and decision.confidence < .8) or any(
                         not private.evidence_progress.get(ref, EvidenceProgress()).fully_inspected() for ref in decision.evidence_refs):
                         raise ValueError("confirmation requires delivered and inspected evidence with confidence >=0.8")
@@ -375,7 +379,8 @@ class AgentSubgraphs:
             FinalAcceptanceGate({key: FindingCandidate.model_validate(raw) for key, raw in state["candidates"].items()},
                 evidence_refs={ref for decision in verification.decisions for ref in decision.evidence_refs},
                 inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
-                snapshot_id=state["snapshot_id"], duplicate_groups=verification.duplicate_groups, verification=verification
+                snapshot_id=state["snapshot_id"], duplicate_groups=verification.duplicate_groups, verification=verification,
+                require_independent_support=self.require_independent_support
                 ).accept(result.report_draft, verification.decisions)
         elif action.kind == "request_followup":
             # Follow-up proposals belong to the verification output; runtime
@@ -663,6 +668,9 @@ class AgentSubgraphs:
             candidates = {key: FindingCandidate.model_validate(raw) for key, raw in state['candidates'].items()}
             if verified is None:
                 raise ValueError('Recorded verification is required for assembly.')
+            if self.require_independent_support:
+                verified = semantic_verification.require_independent_verification(candidates, verified)
+                state['verification'] = verified
             if self.tools.validate_confirmation is not None:
                 for decision in verified.decisions:
                     if decision.verdict != 'rejected':
@@ -674,7 +682,7 @@ class AgentSubgraphs:
                 evidence_refs={ref for claim in candidates.values() for ref in claim.evidence_refs} | set(private.evidence_refs),
                 inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
                 snapshot_id=state['snapshot_id'], duplicate_groups=verified.duplicate_groups,
-                verification=verified).accept(draft, verified.decisions)
+                verification=verified, require_independent_support=self.require_independent_support).accept(draft, verified.decisions)
             draft.summary, draft.limitations = accepted.draft.summary, accepted.draft.limitations
             state['output'] = VerificationSynthesisResult(**verified.model_dump(),
                 report_draft=draft, coverage_summary=draft.coverage)
@@ -876,13 +884,16 @@ class AgentSubgraphs:
                         semantic_verification.combine_verification(state.get('verification'), verified),
                         {ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()})
                     state['provisional_verification'] = VerificationPhaseResult(decisions=remaining) if remaining else None
-                elif self.require_verification_challenge and verified.decisions:
+                elif self.require_verification_challenge and any(
+                        item.verdict != 'uncertain' for item in verified.decisions):
                     state['provisional_verification'] = verified
                     state['action'] = None
                     return state
                 else:
                     verified.decisions = [semantic_verification.enforce_arithmetic(
                         state['candidates'][item.finding_id], item) for item in verified.decisions]
+                if self.require_independent_support:
+                    verified = semantic_verification.require_independent_verification(state['candidates'], verified)
                 completed = list(verified.decisions)
                 previous = state.get("verification")
                 verified = semantic_verification.combine_verification(previous, verified)

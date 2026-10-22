@@ -1591,3 +1591,31 @@ wire freshness, compilation and whitespace passed. M14-only self-review found no
 required remaining change. See m14-orchestration-report.md and evidence/m14-*.
 M13 live model quality remains PARTIAL. No new paid calls or M15 implementation;
 no commit, push, deployment or global configuration changes performed.
+# M30 independent evidence (2026-10-22): PARTIAL
+
+Bounded arithmetic checking, exact text binding, independently checked
+counterexamples, disagreement retention and runtime-owned report receipts are
+implemented. Backend 792 identities pass across full run/recheck; frontend
+57/build pass. All seven exposed live reviews ran; five strict passes, one
+schema-binding repair failure and one incomplete contract acknowledgment. Raw
+free-form semantic failures remain. M30 US$0.12889575, shared US$7.31597325,
+remaining US$1.68402675. Historical holds retained; no shipping or trace exports.
+See [M30 report](m30-reliability-report.md).
+
+# M31 conservative reliability completion (2026-10-22): COMPLETE, selected scope
+
+Replaced fragile duplicate arithmetic prose encoding with typed, candidate-version-
+bound assertions rendered by runtime in audit. Added bounded required-contract
+inspection recovery and enforced the user's explicit uncertainty policy through
+canonical verification, acceptance and recovery. Model-only approvals/rejections
+cannot publish independent conclusions. Passed arithmetic never proves prose.
+
+Final complete backend run: 801 pass, zero failures/errors/skips/identity omissions;
+frontend 57/build and wire freshness pass. Independent static review has no Required
+or Critical findings. Six final live scenarios pass the policy. All 11 M31 attempts
+retain 9 policy and 7 original strict passes, including the initial punctuation
+failure and one pre-dispatch reservation refusal. Historical evidence is unchanged.
+M31 US$0.20862375, shared US$7.524597, remaining US$1.475403 of US$9. No new unknown
+effects; historical US$0.12293325 holds retained. The original automatic-confirmation
+quality gate remains unmet; independent whole-claim proof is a future capability.
+See [M31 report](m31-completion-report.md). No shipping or new trace exports.

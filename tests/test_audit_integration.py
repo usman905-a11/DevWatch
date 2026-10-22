@@ -69,7 +69,8 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
         await manager.close()
         assert done.status=='completed'
         report=json.loads(done.result['json'])
-        assert len(report['confirmed_defects'])==1
+        assert not report['confirmed_defects']
+        assert len(report['uncertain_high_impact_candidates'])==1
         thread=sha256(('alice\0'+job.job_id).encode()).hexdigest()
         specialist=AgentPrivateState.model_validate(executor.checkpoints.load(thread,'logic-1')['state']['private_state'])
         ast=specialist.evidence_refs[0]
@@ -77,7 +78,7 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
         assert (12000,13000) in specialist.evidence_progress[ast].delivered
         assert (12000,13000) in specialist.evidence_progress[ast].inspected
         verifier=AgentPrivateState.model_validate(executor.checkpoints.load(thread,'__final')['state']['private_state'])
-        own=report['confirmed_defects'][0]['evidence_refs'][0]
+        own=report['uncertain_high_impact_candidates'][0]['evidence_refs'][0]
         assert verifier.evidence_progress[own].fully_inspected()
         assert verifier.evidence_progress[own].provenance['agent_id']=='synthesizer_verifier'
         assert specialist.evidence_progress[ast].provenance['agent_id']=='logic_correctness'

@@ -19,14 +19,15 @@ def setup(tmp_path):
     return SimpleNamespace(repository=repo, board=board), identity, ref
 
 
-def test_persisted_unsupported_impact_is_rejected_instead_of_downgraded_and_published(tmp_path):
+def test_uninspected_model_unsupported_impact_remains_unreviewed_not_a_proven_rejection(tmp_path):
     session, identity, ref = setup(tmp_path)
     claim = session.board.candidates[identity]
     raw = decision(claim, [ref], identity=identity, statuses={'impact': 'unsupported'})
     result = _ReviewSession.partial_result(session, AgentPrivateState(stop_reason='invalid_schema'),
         verification=VerificationPhaseResult(decisions=[raw]))
-    assert result.decisions[0].verdict == 'rejected'
-    assert not result.report_draft.uncertain_high_impact_candidates
+    assert result.decisions[0].verdict == 'uncertain'
+    assert result.decisions[0].causal_review is None
+    assert len(result.report_draft.uncertain_high_impact_candidates) == 1
     assert not result.report_draft.confirmed_defects
 
 

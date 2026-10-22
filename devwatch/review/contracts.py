@@ -109,14 +109,6 @@ class FindingCandidate(ContractModel):
     remediation: str = Field(default="", max_length=1000)
     arithmetic_claims: list[ArithmeticClaim] = Field(default_factory=list, max_length=8)
 
-    @model_validator(mode='after')
-    def bind_arithmetic_text(self):
-        for claim in self.arithmetic_claims:
-            if claim.statement() not in getattr(self, claim.field):
-                raise ValueError('arithmetic claim requires its canonical statement in the associated field')
-        return self
-
-
 class Coverage(ContractModel):
     inspected_files: list[str] = Field(default_factory=list)
     inspected_symbols: list[str] = Field(default_factory=list)

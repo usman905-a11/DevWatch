@@ -7,7 +7,7 @@ import ast
 from itertools import product
 import operator
 import re
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
@@ -55,8 +55,8 @@ class ArithmeticCheck(ArithmeticModel):
 
 
 class ArithmeticCounterexample(ArithmeticModel):
-    claim_index: int = Field(ge=0, le=7)
-    point: dict[str, StrictInt] = Field(max_length=4)
+    claim_index: StrictInt = Field(ge=0, le=7)
+    point: dict[str, Annotated[StrictInt, Field(ge=-(2**31), le=2**31 - 1)]] = Field(max_length=4)
 
 
 _BINARY = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,

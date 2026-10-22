@@ -274,7 +274,9 @@ async def test_legacy_evaluator_no_longer_accepts_any_finding_as_true_positive(t
             return response.model_copy(update={"content": json.dumps(action)})
     corpus = json.loads(Path("tests/fixtures/canonical-review-eval-v2.json").read_text())
     result = await evaluate(corpus["cases"][:1], tmp_path, provider_factory=UnrelatedProvider)
-    assert (result["true_positive"], result["false_positive"], result["false_negative"]) == (0, 1, 1)
+    assert (result["true_positive"], result["false_positive"], result["false_negative"]) == (0, 0, 1)
+    score = result['results'][0]['candidate_score']
+    assert (score['true_positive'], score['false_positive'], score['false_negative']) == (0, 1, 1)
 
 
 def test_human_tool_review_is_tied_to_actual_operations():

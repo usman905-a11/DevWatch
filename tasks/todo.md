@@ -1,11 +1,26 @@
 # DevWatch seven-agent implementation checklist
 
-## M30 independent evidence - in progress
+## M31 completion
 
-- [ ] Bound mathematical assertions to exact candidate text; check finite domains safely.
-- [ ] Preserve conflicting judgments as unresolved; independently check arithmetic at admission.
-- [ ] Recompute report receipts, preserve checkpoint safety and verify consumers/full regression.
-- [ ] Record scoped results and remaining natural-language/live limitations without rewriting M27-M29.
+- [x] Structured, candidate-version-bound arithmetic; runtime audit rendering and private shape repair within one retry.
+- [x] Recover incomplete required contract/source inspection without fabricated receipts.
+- [x] Keep model-only claims uncertain in canonical admission, acceptance and recovery.
+- [x] Full regression, bounded approved live verification and honest classification accounting.
+
+Latest result: [M31 report](m31-completion-report.md), backend 801/frontend 57/build
+pass; final live policy scenarios 6/6, all attempts 9/11 policy and 7/11 original
+strict. No automatic confirmations without independent whole-claim proof. That
+proof adapter and fresh confirmation-quality evaluation are future capabilities.
+The historical partial statuses below remain recorded as originally measured.
+
+## M30 independent evidence - PARTIAL after live verification
+
+- [x] Bound mathematical assertions to exact candidate text; check finite domains safely.
+- [x] Preserve conflicting judgments as unresolved; independently check arithmetic at admission.
+- [x] Recompute report receipts, preserve checkpoint safety and verify consumers/full regression.
+- [x] Record scoped results and remaining natural-language/live limitations without rewriting M27-M29.
+- [x] Resolve natural schema-binding failure and incomplete contract acknowledgment in M31; original M30 5/7 strict result retained.
+- [x] Protect unencoded explanations/remediations through explicitly approved uncertainty policy in M31; no claim of independent whole-claim proof.
 
 Specification: [m30-independent-claims-spec.md](m30-independent-claims-spec.md).
 

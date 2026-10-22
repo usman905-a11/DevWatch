@@ -32,7 +32,7 @@ from devwatch.review.subgraphs import AgentSubgraphs
 from devwatch.review.tool_runtime import TrustedToolRuntime
 from devwatch.review.database_tools import DatabaseTools
 from devwatch.review.verification import (validate_decision, validate_relations,
-    checkpoint_verification, CHALLENGE_POLICY)
+    checkpoint_verification, CHALLENGE_POLICY, require_independent_verification)
 
 
 class ReviewExecutionError(RuntimeError):
@@ -185,7 +185,8 @@ class CanonicalReviewExecutor:
             return FinalAcceptanceGate(session.board.candidates, evidence_refs=refs,
                 inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
                 snapshot_id=repository.snapshot_id, duplicate_groups=result.duplicate_groups, verification=result,
-                provenance=session.board.provenance(), allow_unreviewed=True).accept(draft, decisions)
+                provenance=session.board.provenance(), allow_unreviewed=True,
+                require_independent_support=True).accept(draft, decisions)
         workflow = FinalizationWorkflow(partial, no_followup, accept, budget=budget, tasks=tasks,
                                         renderer=lambda accepted: self.render_report(job, accepted), emit=session.emit)
         return (await workflow.run())["rendered"]
@@ -230,7 +231,7 @@ class _ReviewSession:
         self.database_runtime = DatabaseTools(repository, job, policies=executor.databases)
         self.agents = AgentSubgraphs(executor.provider, repository.tools(self.command_runtime, self.database_runtime), budget, self.context,
             models=executor.models, persist=self.persist_agent, model_slots=executor.model_slots, emit=self.emit,
-            require_verification_challenge=True)
+            require_verification_challenge=True, require_independent_support=True)
 
     def emit(self, kind, **payload):
         if kind == "model_call_completed":
@@ -564,7 +565,8 @@ class _ReviewSession:
                                                               decision, work, private)
                 return FinalAcceptanceGate(self.board.candidates, evidence_refs=refs, inspected_evidence=inspected,
                     snapshot_id=self.repository.snapshot_id, duplicate_groups=groups, verification=verification,
-                    provenance=self.board.provenance(), allow_unreviewed=allow_unreviewed)
+                    provenance=self.board.provenance(), allow_unreviewed=allow_unreviewed,
+                    require_independent_support=True)
             try:
                 same_decisions = (recorded is not None and len(recorded.decisions) == len(decisions)
                                   and {item.finding_id: item for item in recorded.decisions}
@@ -608,6 +610,8 @@ class _ReviewSession:
                             item.status == 'unsupported' for item in decision.causal_review.assessments):
                         decision = decision.model_copy(update={'verdict': 'rejected',
                             'rationale': 'Rejected: recorded causal review identifies an unsupported clause.'})
+                    decision = require_independent_verification({identity:candidate},
+                        VerificationPhaseResult(decisions=[decision])).decisions[0]
                     validate_decision(candidate, decision)
                     for ref in decision.evidence_refs:
                         self.repository.scoped_evidence(ref, work)
@@ -629,6 +633,8 @@ class _ReviewSession:
         metadata = VerificationPhaseResult(**{field: getattr(verification, field)
             for field in VerificationPhaseResult.model_fields}) if verification else VerificationPhaseResult(decisions=[])
         metadata.decisions = decisions
+        metadata = require_independent_verification(self.board.candidates, metadata)
+        decisions = metadata.decisions
         relation_limitations = []
         try:
             validate_relations(self.board.candidates, metadata,

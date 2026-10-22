@@ -48,7 +48,8 @@ class AcceptedReport:
 class FinalAcceptanceGate:
     def __init__(self, candidates: dict[str, FindingCandidate], *, evidence_refs: set[str] | None = None,
                  inspected_evidence: set[str] | None = None, snapshot_id: str | None = None,
-                 duplicate_groups=(), verification=None, provenance=None, allow_unreviewed=False):
+                 duplicate_groups=(), verification=None, provenance=None, allow_unreviewed=False,
+                 require_independent_support=False):
         self.candidates = {key: value.model_copy(deep=True) for key, value in candidates.items()}
         self.evidence_refs = frozenset(evidence_refs or ())
         self.inspected_evidence = frozenset(inspected_evidence or ())
@@ -58,6 +59,7 @@ class FinalAcceptanceGate:
             for field in VerificationPhaseResult.model_fields}) if verification is not None else None)
         self.provenance = dict(provenance or {})
         self.allow_unreviewed = allow_unreviewed
+        self.require_independent_support = require_independent_support
 
     def accept(self, draft: ReportDraft, decisions: list[VerificationDecision]) -> AcceptedReport:
         draft = ReportDraft.model_validate(draft.model_dump())
@@ -71,6 +73,12 @@ class FinalAcceptanceGate:
         if set(by_id) != set(self.candidates):
             raise AcceptanceError("every candidate must receive a verification decision")
         for decision in decisions:
+            if self.require_independent_support and decision.verdict in {'confirmed', 'advisory'}:
+                raise AcceptanceError('Positive publication requires independent whole-claim support, not model agreement.')
+            if (self.require_independent_support and decision.verdict == 'rejected' and not any(
+                    receipt.result.status == 'contradicted' for receipt in arithmetic_receipts(
+                        self.candidates[decision.finding_id], decision.arithmetic_counterexamples))):
+                raise AcceptanceError('Rejection requires an independent contradiction; model-only disputes remain uncertain.')
             try:
                 validate_decision(self.candidates[decision.finding_id], decision,
                                   allow_unreviewed=self.allow_unreviewed)

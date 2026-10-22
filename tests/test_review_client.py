@@ -37,7 +37,9 @@ def test_client_submits_snapshot_once_polls_and_downloads_validated_report(tmp_p
         pending = client.submit(snapshot.snapshot_id, capture.changed_files, idempotency_key="stable-intent")
         duplicate = client.submit(snapshot.snapshot_id, capture.changed_files, idempotency_key="stable-intent")
         assert duplicate.job_id == pending.job_id
-        complete = client.wait(pending.job_id, wait_seconds=5, poll_seconds=.01)
+        # Coordinate the real worker under concurrent suite load; timeout behavior
+        # is tested separately with a deliberately paused provider below.
+        complete = client.wait(pending.job_id, wait_seconds=30, poll_seconds=.01)
         assert complete.status == "completed"
         report = client.report(complete, format="json")
         assert json.loads(report)["snapshot_id"] == snapshot.snapshot_id

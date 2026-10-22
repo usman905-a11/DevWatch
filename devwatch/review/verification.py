@@ -8,11 +8,11 @@ import json
 
 from devwatch.review.contracts import (FindingCandidate, VerificationPhaseResult,
     CausalReview, ClaimAssessment, ReviewObservation, ArithmeticReceipt)
-from devwatch.review.arithmetic import check_claim, check_counterexample
+from devwatch.review.arithmetic import ArithmeticCheck, check_claim, check_counterexample
 
 
 CLAIM_FIELDS = frozenset(('title', 'description', 'impact', 'remediation'))
-CHALLENGE_POLICY = 'independent-arithmetic-v1'
+CHALLENGE_POLICY = 'independent-claims-v3'
 
 
 def candidate_digest(candidate):
@@ -68,18 +68,24 @@ def checkpoint_verification(raw):
     return result
 
 
-def arithmetic_receipts(candidate):
+def arithmetic_receipts(candidate, counterexamples=()):
     claim = FindingCandidate.model_validate(candidate)
     digest = candidate_digest(claim)
-    return [ArithmeticReceipt(candidate_digest=digest, claim_index=index, field=item.field,
-        statement=item.statement(), result=check_claim(item))
-        for index, item in enumerate(claim.arithmetic_claims)]
+    receipts = []
+    for index, item in enumerate(claim.arithmetic_claims):
+        witness = next((example for example in counterexamples if example.claim_index == index
+            and check_counterexample(item, example.point) == 'contradicts'), None)
+        result = (ArithmeticCheck(status='contradicted', checked_assignments=1,
+            counterexample=dict(witness.point), reason='in_domain_counterexample') if witness is not None else check_claim(item))
+        receipts.append(ArithmeticReceipt(candidate_digest=digest, claim_index=index, field=item.field,
+            statement=item.statement(), result=result))
+    return receipts
 
 
 def _uncertain(candidate, decision, reason):
     claim = FindingCandidate.model_validate(candidate)
     # Do not launder either review's disputed prose into an authoritative fact.
-    refs = list(claim.evidence_refs)
+    refs = list(decision.evidence_refs or claim.evidence_refs)
     return decision.model_copy(deep=True, update={'verdict': 'uncertain',
         'confidence': min(decision.confidence, .5), 'rationale': reason,
         'evidence_refs': refs, 'arithmetic_counterexamples': [],
@@ -123,6 +129,29 @@ def enforce_arithmetic(candidate, decision):
         if unsupported and unsupported.issubset(exact_supported):
             return _uncertain(claim, decision, 'The rejected field is an independently supported arithmetic assertion; source relevance still requires review.')
     return decision.model_copy(deep=True)
+
+
+def require_independent_verification(candidates, result):
+    """No trusted whole-claim proof adapter exists yet; votes are observations.
+
+    Arithmetic receipts establish a predicate, not arbitrary code/prose relevance.
+    Preserve model observations while making the runtime's uncertainty explicit.
+    """
+    result = result.model_copy(deep=True)
+    changed = False
+    for index, decision in enumerate(result.decisions):
+        checked = enforce_arithmetic(candidates[decision.finding_id], decision)
+        contradicted = any(receipt.result.status == 'contradicted' for receipt in
+            arithmetic_receipts(candidates[decision.finding_id], checked.arithmetic_counterexamples))
+        if checked.verdict in {'confirmed', 'advisory'} or (checked.verdict == 'rejected' and not contradicted):
+            checked = _uncertain(candidates[decision.finding_id], checked,
+                'Independent whole-claim adjudication is unavailable; model agreement alone establishes neither approval nor rejection of the complete candidate.')
+        changed |= checked.verdict != decision.verdict
+        result.decisions[index] = checked
+    if changed:
+        result.duplicate_groups, result.duplicate_reviews, result.disagreements = [], [], []
+        result.conflicts.append('Model-only findings remain uncertain under the independent-support publication policy.')
+    return result
 
 
 def reconcile_challenge(candidates, previous, current):

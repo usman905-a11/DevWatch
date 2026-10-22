@@ -106,8 +106,9 @@ def test_broken_optional_summary_cannot_discard_confirmed_findings_or_fail_cover
         await manager.close()
         assert done.status=='completed'
         report=json.loads(done.result['json'])
-        assert len(report['confirmed_defects'])==1
-        assert report['confirmed_defects'][0]['title']=='Empty input raises'
+        assert not report['confirmed_defects']
+        assert len(report['uncertain_high_impact_candidates'])==1
+        assert report['uncertain_high_impact_candidates'][0]['title']=='Empty input raises'
         assert '__final' not in report['coverage']['failed']
         assert len([r for r in provider.requests if json.loads(r.prompt)['phase']=='synthesis'])==0
     asyncio.run(run())
@@ -155,7 +156,8 @@ def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path, 
         jobs.update_ledger(job.job_id,owner='alice',ledger=ledger)
         before=len(provider.requests)
         report=json.loads((await executor.recover_timeout(jobs.get(job.job_id,owner='alice')))['json'])
-        assert len(report['confirmed_defects'])==1
+        assert not report['confirmed_defects']
+        assert len(report['uncertain_high_impact_candidates'])==1
         assert len(provider.requests)==before
         assert report['coverage']['failed']['__job']=='review_time_exhausted'
     asyncio.run(run())
@@ -216,8 +218,9 @@ def test_inconsistent_persisted_synthesis_recovers_from_recorded_verification(tm
         executor.checkpoints.save(session.thread_id,state,1)
         final=await session.finalize({'tasks':[task.model_dump(mode='json')],'results':[result.model_dump(mode='json')]})
         report=json.loads(final['rendered']['json'])
-        assert len(report['confirmed_defects'])==1
-        assert report['confirmed_defects'][0]['finding_id']==identity
+        assert not report['confirmed_defects']
+        assert len(report['uncertain_high_impact_candidates'])==1
+        assert report['uncertain_high_impact_candidates'][0]['finding_id']==identity
         assert 'Partial' in report['summary']
         assert provider.requests==[]
     asyncio.run(run())

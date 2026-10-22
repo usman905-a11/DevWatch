@@ -1,6 +1,27 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## M31: complete existing reliability issues (2026-10-22)
+
+**COMPLETE for the user-selected conservative publication scope.** Structured
+arithmetic/audit rendering, bounded required-evidence recovery, and strict
+uncertainty at admission/acceptance/recovery are verified. Final backend 801,
+frontend 57/build and wire freshness pass. Six final live scenarios meet the
+preregistered policy; all 11 attempts retain 9 policy passes and 7 original strict
+passes. No automatic whole-claim confirmation is enabled. See the
+[M31 report](m31-completion-report.md) and [spec](m31-completion-spec.md).
+M31 US$0.20862375; shared US$7.524597 of US$9; remaining US$1.475403. Earlier
+failed evidence and US$0.12293325 unknown holds remain retained. The original
+confirmation-quality gate remains unmet; independent proof is a future capability.
+
 ## Current request: M30 independent claim evidence (2026-10-22)
+
+**PARTIAL after verification.** Bounded checking and disagreement preservation
+are implemented. All 792 backend identities pass across the complete run and
+three-file recheck; frontend 57/build pass. Live 5/7 strict passes, all seven
+attempted. See [M30 report](m30-reliability-report.md). Next slice: precise
+arithmetic-binding repair diagnostics and required-contract acknowledgment;
+unencoded whole-claim semantics remain open. Shared remaining US$1.68402675,
+including all historical holds; synthetic envelope remaining only US$0.028434.
 
 Implement [the M30 specification](m30-independent-claims-spec.md) in three
 sequential slices: bounded arithmetic checking, disagreement-preserving admission,

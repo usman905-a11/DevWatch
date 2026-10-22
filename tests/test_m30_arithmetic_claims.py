@@ -83,7 +83,15 @@ def test_candidate_binding_does_not_certify_a_different_prose_clause(tmp_path):
     assertion = claim('(n ^ (n - 1)) == 1', n=(3, 3))
     candidate['arithmetic_claims'] = [assertion.model_dump()]
     candidate['description'] = 'XOR flips the lowest set bit.'
-    with pytest.raises(ValidationError, match='canonical'):
-        FindingCandidate.model_validate(candidate)
-    candidate['description'] = 'For integers n in [3, 3] step 1: (n ^ (n - 1)) == 1.'
-    assert FindingCandidate.model_validate(candidate).arithmetic_claims[0] == assertion
+    from devwatch.review.verification import candidate_digest, require_independent_verification
+    from devwatch.review.contracts import VerificationPhaseResult
+    from tests.verification_fixtures import decision
+    typed = FindingCandidate.model_validate(candidate)
+    assert typed.arithmetic_claims[0] == assertion
+    original_digest = candidate_digest(typed)
+    typed.arithmetic_claims = []
+    assert candidate_digest(typed) != original_digest
+    result = require_independent_verification({'f1':candidate},
+        VerificationPhaseResult(decisions=[decision(candidate, candidate['evidence_refs'])]))
+    assert result.decisions[0].verdict == 'uncertain'
+    assert candidate['description'] == 'XOR flips the lowest set bit.'

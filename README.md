@@ -416,6 +416,22 @@ Use the Gradle wrapper/tasks provided by that extension for local development.
 
 ## Development and verification
 
+Canonical reviews require independent support for a whole claim before positive
+publication. Model-only approvals and rejections remain uncertain, even when both
+review passes agree. Structured arithmetic assertions are bound to the candidate
+version and rendered by the runtime in the audit. The checker proves only their
+predicates on declared finite integer domains; it does not prove source relevance,
+surrounding explanations, or remediation safety. Consequently, current canonical
+reviews retain model findings in the uncertainty bucket and do not automatically
+confirm them. Independently computed false assertions may reject a candidate.
+Both original model judgments remain in the audit. Historical completed reports
+retain the policy under which they were produced.
+
+Evaluation reports separate candidate precision/recall from confirmed precision/
+recall. Passing candidate-detection checks does not mean the original independent
+confirmation quality gate passed. See `tasks/m31-completion-spec.md` for the user-
+selected policy and the bounded repair/required-inspection behavior.
+
 Run the backend tests:
 
 ```powershell

@@ -121,8 +121,8 @@ def test_cli_rejects_provided_full_evaluation_without_creating_output(tmp_path,m
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('role,expected',[
-    ('performance_scalability',['specialist_completion','performance_cost']),
-    ('bug_reliability',['specialist_completion']),
+    ('performance_scalability',['specialist_completion','arithmetic_claims','performance_cost']),
+    ('bug_reliability',['specialist_completion','arithmetic_claims']),
 ])
 async def test_cost_guidance_loads_after_real_source_delivery_only_for_performance(tmp_path,role,expected):
     from devwatch.review.contracts import AgentId
@@ -141,6 +141,6 @@ async def test_cost_guidance_loads_after_real_source_delivery_only_for_performan
     result=await engine(repo,provider).run_specialist(task)
     assert result['output'].stop_reason=='evidence_complete'
     first,second=[json.loads(request.prompt) for request in provider.requests]
-    assert list(first['policy_skills'])==['specialist_completion']
+    assert list(first['policy_skills'])==['specialist_completion','arithmetic_claims']
     assert list(second['policy_skills'])==expected
     assert second['prompt_revision']['skills']==expected

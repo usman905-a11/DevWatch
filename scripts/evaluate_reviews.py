@@ -124,6 +124,7 @@ class ContractProbeProvider:
 
 async def evaluate(cases, runtime_root, *, provider_factory=ContractProbeProvider, live=False):
     rows, true_positive, false_positive, false_negative, failed_jobs = [], 0, 0, 0, 0
+    candidate_tp = candidate_fp = candidate_fn = published_positives = 0
     for index, case in enumerate(cases):
         public = {key: value for key, value in case.items() if key not in {"expected_defect", "case_id"}}
         layout = StoreLayout(Path(runtime_root) / f"case-{index}")
@@ -158,13 +159,15 @@ async def evaluate(cases, runtime_root, *, provider_factory=ContractProbeProvide
                 failed_jobs += 1
                 confirmed = 0
                 coverage_failed = True
-                findings, records = [], {}
+                findings, all_findings, records = [], [], {}
             else:
                 report = json.loads(finished.result["json"])
                 findings = report["confirmed_defects"]
+                all_findings = findings + report['uncertain_high_impact_candidates'] + report['advisories']
+                published_positives += len(findings) + len(report['advisories'])
                 confirmed = len(findings)
                 repository = RepositoryContext(artifacts, RepoCache(layout.repo_cache), snapshot.snapshot_id, owner="evaluation")
-                records = {ref: repository.evidence(ref) for finding in findings for ref in finding["evidence_refs"]}
+                records = {ref: repository.evidence(ref) for finding in all_findings for ref in finding["evidence_refs"]}
                 coverage_failed = bool(report["coverage"]["failed"])
                 failed_jobs += int(coverage_failed)
             expected = case["expected_defect"]
@@ -174,18 +177,28 @@ async def evaluate(cases, runtime_root, *, provider_factory=ContractProbeProvide
             gold = [{"defect_id": case["family"], "file_path": case["subject"], "start_line": 2,
                      "end_line": 2, "facets": [[case["contract"]]]}] if expected else []
             score = score_findings(gold, findings, records)
+            candidate_score = score_findings(gold, all_findings, records)
+            candidate_tp += candidate_score['true_positive']
+            candidate_fp += candidate_score['false_positive']
+            candidate_fn += candidate_score['false_negative']
             true_positive += score["true_positive"]
             false_negative += score["false_negative"]
             false_positive += score["false_positive"]
             rows.append({"case_id": case["case_id"], "expected_defect": expected, "confirmed": confirmed,
-                "status": finished.status, "coverage_failed": coverage_failed, "score": score})
+                "status": finished.status, "coverage_failed": coverage_failed, "score": score,
+                "candidate_score": candidate_score})
         finally:
             await manager.close()
     precision = true_positive / (true_positive + false_positive) if true_positive + false_positive else 0.
     recall = true_positive / (true_positive + false_negative) if true_positive + false_negative else 1.
+    candidate_precision = candidate_tp / (candidate_tp + candidate_fp) if candidate_tp + candidate_fp else 0.
+    candidate_recall = candidate_tp / (candidate_tp + candidate_fn) if candidate_tp + candidate_fn else 1.
     return {"version": "canonical-review-eval-v2", "mode": "live-model" if live else "offline-contract-integration",
         "cases": len(cases), "true_positive": true_positive, "false_positive": false_positive, "false_negative": false_negative,
         "confirmed_precision": precision, "confirmed_recall": recall, "failed_jobs": failed_jobs,
+        "candidate_precision": candidate_precision, "candidate_recall": candidate_recall,
+        "publication_policy_satisfied": published_positives == 0,
+        "passes_candidate_gate": len(cases) >= 60 and candidate_precision >= .9 and candidate_recall >= .7 and failed_jobs == 0,
         "passes_quality_gate": len(cases) >= 60 and precision >= .9 and recall >= .7 and failed_jobs == 0,
         "live_model_accuracy": None,
         "live_model_screening": {"precision": precision, "recall": recall} if live else None,

@@ -40,7 +40,7 @@ async def test_real_role_requests_are_compact_versioned_and_checkpointed(tmp_pat
         assert len(request.system_prompt.encode())<=2000
         assert 'TASK_DATA_ONLY_MARKER' not in request.system_prompt
         assert body['task']['agent_id']==role.value
-        expected=(['specialist_completion'] if role in SPECIALISTS else [] if role==AgentId.PLANNER else
+        expected=(['specialist_completion','arithmetic_claims'] if role in SPECIALISTS else [] if role==AgentId.PLANNER else
             ['verification'] if body['phase']=='verification' else ['synthesis'])
         assert list(body['policy_skills'])==expected
         assert revision['skills']==expected

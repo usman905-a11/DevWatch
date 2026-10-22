@@ -12,6 +12,13 @@ class EvidenceInspectionRequired(ValueError):
         self.rejections = rejections
 
 
+class RequiredInspectionIncomplete(EvidenceInspectionRequired):
+    def __init__(self, missing):
+        ValueError.__init__(self, 'Complete required inspection before evidence_complete: '
+            + ', '.join(missing[:3]) + '. Use read_source, then acknowledge delivered pages with inspected_evidence.')
+        self.rejections = []
+
+
 def begin(task, private):
     if private.investigation is not None and private.investigation.required_files != sorted(set(task.files)):
         raise ValueError('investigation progress belongs to another source scope')

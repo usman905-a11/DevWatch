@@ -24,8 +24,9 @@ def test_normal_seven_agent_review_captures_source_and_publishes_verified_format
         done = client.wait(current.job_id, wait_seconds=20, poll_seconds=.02)
         assert done.status == "completed"
         report = json.loads(client.report(done, format="json"))
-        assert len(report["confirmed_defects"]) == 1
-        finding = report["confirmed_defects"][0]
+        assert not report['confirmed_defects']
+        assert len(report["uncertain_high_impact_candidates"]) == 1
+        finding = report["uncertain_high_impact_candidates"][0]
         assert finding["title"] == "Empty input raises"
         assert finding["location"]["file_path"] == "logic.py" and finding["location"]["start_line"] == 2
         assert finding["location"]["snapshot_id"] == snapshot.snapshot_id
@@ -115,8 +116,9 @@ def test_runtime_faults_preserve_verified_siblings_and_honest_coverage(tmp_path,
             assert len(report['uncertain_high_impact_candidates']) == 1
             assert report['uncertain_high_impact_candidates'][0]['confidence'] <= .5
         else:
-            assert len(report["confirmed_defects"]) == 1
-            assert report["confirmed_defects"][0]["title"] == "Empty input raises"
+            assert not report['confirmed_defects']
+            assert len(report["uncertain_high_impact_candidates"]) == 1
+            assert report["uncertain_high_impact_candidates"][0]["title"] == "Empty input raises"
         assert "logic.py" in report["coverage"]["inspected_files"]
         assert not done.ledger.inflight
         if failed_task is not None:
@@ -186,7 +188,8 @@ def test_oversized_evidence_is_paged_inspected_and_bounded_through_final_report(
                            wait_seconds=25, poll_seconds=.02)
         assert done.status == "completed"
         report = json.loads(client.report(done, format="json"))
-        assert len(report["confirmed_defects"]) == 1 and not report["coverage"]["failed"]
+        assert not report['confirmed_defects']
+        assert len(report["uncertain_high_impact_candidates"]) == 1 and not report["coverage"]["failed"]
         events = timeline(client, done.job_id)
         inspected = [event["payload"] for event in events if event["kind"] == "evidence_inspected" and
                      event["payload"]["task_id"] == "quality_testability" and event["payload"]["offset"] == 12000]
@@ -238,7 +241,8 @@ def test_service_restart_resumes_saved_verification_without_repeating_specialist
         assert done.status == "completed" and done.job_id == current.job_id and done.snapshot_id == snapshot.snapshot_id
         assert done.ledger.total_tokens == interrupted.ledger.total_tokens
         report = json.loads(client.report(done, format="json"))
-        assert len(report["confirmed_defects"]) == 1
+        assert not report['confirmed_defects']
+        assert len(report["uncertain_high_impact_candidates"]) == 1
         tail = [event for event in timeline(client, done.job_id) if event["sequence"] > cursor]
         assert [event["payload"]["phase"] for event in tail if event["kind"] == "model_call_started"] == []
         assert not any(event["kind"] == "tool_called" for event in tail)
@@ -257,6 +261,7 @@ def test_real_job_deadline_drains_synthesis_and_publishes_verified_partial(tmp_p
         assert done.status == "completed" and provider.entered.is_set() and provider.drained.is_set()
         report = json.loads(client.report(done, format="json"))
         assert report["coverage"]["failed"]["__job"] == "review_time_exhausted"
-        assert len(report["confirmed_defects"]) == 1
+        assert not report['confirmed_defects']
+        assert len(report["uncertain_high_impact_candidates"]) == 1
         assert done.ledger.elapsed_seconds >= 15 and not done.ledger.inflight
         assert client.report(done, format="pdf").startswith(b"%PDF-")
