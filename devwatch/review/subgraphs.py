@@ -397,6 +397,7 @@ class AgentSubgraphs:
                          SpecialistResult)
         known = state.get("candidates", {})
         active = {key: known[key] for key in state.get("batch_ids", known)}
+        arithmetic = any(FindingCandidate.model_validate(claim).arithmetic_claims for claim in active.values())
         large_synthesis = state.get("phase") == "synthesis" and len(known) > 8
         if large_synthesis:
             active = {}
@@ -417,7 +418,8 @@ class AgentSubgraphs:
         skills,revision=prompts.guidance(task.agent_id.value,contract.system_prompt,
                                         state.get('phase','investigation'),selected_context,
                                         require_verification_challenge=self.require_verification_challenge,
-                                        verification_challenge=state.get('provisional_verification') is not None)
+                                        verification_challenge=state.get('provisional_verification') is not None,
+                                        arithmetic=arithmetic)
         state['prompt_revision']=revision
         body = {
             'prompt_revision':revision,
@@ -427,7 +429,7 @@ class AgentSubgraphs:
             "private_state": compact,
             "selected_context": selected_context,
             "action_schema": prompts.response_schema(AgentAction),
-            "result_schema": prompts.response_schema(result_schema),
+            "result_schema": prompts.response_schema(result_schema, arithmetic=arithmetic),
             "phase": state.get("phase", "investigation"),
             "verified": verified, "candidates": active, "candidate_count": len(known),
             "followup_task_ids": state.get('review_tasks') if state.get('phase') == 'verification' else None,

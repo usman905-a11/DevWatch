@@ -6,7 +6,7 @@ VERSION = 'review-prompts-v6.0'
 CONTEXT_VERSION = 'scoped-evidence-priority-v2'
 
 
-def response_schema(model):
+def response_schema(model, *, arithmetic=True):
     """Drop display labels, retaining JSON Schema fields and validation keywords."""
     def compact(node):
         if isinstance(node, list):
@@ -23,6 +23,9 @@ def response_schema(model):
     if model.__name__ == 'VerificationPhaseResult':
         schema['properties'].pop('review_observations', None)
         schema.get('$defs', {}).pop('ReviewObservation', None)
+        if not arithmetic:
+            schema['$defs']['VerificationDecision']['properties'].pop('arithmetic_counterexamples', None)
+            schema['$defs'].pop('ArithmeticCounterexample', None)
     return compact(schema)
 
 
@@ -219,11 +222,11 @@ def system_policy(role, responsibility):
 
 
 def guidance(role, system_prompt, phase, context, *, require_verification_challenge=False,
-             verification_challenge=False):
+             verification_challenge=False, arithmetic=False):
     verification_skill = ('counterexample_review' if require_verification_challenge and verification_challenge else 'verification')
     names = ([verification_skill if phase == 'verification' else 'synthesis']
              if role == 'synthesizer_verifier' else [] if role == 'planner' else ['specialist_completion'])
-    if role != 'planner' and phase != 'synthesis':
+    if role not in {'planner', 'synthesizer_verifier'} or (phase == 'verification' and arithmetic):
         names.append('arithmetic_claims')
     if isinstance(context, dict) and context.get('declared_context'):
         names.append('declared_context')

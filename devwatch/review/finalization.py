@@ -2,7 +2,7 @@
 
 The upstream structural evidence gate supplies snapshot-validated candidate and
 evidence indexes. This gate checks final draft consistency, not evidence integrity
-alone as proof of correctness. Verification remains the combined final agent's job.
+alone as proof of correctness. Model review and computed arithmetic are distinct.
 """
 
 import html
@@ -117,7 +117,7 @@ class FinalAcceptanceGate:
         metadata.update(decisions=decisions, duplicate_groups=[list(group) for group in self.duplicate_groups],
                         provenance=self.provenance)
         audit = VerificationAudit.model_validate(metadata)
-        audit.arithmetic_checks = {identity: arithmetic_receipts(candidate)
+        audit.arithmetic_checks = {identity: arithmetic_receipts(candidate, by_id[identity].arithmetic_counterexamples)
             for identity, candidate in self.candidates.items() if candidate.arithmetic_claims}
         try:
             validate_relations(self.candidates, audit, self.inspected_evidence)

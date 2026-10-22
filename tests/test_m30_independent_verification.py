@@ -139,3 +139,23 @@ def test_model_cannot_forge_original_judgment_history(tmp_path):
     state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=task.files, candidates={'f1':candidate}))
     assert state['verification'] is None
     assert state['private_state'].stop_reason == 'invalid_schema'
+
+
+def test_valid_counterexample_refutes_large_domain_without_exhaustive_enumeration(tmp_path):
+    from devwatch.review.finalization import FinalAcceptanceGate, assemble_report
+    from devwatch.review.contracts import FindingCandidate
+    repo, task, ref, candidate = setup(tmp_path)
+    candidate = asserted(candidate, '(n ^ (n - 1)) == n', stop=2147483647)
+    positive = decision(candidate, [ref])
+    negative = decision(candidate, [ref], verdict='rejected', statuses={'description': 'unsupported'})
+    negative['arithmetic_counterexamples'] = [dict(claim_index=0, point={'n':3})]
+    state, _ = run_pair(repo, task, ref, candidate, positive, negative)
+    verified = state['verification']
+    assert verified.decisions[0].verdict == 'rejected'
+    draft = assemble_report(repo.snapshot_id, {'f1': candidate}, verified.decisions, summary='review')
+    report = FinalAcceptanceGate({'f1':FindingCandidate.model_validate(candidate)}, evidence_refs={ref},
+        inspected_evidence={ref}, verification=verified).accept(draft, verified.decisions).draft
+    result = report.verification_audit.arithmetic_checks['f1'][0].result
+    assert result.status == 'contradicted'
+    assert result.counterexample == {'n':3}
+    assert result.checked_assignments == 1
