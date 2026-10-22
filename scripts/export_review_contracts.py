@@ -29,6 +29,10 @@ def export() -> str:
             if name == 'ReportDraft':
                 # M20 audit metadata is additive; older persisted reports remain readable.
                 definition['required'].remove('verification_audit')
+            # M30 evidence is additive; archived findings/audits remain readable.
+            for field in ('arithmetic_claims', 'arithmetic_counterexamples', 'review_observations', 'arithmetic_checks'):
+                if field in definition['required']:
+                    definition['required'].remove(field)
     return json.dumps(schema, sort_keys=True, indent=2, ensure_ascii=True) + "\n"
 
 

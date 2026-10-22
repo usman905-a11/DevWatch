@@ -47,7 +47,7 @@ def test_compact_synthesis_assembles_verified_fields_deterministically(tmp_path)
     runtime,_ = engine(repo,[dict(kind='submit_verification',inspected_evidence=[ref],payload={'decisions':good['decisions']}),
         dict(kind='submit_synthesis',payload={'summary':'Reviewed source','limitations':[]})])
     state=asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id,files=task.files,candidates={'f1':candidate(repo,ref)}))
-    assert state['output'].report_draft.confirmed_defects[0].model_dump()==good['report_draft']['confirmed_defects'][0] | {'kind':'defect','remediation':''}
+    assert state['output'].report_draft.confirmed_defects[0].model_dump()==good['report_draft']['confirmed_defects'][0] | {'kind':'defect','remediation':'','arithmetic_claims':[]}
 
 
 def test_verifier_may_raise_confidence_after_inspecting_new_evidence(tmp_path):

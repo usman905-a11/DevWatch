@@ -84,6 +84,15 @@ def _build_document(draft: dict) -> bytes:
             add(f"Equivalent findings: {', '.join(group['finding_ids'])}; {group['rationale']}")
         for conflict in audit['disagreements']:
             add(f"Disagreement {conflict['resolution']}: {', '.join(conflict['finding_ids'])}; {conflict['rationale']}")
+        for observation in audit.get('review_observations', []):
+            record = observation['decision']
+            add(f"Model review {observation['pass_number']}: {record['finding_id']}; {record['verdict']}; {record['rationale']}")
+        for identity, receipts in audit.get('arithmetic_checks', {}).items():
+            for receipt in receipts:
+                result = receipt['result']
+                add(f"Independent arithmetic {identity}/{receipt['field']}: {result['status']}; "
+                    f"{result['checked_assignments']} assignments; {receipt['statement']}; "
+                    f"counterexample={result['counterexample']}; {result['reason']}")
     add("Coverage", heading)
     coverage = draft["coverage"]
     add(f"Files inspected: {len(coverage['inspected_files'])}; symbols inspected: {len(coverage['inspected_symbols'])}")

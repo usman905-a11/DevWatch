@@ -13,6 +13,156 @@
       "title": "AgentId",
       "type": "string"
     },
+    "ArithmeticCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "checked_assignments": {
+          "maximum": 4096,
+          "minimum": 0,
+          "title": "Checked Assignments",
+          "type": "integer"
+        },
+        "counterexample": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Counterexample"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "contradicted",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "checked_assignments",
+        "counterexample",
+        "reason",
+        "status"
+      ],
+      "title": "ArithmeticCheck",
+      "type": "object"
+    },
+    "ArithmeticClaim": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Expression",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "title",
+            "description",
+            "impact",
+            "remediation"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "variables": {
+          "additionalProperties": {
+            "$ref": "#/$defs/IntegerRange"
+          },
+          "maxProperties": 4,
+          "title": "Variables",
+          "type": "object"
+        }
+      },
+      "required": [
+        "expression",
+        "field",
+        "variables"
+      ],
+      "title": "ArithmeticClaim",
+      "type": "object"
+    },
+    "ArithmeticCounterexample": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_index": {
+          "maximum": 7,
+          "minimum": 0,
+          "title": "Claim Index",
+          "type": "integer"
+        },
+        "point": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "maxProperties": 4,
+          "title": "Point",
+          "type": "object"
+        }
+      },
+      "required": [
+        "claim_index",
+        "point"
+      ],
+      "title": "ArithmeticCounterexample",
+      "type": "object"
+    },
+    "ArithmeticReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Digest",
+          "type": "string"
+        },
+        "claim_index": {
+          "maximum": 7,
+          "minimum": 0,
+          "title": "Claim Index",
+          "type": "integer"
+        },
+        "field": {
+          "enum": [
+            "title",
+            "description",
+            "impact",
+            "remediation"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "result": {
+          "$ref": "#/$defs/ArithmeticCheck"
+        },
+        "statement": {
+          "title": "Statement",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_digest",
+        "claim_index",
+        "field",
+        "result",
+        "statement"
+      ],
+      "title": "ArithmeticReceipt",
+      "type": "object"
+    },
     "BalancedLimits": {
       "additionalProperties": false,
       "properties": {
@@ -948,6 +1098,37 @@
       "title": "GitMetadata",
       "type": "object"
     },
+    "IntegerRange": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Start",
+          "type": "integer"
+        },
+        "step": {
+          "default": 1,
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Step",
+          "type": "integer"
+        },
+        "stop": {
+          "maximum": 2147483647,
+          "minimum": -2147483648,
+          "title": "Stop",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "step",
+        "stop"
+      ],
+      "title": "IntegerRange",
+      "type": "object"
+    },
     "JobView": {
       "additionalProperties": false,
       "description": "Owned transport view: no principal, raw source, private state or API keys.",
@@ -1176,6 +1357,14 @@
     "ReportFinding": {
       "additionalProperties": false,
       "properties": {
+        "arithmetic_claims": {
+          "items": {
+            "$ref": "#/$defs/ArithmeticClaim"
+          },
+          "maxItems": 8,
+          "title": "Arithmetic Claims",
+          "type": "array"
+        },
         "category": {
           "maxLength": 64,
           "minLength": 1,
@@ -1259,6 +1448,28 @@
         "verification_rationale"
       ],
       "title": "ReportFinding",
+      "type": "object"
+    },
+    "ReviewObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/VerificationDecision"
+        },
+        "pass_number": {
+          "enum": [
+            1,
+            2
+          ],
+          "title": "Pass Number",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "decision",
+        "pass_number"
+      ],
+      "title": "ReviewObservation",
       "type": "object"
     },
     "SnapshotManifest": {
@@ -1415,6 +1626,16 @@
     "VerificationAudit": {
       "additionalProperties": false,
       "properties": {
+        "arithmetic_checks": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/ArithmeticReceipt"
+            },
+            "type": "array"
+          },
+          "title": "Arithmetic Checks",
+          "type": "object"
+        },
         "conflicts": {
           "items": {
             "type": "string"
@@ -1466,6 +1687,13 @@
           },
           "title": "Provenance",
           "type": "object"
+        },
+        "review_observations": {
+          "items": {
+            "$ref": "#/$defs/ReviewObservation"
+          },
+          "title": "Review Observations",
+          "type": "array"
         }
       },
       "required": [
@@ -1483,6 +1711,14 @@
     "VerificationDecision": {
       "additionalProperties": false,
       "properties": {
+        "arithmetic_counterexamples": {
+          "items": {
+            "$ref": "#/$defs/ArithmeticCounterexample"
+          },
+          "maxItems": 8,
+          "title": "Arithmetic Counterexamples",
+          "type": "array"
+        },
         "causal_review": {
           "anyOf": [
             {

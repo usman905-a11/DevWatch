@@ -21,7 +21,7 @@ from devwatch.review.contracts import (
     AgentId, Coverage, FindingCandidate, FollowupRequest, ReportDraft, ReportFinding, ReviewTask,
     VerificationDecision, VerificationSynthesisResult, VerificationAudit, VerificationPhaseResult,
 )
-from devwatch.review.verification import validate_decision, validate_relations
+from devwatch.review.verification import validate_decision, validate_relations, arithmetic_receipts
 
 
 class AcceptanceError(ValueError):
@@ -95,7 +95,7 @@ class FinalAcceptanceGate:
                 seen.add(finding.finding_id)
                 if finding.location.snapshot_id != draft.snapshot_id:
                     raise AcceptanceError("finding belongs to a different snapshot")
-                for field in ("location", "title", "description", "impact", "category", "remediation"):
+                for field in ("location", "title", "description", "impact", "category", "remediation", "arithmetic_claims"):
                     if getattr(finding, field) != getattr(candidate, field):
                         raise AcceptanceError("final claim differs from the verified candidate")
                 if decision.verdict != verdict or finding.kind != kind:
@@ -117,6 +117,8 @@ class FinalAcceptanceGate:
         metadata.update(decisions=decisions, duplicate_groups=[list(group) for group in self.duplicate_groups],
                         provenance=self.provenance)
         audit = VerificationAudit.model_validate(metadata)
+        audit.arithmetic_checks = {identity: arithmetic_receipts(candidate)
+            for identity, candidate in self.candidates.items() if candidate.arithmetic_claims}
         try:
             validate_relations(self.candidates, audit, self.inspected_evidence)
         except ValueError as exc:
@@ -124,6 +126,11 @@ class FinalAcceptanceGate:
         if draft.verification_audit is not None and draft.verification_audit != audit:
             raise AcceptanceError('Synthesis cannot alter verification audit or specialist provenance.')
         draft.verification_audit = audit
+        if self.candidates:
+            note = ('Independent arithmetic checks cover only explicit predicates on their declared integer domains. '
+                    'Source relevance and other prose remain model judgments, not independently proven facts.')
+            if note not in draft.limitations:
+                draft.limitations.append(note)
         draft.limitations.extend(note for note in audit.conflicts if note not in draft.limitations)
         notes = ['Unresolved disagreement: ' + item.rationale for item in audit.disagreements
                  if item.resolution == 'unresolved']
@@ -244,6 +251,15 @@ def render_accepted_report(report: AcceptedReport) -> dict[str, str]:
             lines.append(_markdown_text(f'Equivalent findings: {", ".join(group.finding_ids)}; {group.rationale}'))
         for conflict in draft.verification_audit.disagreements:
             lines.append(_markdown_text(f'Disagreement {conflict.resolution}: {", ".join(conflict.finding_ids)}; {conflict.rationale}'))
+        for observation in draft.verification_audit.review_observations:
+            record = observation.decision
+            lines.append(_markdown_text(f'Model review {observation.pass_number}: {record.finding_id}; {record.verdict}; {record.rationale}'))
+        for identity, receipts in draft.verification_audit.arithmetic_checks.items():
+            for receipt in receipts:
+                result = receipt.result
+                lines.append(_markdown_text(f'Independent arithmetic {identity}/{receipt.field}: {result.status}; '
+                    f'{result.checked_assignments} assignments; {receipt.statement}; '
+                    f'counterexample={result.counterexample}; {result.reason}'))
     limitations = sorted(set(draft.limitations + draft.coverage.limitations))
     if limitations:
         lines.extend(["", "## Limitations", ""])

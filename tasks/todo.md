@@ -1,5 +1,14 @@
 # DevWatch seven-agent implementation checklist
 
+## M30 independent evidence - in progress
+
+- [ ] Bound mathematical assertions to exact candidate text; check finite domains safely.
+- [ ] Preserve conflicting judgments as unresolved; independently check arithmetic at admission.
+- [ ] Recompute report receipts, preserve checkpoint safety and verify consumers/full regression.
+- [ ] Record scoped results and remaining natural-language/live limitations without rewriting M27-M29.
+
+Specification: [m30-independent-claims-spec.md](m30-independent-claims-spec.md).
+
 ## Reliability remediation - M24-M26 scoped complete; M27-M29 partial
 
 - [x] M24: fix larger-repository coverage, verify repaired control, distinguish local refusal.

@@ -1,5 +1,15 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: M30 independent claim evidence (2026-10-22)
+
+Implement [the M30 specification](m30-independent-claims-spec.md) in three
+sequential slices: bounded arithmetic checking, disagreement-preserving admission,
+then runtime-owned reporting and verification. This follows the user's approval
+to start solving the recorded issues with independent evidence. M27-M29 remain
+historically partial. No new budget grant: US$1.81292250 remains under US$9,
+subject to narrower original payload envelopes. Next live work must use a new
+frozen protocol and retain all attempts.
+
 ## Current request: reliability remediation M24–M27 (2026-10-21)
 
 User authorized fixes and US$4 more live budget. Shared cap US$9, starting

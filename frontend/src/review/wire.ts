@@ -30,6 +30,11 @@ export interface ReportFinding {
   title: string; description: string; impact: string; confidence: number; remediation: string
   location: { snapshot_id: string; file_path: string; start_line: number; end_line: number }
   evidence_refs: string[]; verification_rationale: string
+  arithmetic_claims?: ArithmeticClaim[]
+}
+export interface ArithmeticClaim {
+  field: 'title' | 'description' | 'impact' | 'remediation'; expression: string
+  variables: Record<string, { start: number; stop: number; step: number }>
 }
 export interface ReportDraft {
   snapshot_id: string; summary: string; confirmed_defects: ReportFinding[]
@@ -45,6 +50,7 @@ export interface CausalReview {
 export interface VerificationDecision {
   finding_id: string; verdict: 'confirmed' | 'uncertain' | 'rejected' | 'advisory'
   confidence: number; rationale: string; evidence_refs: string[]; causal_review: CausalReview | null
+  arithmetic_counterexamples?: { claim_index: number; point: Record<string, number> }[]
 }
 export interface VerificationAudit {
   decisions: VerificationDecision[]; duplicate_groups: string[][]; conflicts: string[]
@@ -52,6 +58,12 @@ export interface VerificationAudit {
   disagreements: { finding_ids: string[]; resolution: 'resolved' | 'unresolved'; rationale: string; evidence_refs: string[] }[]
   followup_requests: { task_id: string; question: string; evidence_needed: string }[]
   provenance: Record<string, { task_id: string; agent_id: AgentId }>
+  review_observations?: { pass_number: 1 | 2; decision: VerificationDecision }[]
+  arithmetic_checks?: Record<string, { candidate_digest: string; claim_index: number
+    field: ArithmeticClaim['field']; statement: string; result: {
+      status: 'supported' | 'contradicted' | 'unknown'; checked_assignments: number
+      counterexample: Record<string, number> | null; reason: string
+    } }[]>
 }
 export interface PersistedEvent {
   event_id: string; job_id: string; sequence: number; kind: string; timestamp: number

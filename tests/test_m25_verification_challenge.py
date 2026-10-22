@@ -28,7 +28,7 @@ def test_counterexample_cannot_be_overridden_by_first_positive_judgment(tmp_path
     runtime.require_verification_challenge = True
     state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=task.files,
                                           candidates={'f1': claim}))
-    assert state['verification'].decisions[0].verdict == challenge_verdict
+    assert state['verification'].decisions[0].verdict == ('uncertain' if challenge_verdict == 'rejected' else challenge_verdict)
     assert state['verification'].decisions[0].confidence <= second['confidence']
     challenge = json.loads(provider.requests[1].prompt)
     assert challenge['verification_challenge'] is True
@@ -50,9 +50,9 @@ def test_interruption_after_first_approval_cannot_publish_it(tmp_path):
     ('confirmed', 'confirmed', 'confirmed'),
     ('advisory', 'confirmed', 'advisory'),
     ('uncertain', 'confirmed', 'uncertain'),
-    ('rejected', 'confirmed', 'rejected'),
+    ('rejected', 'confirmed', 'uncertain'),
 ])
-def test_reconciliation_never_upgrades_either_pass(tmp_path, first_verdict, second_verdict, expected):
+def test_reconciliation_cannot_turn_disagreement_into_confirmation(tmp_path, first_verdict, second_verdict, expected):
     _, _, ref, claim = setup(tmp_path)
     def result(verdict, confidence):
         statuses = {'impact': 'unsupported'} if verdict == 'rejected' else {'impact': 'uncertain'} if verdict == 'uncertain' else {}
@@ -97,7 +97,7 @@ def test_legacy_inflight_approval_cannot_bypass_the_current_challenge_policy(tmp
     prior_iterations = runtime.budget.ledger.task_iterations['__final']
     state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=task.files, candidates={'f1': claim},
         restored_state=serializable(old), private_state=old['private_state']))
-    assert state['verification'].decisions[0].verdict == 'rejected'
+    assert state['verification'].decisions[0].verdict == 'uncertain'
     assert len(provider.requests) == 1
     assert runtime.budget.ledger.task_iterations['__final'] == prior_iterations + 1
 
@@ -113,7 +113,7 @@ def test_pending_challenge_survives_restart_without_repeating_the_first_pass(tmp
     runtime.provider = provider
     state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=task.files, candidates={'f1': claim},
         restored_state=serializable(paused), private_state=paused['private_state']))
-    assert state['verification'].decisions[0].verdict == 'rejected'
+    assert state['verification'].decisions[0].verdict == 'uncertain'
     assert len(provider.requests) == 1
     assert runtime.budget.ledger.task_iterations['__final'] == prior_iterations + 1
 
@@ -126,14 +126,14 @@ def test_timeout_recovery_does_not_admit_a_legacy_positive_checkpoint(tmp_path):
 
 def test_reconciled_checkpoint_retains_its_recorded_verdict_on_recovery(tmp_path):
     _, _, ref, claim = setup(tmp_path)
-    raw = dict(verification_policy='counterexample-v1',
+    raw = dict(verification_policy=verification.CHALLENGE_POLICY,
         verification=VerificationPhaseResult(decisions=[decision(claim, [ref])]).model_dump(mode='json'))
     result = verification.checkpoint_verification(raw)
     assert result.decisions[0].verdict == 'confirmed'
 
 
 @pytest.mark.asyncio
-async def test_canonical_report_obeys_the_counterexample_veto(tmp_path):
+async def test_canonical_report_preserves_disputed_candidate_without_confirmation(tmp_path):
     from scripts.evaluate_agents import load_corpus, review_input, run_case
     from tests.test_m19_evaluation import RecordingProvider
     case = load_corpus()[0]
@@ -150,7 +150,9 @@ async def test_canonical_report_obeys_the_counterexample_veto(tmp_path):
     provider = Counterexample(review_input(case))
     row = await run_case(case, tmp_path, mode='full', provider=provider)
     assert row['candidate_score']['true_positive'] == 1
-    assert row['findings'] == []
+    assert len(row['findings']) == 1
+    assert row['findings'][0]['kind'] == 'high_impact_candidate'
+    assert row['findings'][0]['confidence'] < .8
     assert any(json.loads(request.prompt).get('verification_challenge') for request in provider.requests)
 
 
@@ -176,7 +178,7 @@ def test_challenge_batch_shrinking_keeps_undelivered_candidates_provisional(tmp_
     runtime.budget = BudgetManager(BalancedLimits(model_context_tokens=24000))
     restored = dict(snapshot_id=repo.snapshot_id, candidates=candidates,
         task=dict(agent_id='synthesizer_verifier'), phase='verification',
-        provisional_verification=provisional.model_dump(mode='json'), verification_policy='counterexample-v1')
+        provisional_verification=provisional.model_dump(mode='json'), verification_policy=verification.CHALLENGE_POLICY)
     state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=task.files, candidates=candidates,
         restored_state=restored))
     assert state['private_state'].stop_reason == 'evidence_complete', state.get('validation_error')
@@ -220,5 +222,5 @@ def test_disagreement_does_not_retain_relations_that_could_merge_a_vetoed_claim(
         duplicate_groups=[['f1','f2']], conflicts=['A retained evidence qualification.'])
     result = verification.reconcile_challenge(claims, first, second)
     assert result.duplicate_groups == result.duplicate_reviews == result.disagreements == []
-    assert result.decisions[0].verdict == 'rejected'
+    assert result.decisions[0].verdict == 'uncertain'
     assert 'A retained evidence qualification.' in result.conflicts

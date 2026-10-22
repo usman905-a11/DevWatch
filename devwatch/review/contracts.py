@@ -12,6 +12,7 @@ from typing import Any, Literal, get_args
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from devwatch.review.tool_errors import ToolDiagnostic
 from devwatch.review.prompts import system_policy
+from devwatch.review.arithmetic import ArithmeticClaim, ArithmeticCounterexample, ArithmeticCheck
 
 
 class ContractModel(BaseModel):
@@ -106,6 +107,14 @@ class FindingCandidate(ContractModel):
     location: SourceLocation
     evidence_refs: list[str] = Field(min_length=1, max_length=8)
     remediation: str = Field(default="", max_length=1000)
+    arithmetic_claims: list[ArithmeticClaim] = Field(default_factory=list, max_length=8)
+
+    @model_validator(mode='after')
+    def bind_arithmetic_text(self):
+        for claim in self.arithmetic_claims:
+            if claim.statement() not in getattr(self, claim.field):
+                raise ValueError('arithmetic claim requires its canonical statement in the associated field')
+        return self
 
 
 class Coverage(ContractModel):
@@ -239,6 +248,20 @@ class VerificationDecision(ContractModel):
     rationale: str = Field(min_length=1, max_length=600)
     evidence_refs: list[str] = Field(default_factory=list, max_length=8)
     causal_review: CausalReview | None = None
+    arithmetic_counterexamples: list[ArithmeticCounterexample] = Field(default_factory=list, max_length=8)
+
+
+class ReviewObservation(ContractModel):
+    pass_number: Literal[1, 2]
+    decision: VerificationDecision
+
+
+class ArithmeticReceipt(ContractModel):
+    candidate_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
+    claim_index: int = Field(ge=0, le=7)
+    field: Literal['title', 'description', 'impact', 'remediation']
+    statement: str
+    result: ArithmeticCheck
 
 
 class DuplicateReview(ContractModel):
@@ -258,6 +281,7 @@ class VerificationPhaseResult(ContractModel):
     followup_requests: list['FollowupRequest'] = Field(default_factory=list)
     duplicate_reviews: list[DuplicateReview] = Field(default_factory=list)
     disagreements: list[Disagreement] = Field(default_factory=list)
+    review_observations: list[ReviewObservation] = Field(default_factory=list)
 
 
 class SpecialistProvenance(ContractModel):
@@ -267,6 +291,7 @@ class SpecialistProvenance(ContractModel):
 
 class VerificationAudit(VerificationPhaseResult):
     provenance: dict[str, SpecialistProvenance] = Field(default_factory=dict)
+    arithmetic_checks: dict[str, list[ArithmeticReceipt]] = Field(default_factory=dict)
 
 
 class ReportFinding(FindingCandidate):
@@ -298,6 +323,7 @@ class VerificationSynthesisResult(ContractModel):
     followup_requests: list[FollowupRequest] = Field(default_factory=list)
     duplicate_reviews: list[DuplicateReview] = Field(default_factory=list)
     disagreements: list[Disagreement] = Field(default_factory=list)
+    review_observations: list[ReviewObservation] = Field(default_factory=list)
     report_draft: ReportDraft
     coverage_summary: Coverage
 

@@ -326,11 +326,13 @@ class AgentSubgraphs:
             if state.get("phase") != "verification":
                 raise ValueError("verification has already been recorded")
             result = VerificationPhaseResult.model_validate(action.payload)
+            if result.review_observations:
+                raise ValueError('review observations are runtime-owned')
             known = {key: state["candidates"][key] for key in state.get("batch_ids", state["candidates"])}
             if {d.finding_id for d in result.decisions} != set(known) or len(result.decisions) != len(known):
                 raise ValueError("every known candidate requires exactly one decision")
             for decision in result.decisions:
-                semantic_verification.validate_decision(known[decision.finding_id], decision)
+                semantic_verification.validate_decision(known[decision.finding_id], decision, independent=False)
                 allowed = set(known[decision.finding_id]["evidence_refs"]) | set(private.evidence_refs)
                 # Delivered, acknowledged evidence is available to this verifier
                 # even when another candidate originally supplied its ref.
@@ -872,11 +874,13 @@ class AgentSubgraphs:
                         semantic_verification.combine_verification(state.get('verification'), verified),
                         {ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()})
                     state['provisional_verification'] = VerificationPhaseResult(decisions=remaining) if remaining else None
-                elif self.require_verification_challenge and any(
-                        item.verdict in {'confirmed', 'advisory'} for item in verified.decisions):
+                elif self.require_verification_challenge and verified.decisions:
                     state['provisional_verification'] = verified
                     state['action'] = None
                     return state
+                else:
+                    verified.decisions = [semantic_verification.enforce_arithmetic(
+                        state['candidates'][item.finding_id], item) for item in verified.decisions]
                 completed = list(verified.decisions)
                 previous = state.get("verification")
                 verified = semantic_verification.combine_verification(previous, verified)
