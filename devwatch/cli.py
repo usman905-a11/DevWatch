@@ -110,6 +110,7 @@ def submit(
     snapshot_id: str,
     idempotency_key: str = typer.Option(..., "--idempotency-key"),
     changed_file: Optional[list[str]] = typer.Option(None, "--changed-file", help="Repeat for the original selected paths"),
+    context_file: Optional[list[str]] = typer.Option(None, "--context-file", help="Snapshot document shared with all review roles; repeat up to four, 6000 bytes total"),
     empty_scope: bool = typer.Option(False, "--empty-scope", help="Explicitly select zero changed files"),
     service_url: str = typer.Option("http://127.0.0.1:8000", "--service-url", envvar="DEVWATCH_SERVICE_URL"),
 ):
@@ -117,7 +118,8 @@ def submit(
     try:
         if empty_scope and changed_file:
             raise ValueError("Choose changed files or empty scope")
-        current = _client(service_url).submit(snapshot_id, [] if empty_scope else changed_file, idempotency_key=idempotency_key)
+        context = {'context_files': context_file} if context_file is not None else {}
+        current = _client(service_url).submit(snapshot_id, [] if empty_scope else changed_file, idempotency_key=idempotency_key, **context)
         typer.echo(current.model_dump_json())
     except (ClientError, ValueError, OSError) as error:
         _error(error)

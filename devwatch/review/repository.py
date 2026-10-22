@@ -139,6 +139,17 @@ class RepositoryContext:
                              "end_line": end, "content_hash": self.manifest.entries[path].content_hash,
                              "data": excerpt}, work=work)
 
+    def _read_sources(self, arguments, work):
+        from devwatch.review.tool_catalogue import SourceArguments
+        parsed = SourceArguments.model_validate(arguments).model_dump(exclude_unset=True)
+        paths = [parsed.pop('file_path'), *parsed.pop('additional_files', [])]
+        # Authorize the entire batch before materializing any source artifact.
+        for path in paths:
+            self._scoped_path(path, work)
+        observations = [self._read_source({**parsed, 'file_path':path}, work) for path in paths]
+        return observations[0].model_copy(update={
+            'additional_evidence_refs':[item.evidence_ref for item in observations[1:]]})
+
     def evidence_page(self, identity, work, *, offset=0, max_chars=1500):
         record = self.scoped_evidence(identity, work)
         encoded = _json(record)
@@ -162,7 +173,7 @@ class RepositoryContext:
     def context(self, state):
         work, private, action = state["task"], state["private_state"], state.get("action")
         if action is not None and action.kind == "request_context":
-            return self._read_source(action.arguments, work)
+            return self._read_sources(action.arguments, work)
         pages = [self.evidence_page(identity, work, offset=private.evidence_cursors.get(identity, 0),
                                    max_chars=private.evidence_page_sizes.get(identity, 1500))
                  for identity in reversed(list(dict.fromkeys(work.evidence_refs + private.evidence_refs)))]
@@ -213,7 +224,7 @@ class RepositoryContext:
         tools.validate_confirmation = self.validate_confirmation
         tools.validate_candidate = self.validate_candidate
         async def read_source(arguments, work):
-            return self._read_source(arguments, work)
+            return self._read_sources(arguments, work)
         async def read_evidence(arguments, work):
             identity = arguments["evidence_ref"]
             offset = arguments.get("offset", 0)

@@ -18,7 +18,7 @@ from pydantic import Field, ValidationError
 
 from devwatch.providers.base import LLMProvider, LLMRequest, LLMResponse
 from devwatch.providers.exceptions import (ProviderAuthenticationError, ProviderRateLimitError,
-    ProviderQuotaExhaustedError, ProviderTemporaryError, ProviderTimeoutError)
+    ProviderQuotaExhaustedError, ProviderTemporaryError, ProviderTimeoutError, ProviderBudgetRefusedError)
 from devwatch.review.budgets import BudgetExceeded, BudgetManager
 from devwatch.review.jobs import UnknownToolCompletion, safe_stop_reason
 from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, CommandArguments, describe_tool
@@ -29,11 +29,12 @@ from devwatch.review.contracts import (
     AGENT_CONTRACTS, SPECIALISTS, AgentAction, AgentId, AgentPrivateState, AgentWorkItem,
     ContractModel, EvidenceProgress, ModelTier, ReviewPlan, ReviewTask, SpecialistResult, TokenUsage,
     SynthesisSummary, VerificationPhaseResult, VerificationSynthesisResult,
-    VerificationDecision, CausalReview, ClaimAssessment, DuplicateReview, Disagreement, FindingCandidate,
+    VerificationDecision, CausalReview, ClaimAssessment, DuplicateReview, Disagreement, FindingCandidate, SourceLocation,
 )
 
 
 class ToolObservation(ContractModel):
+    additional_evidence_refs: list[str] = Field(default_factory=list, max_length=3)
     evidence_ref: str = Field(min_length=1)
     inspected: list[str] = Field(default_factory=list)
     offset: int = Field(default=0, ge=0)
@@ -58,9 +59,20 @@ class ContextRetrievalTimeout(RuntimeError):
 
 
 class CandidateSchemaError(ValueError):
-    def __init__(self, rejections):
-        super().__init__('Return complete candidates: category, title, description, impact, confidence, '
-                         'location, evidence_refs, kind and remediation. Preserve valid findings.')
+    def __init__(self, rejections, raw_candidates=()):
+        fields = set(FindingCandidate.model_fields) | set(SourceLocation.model_fields)
+        errors = []
+        for index, raw in enumerate(raw_candidates):
+            try:
+                FindingCandidate.model_validate(raw)
+            except ValidationError as exc:
+                for error in exc.errors():
+                    path = '.'.join(str(part) if isinstance(part, int) or part in fields else 'field'
+                                    for part in error['loc'])
+                    errors.append(f"candidates.{index}.{path}:{error['type']}")
+        detail = '; '.join(errors)[:145]
+        super().__init__('Repair invalid candidates: ' + detail + '. Preserve valid findings.'
+                         if detail else 'Return complete candidates. Preserve valid findings.')
         self.rejections = rejections
 
 
@@ -117,7 +129,8 @@ class PermissionedTools:
         if action.kind in {"call_tool", "request_context"}:
             parsed = self._arguments[action.tool or "read_source"].model_validate(action.arguments)
             path = getattr(parsed, "file_path", None)
-            if path is not None and path not in task.files:
+            paths = ([path] if path is not None else []) + getattr(parsed, 'additional_files', [])
+            if any(path not in task.files for path in paths):
                 raise PermissionError("source is outside the assigned scope")
             return parsed.model_dump(mode="json", exclude_unset=True)
 
@@ -137,6 +150,8 @@ class AgentExecutionState(TypedDict, total=False):
     snapshot_id: str
     phase: str
     verification: VerificationPhaseResult | None
+    provisional_verification: VerificationPhaseResult | None
+    verification_policy: str | None
     candidates: dict[str, Any]
     model_tier: ModelTier
     escalation_count: int
@@ -175,12 +190,14 @@ class AgentSubgraphs:
     def __init__(self, provider: LLMProvider, tools: PermissionedTools, budget: BudgetManager,
                  context: Callable[[AgentExecutionState], Any], *, models: dict[ModelTier, str],
                  persist: Callable[[AgentExecutionState, dict[str, Any]], Any] | None = None,
-                 model_slots: asyncio.Semaphore | None = None, emit: Callable | None = None):
+                 model_slots: asyncio.Semaphore | None = None, emit: Callable | None = None,
+                 require_verification_challenge: bool = False):
         if set(models) != set(ModelTier) or any(not name.strip() for name in models.values()):
             raise ValueError("explicit small, medium and strong model names are required")
         self.provider, self.tools, self.budget, self.context = provider, tools, budget, context
         self.models, self.persist = dict(models), persist
         self.emit = emit
+        self.require_verification_challenge = require_verification_challenge
         self.budget.begin_execution()
         self.model_slots = model_slots or asyncio.Semaphore(budget.limits.concurrent_model_calls)
         self.graphs = {agent: self._build() for agent in SPECIALISTS}
@@ -290,7 +307,7 @@ class AgentSubgraphs:
                 raise ValueError("result does not belong to the assigned agent/task")
             if task.agent_id in SPECIALISTS:
                 if not output.candidates and output.quarantined:
-                    raise CandidateSchemaError(output.quarantined)
+                    raise CandidateSchemaError(output.quarantined, action.payload.get('candidates', []))
                 output = investigation.admit(task, private, output, self.tools.validate_candidate)
                 action.payload = output.model_dump(mode="json")
         elif action.kind == "submit_plan":
@@ -315,6 +332,9 @@ class AgentSubgraphs:
             for decision in result.decisions:
                 semantic_verification.validate_decision(known[decision.finding_id], decision)
                 allowed = set(known[decision.finding_id]["evidence_refs"]) | set(private.evidence_refs)
+                # Delivered, acknowledged evidence is available to this verifier
+                # even when another candidate originally supplied its ref.
+                allowed.update(ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected())
                 if not set(decision.evidence_refs).issubset(allowed):
                     raise ValueError("verification cites unknown evidence")
                 if decision.verdict != "rejected" and not decision.evidence_refs:
@@ -378,7 +398,7 @@ class AgentSubgraphs:
         large_synthesis = state.get("phase") == "synthesis" and len(known) > 8
         if large_synthesis:
             active = {}
-        compact = private.model_dump(mode="json", exclude={"local_findings", "pending_actions", "evidence_progress", "coverage", "quarantined_candidates", "tool_diagnostics", "investigation"})
+        compact = private.model_dump(mode="json", exclude={"local_findings", "pending_actions", "evidence_progress", "coverage", "quarantined_candidates", "tool_diagnostics", "investigation", "evidence_cursors", "evidence_page_sizes"})
         compact["hypotheses"] = [{**item, "claim": item["claim"][:300]} for item in compact["hypotheses"][-3:]]
         compact["evidence_refs"] = compact["evidence_refs"][-12:]
         compact["evidence_progress"] = {ref: {"processed": receipt.processed, "delivered": bool(receipt.delivered), "inspected": bool(receipt.inspected)}
@@ -393,7 +413,9 @@ class AgentSubgraphs:
         catalogue,selection=self.tools.for_model(state,selected_context)
         state['tool_selection']=selection
         skills,revision=prompts.guidance(task.agent_id.value,contract.system_prompt,
-                                        state.get('phase','investigation'),selected_context)
+                                        state.get('phase','investigation'),selected_context,
+                                        require_verification_challenge=self.require_verification_challenge,
+                                        verification_challenge=state.get('provisional_verification') is not None)
         state['prompt_revision']=revision
         body = {
             'prompt_revision':revision,
@@ -416,6 +438,8 @@ class AgentSubgraphs:
         }
         actions = set(contract.allowed_actions)
         if state.get("phase") == "verification":
+            if self.require_verification_challenge:
+                body['verification_challenge'] = state.get('provisional_verification') is not None
             actions.discard("submit_synthesis")
         elif state.get("phase") == "synthesis":
             actions.difference_update({"submit_verification", "request_followup"})
@@ -433,12 +457,12 @@ class AgentSubgraphs:
                           else self.budget.limits.planner_output_tokens if task.agent_id == AgentId.PLANNER else 8192)
             prompt = json.dumps(body, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
             input_bound = len(prompt.encode("utf-8")) + len(contract.system_prompt.encode("utf-8")) + 512
-            allowance = self.budget.model_allowance(task.agent_id) if task.agent_id == AgentId.PLANNER else None
+            allowance = self.budget.model_allowance(task.agent_id)
             if allowance is not None:
                 max_output = min(max_output, allowance - input_bound)
             if max_output > 0 and input_bound + max_output <= self.budget.limits.model_context_tokens:
                 return prompt, max_output
-            optional = {key: value for key, value in selected_context.items() if key not in {"evidence", "snapshot_id", "scope"}} if isinstance(selected_context, dict) else {}
+            optional = {key: value for key, value in selected_context.items() if key not in {"evidence", "snapshot_id", "scope", "declared_context"}} if isinstance(selected_context, dict) else {}
             if optional:
                 key = max(optional, key=lambda item: len(json.dumps(optional[item], ensure_ascii=False).encode("utf-8")))
                 selected_context.pop(key)
@@ -447,9 +471,15 @@ class AgentSubgraphs:
                 # Retrieved pages must be deliverable before acknowledgment.
                 # Fit the response reservation first; it is a ceiling, not a
                 # reason to discard evidence that fits the actual context.
-                headroom = self.budget.limits.model_context_tokens - input_bound
+                headroom = min(self.budget.limits.model_context_tokens, allowance) - input_bound
                 if task.agent_id != AgentId.PLANNER and headroom >= 512:
                     return prompt, min(max_output, headroom)
+                if state.get('phase') == 'verification' and len(active) > 1:
+                    # Keep source deliverable while splitting a candidate batch;
+                    # dropping it first can make every repeated batch unreadable.
+                    active.pop(next(reversed(active)))
+                    state['batch_ids'] = list(active)
+                    continue
                 selected_context["evidence"].pop()
                 body["context_omissions"].append("evidence_page; retrieve via read_evidence")
             elif compact.get("hypotheses"):
@@ -462,11 +492,13 @@ class AgentSubgraphs:
                 # Optional context is already removed. A response reservation
                 # is a ceiling, not a minimum: retain mandatory schemas/claims
                 # and fit output to the remaining context without raising limits.
-                headroom = self.budget.limits.model_context_tokens - input_bound
+                headroom = min(self.budget.limits.model_context_tokens, allowance) - input_bound
                 if task.agent_id != AgentId.PLANNER and headroom >= 512:
                     return prompt, min(max_output, headroom)
-                if allowance is not None and allowance <= input_bound:
-                    raise BudgetExceeded("remaining Planner budget cannot admit the required prompt")
+                if input_bound >= self.budget.limits.model_context_tokens:
+                    raise PromptContextLimit("required request fields exceed model context")
+                if allowance <= input_bound:
+                    raise BudgetExceeded("remaining agent budget cannot admit the required prompt")
                 raise PromptContextLimit("required request fields exceed model context")
 
     async def _call_model(self, state: AgentExecutionState, *, repair: bool, attempt: int = 1) -> str:
@@ -474,7 +506,9 @@ class AgentSubgraphs:
         contract = AGENT_CONTRACTS[task.agent_id]
         if state.get("phase") == "verification":
             decided = {decision.finding_id for decision in state["verification"].decisions} if state.get("verification") else set()
-            state["batch_ids"] = [key for key in state["candidates"] if key not in decided][:8]
+            pending = state.get('provisional_verification')
+            state["batch_ids"] = ([item.finding_id for item in pending.decisions] if pending is not None
+                else [key for key in state["candidates"] if key not in decided])[:8]
             task = task.model_copy(update={"evidence_refs": list(dict.fromkeys(ref for key in state["batch_ids"]
                                              for ref in state["candidates"][key]["evidence_refs"]))})
         try:
@@ -513,6 +547,17 @@ class AgentSubgraphs:
                     reasoning_effort="low",
                 )), timeout=self.budget.timeout_for("provider"))
                 response = LLMResponse.model_validate(response)
+            except ProviderBudgetRefusedError as exc:
+                # Only trusted local admission proves zero remote consumption.
+                self.budget.record_model(ticket, prompt_tokens=0, completion_tokens=0)
+                call.update(status='not_dispatched', charged_tokens=0,
+                            duration_seconds=time.monotonic() - started)
+                state['provider_observation'] = dict(call)
+                private.coverage.limitations.append('Local provider budget refused before dispatch; no provider tokens consumed.')
+                await self._event('model_call_completed', state, operation_id=ticket, attempt=attempt,
+                    outcome='failed', stop_reason='budget_exhausted', total_tokens=0,
+                    duration_seconds=time.monotonic() - started)
+                raise BudgetExceeded('local provider budget refused before dispatch') from exc
             except BaseException as exc:
                 # A timeout/cancel can still consume provider tokens. Charge the
                 # reservation conservatively; never free unknown consumption.
@@ -781,13 +826,14 @@ class AgentSubgraphs:
                 else:
                     observation = await asyncio.wait_for(self.tools.execute(task, action),
                                                          timeout=self.budget.timeout_for("command"))
-                if observation.evidence_ref in private.evidence_refs:
-                    private.evidence_refs.remove(observation.evidence_ref)
-                private.evidence_refs.append(observation.evidence_ref)
-                private.evidence_cursors[observation.evidence_ref] = observation.offset
-                private.evidence_page_sizes[observation.evidence_ref] = observation.max_chars
-                receipt = private.evidence_progress.setdefault(observation.evidence_ref, EvidenceProgress())
-                receipt.processed = True
+                for identity in [observation.evidence_ref, *observation.additional_evidence_refs]:
+                    if identity in private.evidence_refs:
+                        private.evidence_refs.remove(identity)
+                    private.evidence_refs.append(identity)
+                    private.evidence_cursors[identity] = observation.offset
+                    private.evidence_page_sizes[identity] = observation.max_chars
+                    receipt = private.evidence_progress.setdefault(identity, EvidenceProgress())
+                    receipt.processed = True
                 if private.investigation is not None:
                     investigation.observed(private, fingerprint, observation.evidence_ref)
                 state["last_tool_error"] = None
@@ -812,13 +858,33 @@ class AgentSubgraphs:
                 return self._stop(state, "evidence_complete")
             elif action.kind == "submit_verification":
                 verified = VerificationPhaseResult.model_validate(action.payload)
+                pending = state.get('provisional_verification')
+                if self.require_verification_challenge and pending is not None:
+                    identities = {item.finding_id for item in verified.decisions}
+                    selected = pending.model_copy(deep=True)
+                    selected.decisions = [item for item in pending.decisions if item.finding_id in identities]
+                    remaining = [item for item in pending.decisions if item.finding_id not in identities]
+                    if remaining:
+                        selected.duplicate_groups, selected.duplicate_reviews, selected.disagreements = [], [], []
+                    verified = semantic_verification.reconcile_challenge(
+                        {key: claim for key, claim in state['candidates'].items() if key in identities}, selected, verified)
+                    semantic_verification.validate_relations(state['candidates'],
+                        semantic_verification.combine_verification(state.get('verification'), verified),
+                        {ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()})
+                    state['provisional_verification'] = VerificationPhaseResult(decisions=remaining) if remaining else None
+                elif self.require_verification_challenge and any(
+                        item.verdict in {'confirmed', 'advisory'} for item in verified.decisions):
+                    state['provisional_verification'] = verified
+                    state['action'] = None
+                    return state
+                completed = list(verified.decisions)
                 previous = state.get("verification")
                 verified = semantic_verification.combine_verification(previous, verified)
                 proposed = state.get("proposed_followups", [])
                 # A proposal is never a dispatch or a separate agent.
                 verified.followup_requests.extend(proposed)
                 state["verification"] = verified
-                for decision in VerificationPhaseResult.model_validate(action.payload).decisions:
+                for decision in completed:
                     await self._event("verification_completed", state, finding_id=decision.finding_id,
                                       verdict=decision.verdict, count=1)
                 if not action.payload.get("decisions"):
@@ -947,6 +1013,8 @@ class AgentSubgraphs:
                              focus="Plan review" if agent == AgentId.PLANNER else "Verify then synthesize")
         state = {"task": work, "private_state": private, "action": None, "output": None,
                  "snapshot_id": snapshot_id, "candidates": candidates or {}, "verification": None,
+                 "provisional_verification": None,
+                 "verification_policy": semantic_verification.CHALLENGE_POLICY if self.require_verification_challenge else None,
                  "phase": "planning" if agent == AgentId.PLANNER else "verification",
                  "model_tier": tier, "escalation_count": escalations}
         if review_tasks is not None:
@@ -959,6 +1027,12 @@ class AgentSubgraphs:
             if agent == AgentId.SYNTHESIZER_VERIFIER and restored_state.get("verification") is not None:
                 state["verification"] = VerificationPhaseResult.model_validate(restored_state["verification"])
                 state["phase"] = restored_state["phase"]
+                if self.require_verification_challenge and semantic_verification.checkpoint_verification(restored_state) is None:
+                    state['provisional_verification'] = state['verification']
+                    state['verification'], state['phase'] = None, 'verification'
+            if restored_state.get('provisional_verification') is not None:
+                state['provisional_verification'] = VerificationPhaseResult.model_validate(restored_state['provisional_verification'])
+                state['phase'] = 'verification'
             state["proposed_followups"] = restored_state.get("proposed_followups", [])
             state["model_tier"] = ModelTier(restored_state.get("model_tier", tier))
             state["escalation_count"] = restored_state.get("escalation_count", escalations)

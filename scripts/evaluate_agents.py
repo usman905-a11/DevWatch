@@ -8,6 +8,8 @@ from contextlib import closing
 from hashlib import sha256
 from pathlib import Path
 
+from devwatch.providers.exceptions import ProviderBudgetRefusedError
+
 
 CORPUS_VERSION = "agent-evaluation-v1"
 
@@ -178,10 +180,14 @@ class MeasuredProvider:
                 "completion_tokens": request.max_tokens}}, self.rates)
             if self.charged_usd + reserve > self.max_cost_usd:
                 self.budget_refusals += 1
-                raise RuntimeError("evaluation cost cap reached before dispatch")
+                raise ProviderBudgetRefusedError("evaluation cost cap reached before dispatch")
             self.charged_usd += reserve
         try:
             response = await self.provider.generate_completion(request)
+        except ProviderBudgetRefusedError:
+            self.charged_usd -= reserve
+            self.budget_refusals += 1
+            raise
         except BaseException:
             self.unknown_calls += 1
             raise
@@ -254,7 +260,7 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     started = time.monotonic()
     manager = DurableJobManager(jobs, events, executor if mode == "full" else individual)
     try:
-        job = await manager.submit(owner="evaluation", request={"snapshot_id": snapshot.snapshot_id},
+        job = await manager.submit(owner="evaluation", request={"snapshot_id": snapshot.snapshot_id, "context_files": ["REVIEW_CONTRACT.md"]},
                                    idempotency_key="evaluation")
         finished = await manager.wait(job.job_id, owner="evaluation")
     finally:
@@ -310,9 +316,12 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         categories.add("tool_harness" if not invalid_evidence else "evidence_retrieval")
     missing = bool(score["false_negative"])
     provider_errors = sorted({e.payload.error_code for e in timeline if e.kind == "model_call_completed" and e.payload.error_code})
-    if provider_errors:
-        categories.add('evaluation_budget' if meter.budget_refusals > budget_refusals_before else 'tool_harness')
-    if missing and not provider_errors:
+    local_refusal = meter.budget_refusals > budget_refusals_before
+    if local_refusal:
+        categories.add('evaluation_budget')
+    elif provider_errors:
+        categories.add('tool_harness')
+    if missing and not provider_errors and not local_refusal:
         if mode == "full" and case["specialist"] not in roles:
             categories.add("orchestration")
         elif candidate_score["true_positive"] > score["true_positive"]:
@@ -353,7 +362,7 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         # Partial model investigations and schema failures are quality failures,
         # not grounds for excluding a difficult case. Only external model-call
         # failure or failed job execution makes this run unavailable to score.
-        "evaluation_eligible": finished.status == "completed" and not provider_errors,
+        "evaluation_eligible": finished.status == "completed" and not provider_errors and not local_refusal,
         "provider_error_codes": provider_errors,
         "agents_executed": sorted(roles), "failure_categories": sorted(categories),
         "failure_attribution": "trace-based triage; root cause requires inspection",

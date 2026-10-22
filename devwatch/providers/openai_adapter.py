@@ -216,7 +216,7 @@ class OpenAIProviderAdapter(LLMProvider):
                         completion_tokens=getattr(response.usage, "completion_tokens", 0) or 0,
                         total_tokens=getattr(response.usage, "total_tokens", 0) or 0,
                         reasoning_tokens=getattr(getattr(response.usage, "completion_tokens_details", None),
-                                                 "reasoning_tokens", 0) or 0,
+                                                 "reasoning_tokens", None),
                         cached_prompt_tokens=getattr(getattr(response.usage, "prompt_tokens_details", None),
                                                      "cached_tokens", None),
                     )

@@ -188,6 +188,26 @@ at the default address.
 Report output files must be new files with the matching `.md`, `.json`, or
 `.pdf` extension. Existing files are never overwritten.
 
+### Sharing behavioral constraints
+
+When a captured snapshot includes a contract or requirements document, declare it
+as shared context so every review role receives the same constraints:
+
+```sh
+devwatch submit SNAPSHOT_ID --idempotency-key REVIEW_KEY --context-file requirements.md
+```
+
+Repeat `--context-file` for at most four files, with 6000 UTF-8 bytes of content
+combined. Every path must belong to that owned snapshot. The JSON job request and
+Python client's `submit` accept the same optional `context_files` list. Preserve
+the original context list when retrying an idempotency key; changing it is a new
+review intent. Omitted context preserves existing submission behavior.
+
+Declared context is snapshot data pinned in each role's prompt. It grants no tool
+permissions, widens no task scope and creates no source-inspection receipt. If it
+cannot fit the prompt bounds, the review stops with a context limitation instead
+of silently dropping the constraints. Model judgments still require review.
+
 ### Debugging a review
 
 `events` prints one JSON event per line, draining paginated history. `--follow`

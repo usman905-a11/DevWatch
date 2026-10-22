@@ -1,0 +1,230 @@
+{
+  "destination": "Google Gemini Developer API",
+  "model": "gemini-3.8-flash",
+  "cases": [
+    {
+      "case_id": "null-fallback-defect",
+      "payload": {
+        "files": {
+          "settings.py": "def choose(value, fallback):\n    return value or fallback\n"
+        },
+        "contract": "Use the fallback only when value is None. Preserve 0, False and the empty string."
+      }
+    },
+    {
+      "case_id": "null-fallback-clean",
+      "payload": {
+        "files": {
+          "settings.py": "def choose(value, fallback):\n    return fallback if value is None else value\n"
+        },
+        "contract": "Use the fallback only when value is None. Preserve 0, False and the empty string."
+      }
+    },
+    {
+      "case_id": "retry-limit-defect",
+      "payload": {
+        "files": {
+          "retry.py": "def retry(operation, max_attempts):\n    for attempt in range(max_attempts + 1):\n        try:\n            return operation()\n        except RuntimeError:\n            if attempt == max_attempts:\n                raise\n"
+        },
+        "contract": "Call operation at most max_attempts times, including the first try. Return on success; otherwise propagate the final RuntimeError. max_attempts is a positive integer."
+      }
+    },
+    {
+      "case_id": "retry-limit-clean",
+      "payload": {
+        "files": {
+          "retry.py": "def retry(operation, max_attempts):\n    for attempt in range(max_attempts):\n        try:\n            return operation()\n        except RuntimeError:\n            if attempt == max_attempts - 1:\n                raise\n"
+        },
+        "contract": "Call operation at most max_attempts times, including the first try. Return on success; otherwise propagate the final RuntimeError. max_attempts is a positive integer."
+      }
+    },
+    {
+      "case_id": "cross-file-units-defect",
+      "payload": {
+        "files": {
+          "schedule.py": "from constants import MILLISECONDS_PER_SECOND\n\ndef schedule(now_ms, delay_seconds):\n    return now_ms + delay_seconds\n",
+          "constants.py": "MILLISECONDS_PER_SECOND = 1000\n"
+        },
+        "contract": "schedule(now_ms, delay_seconds) returns the deadline in milliseconds. now_ms and delay_seconds are nonnegative numbers; constants.py defines the conversion."
+      }
+    },
+    {
+      "case_id": "cross-file-units-clean",
+      "payload": {
+        "files": {
+          "schedule.py": "from constants import MILLISECONDS_PER_SECOND\n\ndef schedule(now_ms, delay_seconds):\n    return now_ms + delay_seconds * MILLISECONDS_PER_SECOND\n",
+          "constants.py": "MILLISECONDS_PER_SECOND = 1000\n"
+        },
+        "contract": "schedule(now_ms, delay_seconds) returns the deadline in milliseconds. now_ms and delay_seconds are nonnegative numbers; constants.py defines the conversion."
+      }
+    },
+    {
+      "case_id": "exclusive-bound-defect",
+      "payload": {
+        "files": {
+          "ranges.py": "def contains(start, end, point):\n    return start <= point <= end\n"
+        },
+        "contract": "contains(start, end, point) tests a half-open interval [start, end): start is included and end is excluded. Integers satisfy start <= end."
+      }
+    },
+    {
+      "case_id": "exclusive-bound-clean",
+      "payload": {
+        "files": {
+          "ranges.py": "def contains(start, end, point):\n    return start <= point < end\n"
+        },
+        "contract": "contains(start, end, point) tests a half-open interval [start, end): start is included and end is excluded. Integers satisfy start <= end."
+      }
+    },
+    {
+      "case_id": "sibling-path-defect",
+      "payload": {
+        "files": {
+          "access.py": "from pathlib import Path\n\ndef allows(root, candidate):\n    return str(Path(candidate).resolve()).startswith(str(Path(root).resolve()))\n"
+        },
+        "contract": "allows(root, candidate) returns True only for root or a path beneath root after resolving dot segments and symlinks. A sibling whose name merely starts with the root name must be rejected. Paths are local filesystem paths; no operation is performed by this predicate."
+      }
+    },
+    {
+      "case_id": "sibling-path-clean",
+      "payload": {
+        "files": {
+          "access.py": "from pathlib import Path\n\ndef allows(root, candidate):\n    return Path(candidate).resolve().is_relative_to(Path(root).resolve())\n"
+        },
+        "contract": "allows(root, candidate) returns True only for root or a path beneath root after resolving dot segments and symlinks. A sibling whose name merely starts with the root name must be rejected. Paths are local filesystem paths; no operation is performed by this predicate."
+      }
+    },
+    {
+      "case_id": "secret-log-defect",
+      "payload": {
+        "files": {
+          "audit.py": "def record_login(logger, username, password):\n    logger.info(\"Login %s password=%s\", username, password)\n"
+        },
+        "contract": "record_login logs the username only. A password must never be included in log arguments or formatted log messages, even when authentication succeeds."
+      }
+    },
+    {
+      "case_id": "secret-log-clean",
+      "payload": {
+        "files": {
+          "audit.py": "def record_login(logger, username, password):\n    logger.info(\"Login %s\", username)\n"
+        },
+        "contract": "record_login logs the username only. A password must never be included in log arguments or formatted log messages, even when authentication succeeds."
+      }
+    },
+    {
+      "case_id": "nested-copy-defect",
+      "payload": {
+        "files": {
+          "orders.py": "def with_item(order, item):\n    updated = dict(order)\n    updated[\"items\"].append(item)\n    return updated\n"
+        },
+        "contract": "with_item(order, item) returns an independent order with item appended to its items list. The caller-owned order and nested items list must remain unchanged. Orders contain only ordinary dictionaries, lists, numbers and strings."
+      }
+    },
+    {
+      "case_id": "nested-copy-clean",
+      "payload": {
+        "files": {
+          "orders.py": "from copy import deepcopy\n\ndef with_item(order, item):\n    updated = deepcopy(order)\n    updated[\"items\"].append(item)\n    return updated\n"
+        },
+        "contract": "with_item(order, item) returns an independent order with item appended to its items list. The caller-owned order and nested items list must remain unchanged. Orders contain only ordinary dictionaries, lists, numbers and strings."
+      }
+    },
+    {
+      "case_id": "default-history-defect",
+      "payload": {
+        "files": {
+          "history.py": "def add_event(event, history=[]):\n    history.append(event)\n    return history\n"
+        },
+        "contract": "add_event(event) with no supplied history starts a fresh independent list on every call. When history is explicitly supplied, append to that list and return it."
+      }
+    },
+    {
+      "case_id": "default-history-clean",
+      "payload": {
+        "files": {
+          "history.py": "def add_event(event, history=None):\n    if history is None:\n        history = []\n    history.append(event)\n    return history\n"
+        },
+        "contract": "add_event(event) with no supplied history starts a fresh independent list on every call. When history is explicitly supplied, append to that list and return it."
+      }
+    },
+    {
+      "case_id": "weak-assertion-defect",
+      "payload": {
+        "files": {
+          "test_clamp.py": "from clamp import clamp\n\ndef test_inside():\n    assert clamp(5, 0, 10) is not None\n",
+          "clamp.py": "def clamp(value, low, high):\n    return min(high, max(low, value))\n"
+        },
+        "contract": "The test must detect clamp(5, 0, 10) incorrectly returning 42. clamp returns the input bounded to the inclusive low/high range. Report inadequate test assertions as advisories."
+      }
+    },
+    {
+      "case_id": "weak-assertion-clean",
+      "payload": {
+        "files": {
+          "test_clamp.py": "from clamp import clamp\n\ndef test_inside():\n    assert clamp(5, 0, 10) == 5\n",
+          "clamp.py": "def clamp(value, low, high):\n    return min(high, max(low, value))\n"
+        },
+        "contract": "The test must detect clamp(5, 0, 10) incorrectly returning 42. clamp returns the input bounded to the inclusive low/high range. Report inadequate test assertions as advisories."
+      }
+    },
+    {
+      "case_id": "prefix-sums-defect",
+      "payload": {
+        "files": {
+          "totals.py": "def prefix_sums(values):\n    return [sum(values[:i + 1]) for i in range(len(values))]\n"
+        },
+        "contract": "prefix_sums(values) returns all inclusive prefix sums in order. Input can contain millions of integers. Report unmeasured algorithmic complexity as an advisory; do not invent measured latency or memory limits."
+      }
+    },
+    {
+      "case_id": "prefix-sums-clean",
+      "payload": {
+        "files": {
+          "totals.py": "from itertools import accumulate\n\ndef prefix_sums(values):\n    return list(accumulate(values))\n"
+        },
+        "contract": "prefix_sums(values) returns all inclusive prefix sums in order. Input can contain millions of integers. Report unmeasured algorithmic complexity as an advisory; do not invent measured latency or memory limits."
+      }
+    },
+    {
+      "case_id": "repository-units-defect",
+      "payload": {
+        "files": {
+          "shop/__init__.py": "\"\"\"Small synthetic order service.\"\"\"\n",
+          "shop/config.py": "MAX_ITEMS = 1000\nMILLISECONDS_PER_SECOND = 1000\n",
+          "shop/labels.py": "def label(order):\n    return str(order[\"id\"])\n",
+          "shop/counts.py": "def count_items(order):\n    return len(order[\"items\"])\n",
+          "shop/validation.py": "def valid_quantity(quantity):\n    return isinstance(quantity, int) and not isinstance(quantity, bool) and quantity > 0\n",
+          "shop/currency.py": "def cents_to_units(cents):\n    return cents / 100\n",
+          "shop/lookup.py": "def by_id(orders, identity):\n    return next((order for order in orders if order[\"id\"] == identity), None)\n",
+          "shop/status.py": "def is_open(order):\n    return order[\"status\"] == \"open\"\n",
+          "shop/summary.py": "from shop.counts import count_items\nfrom shop.labels import label\n\ndef summarize(order):\n    return {\"label\": label(order), \"count\": count_items(order)}\n",
+          "shop/ids.py": "def normalize_id(value):\n    return str(value).strip()\n",
+          "shop/schedule.py": "from shop.config import MILLISECONDS_PER_SECOND\n\ndef schedule(now_ms, delay_seconds):\n    return now_ms + delay_seconds\n",
+          "shop/service.py": "from shop.schedule import schedule\nfrom shop.summary import summarize\n\ndef response(order, now_ms, delay_seconds):\n    return {**summarize(order), \"deadline_ms\": schedule(now_ms, delay_seconds)}\n"
+        },
+        "contract": "schedule(now_ms, delay_seconds) returns the deadline in milliseconds. now_ms and delay_seconds are nonnegative numbers; constants.py defines the conversion. This repository is a synthetic order service. All orders contain id, items and status. Response must expose the correct deadline_ms. Other helpers are within the stated contracts."
+      }
+    },
+    {
+      "case_id": "repository-units-clean",
+      "payload": {
+        "files": {
+          "shop/__init__.py": "\"\"\"Small synthetic order service.\"\"\"\n",
+          "shop/config.py": "MAX_ITEMS = 1000\nMILLISECONDS_PER_SECOND = 1000\n",
+          "shop/labels.py": "def label(order):\n    return str(order[\"id\"])\n",
+          "shop/counts.py": "def count_items(order):\n    return len(order[\"items\"])\n",
+          "shop/validation.py": "def valid_quantity(quantity):\n    return isinstance(quantity, int) and not isinstance(quantity, bool) and quantity > 0\n",
+          "shop/currency.py": "def cents_to_units(cents):\n    return cents / 100\n",
+          "shop/lookup.py": "def by_id(orders, identity):\n    return next((order for order in orders if order[\"id\"] == identity), None)\n",
+          "shop/status.py": "def is_open(order):\n    return order[\"status\"] == \"open\"\n",
+          "shop/summary.py": "from shop.counts import count_items\nfrom shop.labels import label\n\ndef summarize(order):\n    return {\"label\": label(order), \"count\": count_items(order)}\n",
+          "shop/ids.py": "def normalize_id(value):\n    return str(value).strip()\n",
+          "shop/schedule.py": "from shop.config import MILLISECONDS_PER_SECOND\n\ndef schedule(now_ms, delay_seconds):\n    return now_ms + delay_seconds * MILLISECONDS_PER_SECOND\n",
+          "shop/service.py": "from shop.schedule import schedule\nfrom shop.summary import summarize\n\ndef response(order, now_ms, delay_seconds):\n    return {**summarize(order), \"deadline_ms\": schedule(now_ms, delay_seconds)}\n"
+        },
+        "contract": "schedule(now_ms, delay_seconds) returns the deadline in milliseconds. now_ms and delay_seconds are nonnegative numbers; constants.py defines the conversion. This repository is a synthetic order service. All orders contain id, items and status. Response must expose the correct deadline_ms. Other helpers are within the stated contracts."
+      }
+    }
+  ]
+}

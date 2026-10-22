@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import Field
 
 from devwatch.review.contracts import AgentId, AgentWorkItem, ContractModel, ModelTier
+from devwatch.review.declared_context import validate_context_files
 from devwatch.review.jobs import DurableJobManager, EventStore, JobConflict, JobNotFound, JobStore, MAX_EVENT_CURSOR
 from devwatch.review.repository import RepositoryContext
 from devwatch.review.stores import ArtifactStore, CaptureCoverage, GitMetadata, RepoCache, StoreLayout
@@ -131,6 +132,7 @@ class SnapshotRequest(ContractModel):
 class JobRequest(ContractModel):
     snapshot_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     changed_files: list[str] | None = Field(default=None, max_length=100)
+    context_files: list[str] | None = Field(default=None, max_length=4)
 
 
 def _public_job(job):
@@ -226,6 +228,7 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
     async def submit(body: JobRequest, principal=Depends(owner),
                      idempotency_key: str = Header(min_length=1, max_length=256)):
         manifest = app.state.artifacts.manifest(body.snapshot_id, owner=principal)
+        validate_context_files(manifest, body.context_files)
         if body.changed_files is not None and any(path not in manifest.entries for path in body.changed_files):
             raise ValueError("changed files must belong to the snapshot")
         job = await app.state.manager.submit(owner=principal, request=body.model_dump(exclude_none=True),

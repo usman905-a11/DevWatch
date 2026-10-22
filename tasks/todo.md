@@ -1,5 +1,40 @@
 # DevWatch seven-agent implementation checklist
 
+## Reliability remediation - M24-M26 scoped complete; M27-M29 partial
+
+- [x] M24: fix larger-repository coverage, verify repaired control, distinguish local refusal.
+- [x] M24 checkpoint: red/green regressions, full suite, natural live pair and budget closure.
+- [x] M25: constrain unsupported impact, unsafe remediations and advisory overstatements.
+- [x] M26: bounded schema repair, unambiguous advisory controls and a fresh holdout.
+- [ ] M27: engineering/telemetry verified; original live 23/24 and one CLI test timeout retained.
+- [ ] M28: context/engineering verified, 18/18 final primary passes; explanatory clauses still fail.
+- [ ] M29: semantic gate failed; unsuccessful policy withdrawn, independent claim evidence requires architecture review.
+
+Plan: [reliability-remediation-plan.md](reliability-remediation-plan.md).
+Shared cap US$9; starting spend US$4.91760450; available US$4.08239550.
+Each milestone is limited to three reported issues and must retain failed attempts.
+
+## Current milestone: M23 Comprehensive Evaluation and Final Validation - PARTIAL
+
+- [x] Preserve 37 M11 artifacts and original corpus; audit actual compiled architecture.
+- [x] Author and witness 20 fresh paired cases plus a 12-file synthetic repository pair.
+- [x] Preregister 98 reviews and fixed gates; test honest denominators and metrics.
+- [x] Obtain explicit new-payload approval and US$1 addition to the shared cap.
+- [x] Complete final-source full backend/frontend/fixture checks and live matrix.
+- [x] Review causal findings, metrics/uncertainty, budget, architecture and limitations.
+- [x] Publish a local final report with an evidence-backed PARTIAL status.
+- [x] Resolve larger-repository coverage/miss and demonstrate a complete repaired control (M24).
+- [x] Address scoped SQL impact/copy-fix regressions and bounded schema recovery (M25/M26; later semantic limits remain).
+- [x] Correct local-refusal diagnostics and preregister unambiguous future advisory controls (M24/M26).
+
+Plan: [m23-validation-plan.md](m23-validation-plan.md).
+Report: [m23-final-validation-report.md](m23-final-validation-report.md).
+708 backend, 55 frontend/build and 24 fixture trials pass. Live 98 attempted,
+95 normal; original regressions pass, larger group fails. M23 US$1.15765125;
+cumulative US$4.91760450 of US$5; remaining US$0.08239550. Earlier US$0.09968775
+unknown holds remain included. No production-source edits, gold leakage, prompt
+tuning on held-out results, commit, push or deployment.
+
 ## Current milestone: M22 Streaming, Observability, and Recovery - COMPLETE (scoped verification)
 
 - [x] Record correlated root/private graph node entry/exit without exposing state.

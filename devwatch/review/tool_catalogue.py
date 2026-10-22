@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from devwatch.review.contracts import ContractModel, SourceLocation
+from devwatch.review.prompts import response_schema
 
 
 class Arguments(ContractModel):
@@ -21,11 +22,22 @@ class FileArguments(Arguments):
 
 
 class SourceArguments(FileArguments):
+    additional_files: list[str] = Field(default_factory=list, max_length=3,
+        description="Up to 3 other assigned paths; same range, separate paged refs.")
+
+    @field_validator('additional_files')
+    @classmethod
+    def relative_additional_paths(cls, values):
+        return [SourceLocation.relative_source_path(value) for value in values]
+
     start_line: int = Field(default=1, ge=1)
-    end_line: int | None = Field(default=None, ge=1, description="Inclusive; at most 200 lines; clamped at EOF. Start must exist. Null/omitted selects up to 80. Large results are paged.")
+    end_line: int | None = Field(default=None, ge=1, description="Inclusive; <=200 lines; EOF clamps. Omit/null selects 80. Paged results.")
 
     @model_validator(mode="after")
     def bounded_range(self):
+        paths = [self.file_path, *self.additional_files]
+        if len(paths) != len(set(paths)):
+            raise ValueError('source batch paths must be unique')
         if self.end_line is not None and not self.start_line <= self.end_line < self.start_line + 200:
             raise ValueError("invalid or unbounded source range")
         return self
@@ -76,7 +88,7 @@ TOOL_ARGUMENTS: dict[str, type[Arguments]] = {
     **{name: CommandArguments for name in ("run_tests", "run_command", "lint", "type_check", "coverage", "sast", "profile", "benchmark", "db_analyze", "query_analyze")},
 }
 DESCRIPTIONS = {
-    "read_source": "Read 1-based inclusive immutable source lines, at most 200. End clamps to EOF; start must exist (empty files accept 1).",
+    "read_source": "Read immutable source lines (1-based, <=200). EOF clamps; empty accepts start=1.",
     "read_evidence": "Page scoped evidence JSON by character offset; follow next_offset. Acknowledge delivered pages with inspected_evidence.",
     "repo_map": "List captured file metadata in the assigned scope.",
     "code_search": "Search assigned immutable files for a literal string; at most 20 matches, each truncated to 500 characters.",
@@ -109,5 +121,5 @@ def describe_tool(name: str, model: type[Arguments]) -> dict[str, Any]:
                    "Explain a SELECT plan against an owner-granted SQLite database; no query execution or result rows."
                    if model is QueryArguments else DESCRIPTIONS[name])
     return {"name": name, "description": description,
-        "arguments": model.model_json_schema(),
+        "arguments": response_schema(model),
         "output": "Evidence reference (processed), retrievable via read_evidence/context pages. Processing does not imply delivery or inspection."}

@@ -12,8 +12,13 @@ def test_real_sdk_uses_unwrapped_transport_and_closes_it(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-only-key")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("LANGSMITH_TRACING", "true")
-    import langsmith.wrappers
-    monkeypatch.setattr(langsmith.wrappers, "wrap_openai", lambda *args, **kwargs: pytest.fail("raw provider tracing is forbidden"))
+    import sys
+    from types import ModuleType
+    import langsmith
+    wrappers = ModuleType("langsmith.wrappers")
+    wrappers.wrap_openai = lambda *args, **kwargs: pytest.fail("raw provider tracing is forbidden")
+    monkeypatch.setitem(sys.modules, "langsmith.wrappers", wrappers)
+    monkeypatch.setattr(langsmith, "wrappers", wrappers, raising=False)
     requests = []
     def reply(request):
         requests.append(json.loads(request.content))

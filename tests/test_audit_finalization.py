@@ -204,7 +204,9 @@ def test_inconsistent_persisted_synthesis_recovers_from_recorded_verification(tm
         identity=next(iter(session.board.candidates))
         good=payload(repo,ref)
         good['decisions'][0]['finding_id']=identity
-        runtime,_=engine(repo,[dict(kind='submit_verification',inspected_evidence=[ref],payload={'decisions':good['decisions']}),dict(kind='finish')])
+        approval = dict(kind='submit_verification', inspected_evidence=[ref], payload={'decisions':good['decisions']})
+        runtime,_=engine(repo,[approval, approval])
+        runtime.require_verification_challenge = True
         state=await runtime.run_final(snapshot_id=repo.snapshot_id,files=task.files,
             candidates={identity:session.board.candidates[identity].model_dump(mode='json')})
         good['report_draft']['confirmed_defects'][0]['finding_id']=identity

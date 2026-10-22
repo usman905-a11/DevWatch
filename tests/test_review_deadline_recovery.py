@@ -156,7 +156,8 @@ def test_deadline_after_empty_followup_retains_initial_candidate_and_completed_c
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="followup-deadline")
         jobs.transition(job.job_id, owner="alice", expected_status="queued", status="running")
         operation = asyncio.create_task(executor(jobs.get(job.job_id, owner="alice")))
-        await asyncio.wait_for(provider.entered.wait(), 5)
+        # Allow local checkpoint I/O before the simulated deadline below.
+        await asyncio.wait_for(provider.entered.wait(), 30)
         operation.cancel()
         await asyncio.gather(operation, return_exceptions=True)
         ledger = jobs.get(job.job_id, owner="alice").ledger

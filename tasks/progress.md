@@ -1,5 +1,84 @@
 # Execution ledger — plan: tasks/seven-agent-design.md
 
+M29 arithmetic and cross-field claim consistency (2026-10-22), PARTIAL.
+All 757 experimental backend tests passed and live 4/4 primary screens passed,
+but the whole-field gate failed again. The critic accepted a false arithmetic
+explanation and rejected a correct one; another candidate masked recall loss.
+Three planned synthetic reviews were not attempted. Archived the v5.2 experiment
+and restored verified v5.1 runtime bytes; 153 runtime/test/script/README files
+match M28, whose full 757-test receipt remains applicable. Fresh restored focused
+checks: 42 passed; wire, compilation, diff and credential checks passed. M29 cost
+US$0.06810675; shared US$7.18707750 / US$9, remaining US$1.81292250.
+All US$0.12293325 unknown holds remain. Further prompt-only changes stopped;
+independent-claim-evidence architecture needs review. See [M29](m29-reliability-report.md)
+and [current reliability status](reliability-status.md).
+
+M28 caller context and quantified claims (2026-10-22), PARTIAL.
+All 757 final backend tests passed; all 18 final live reviews passed primary
+detection/kind/source coverage. Bounded immutable caller context reaches every
+role without expanding permission or fabricating inspection. Clean bitcounts now
+respect their declared domain. Whole-field author review retains one production
+arithmetic error and two raw clause flags. First-run schema/unknown-call failures
+and backend interruption remain archived. M28 US$0.34770075 includes its
+US$0.02324550 unknown hold; shared US$7.11897075 / US$9. All historical holds
+remain. See [M28 report](m28-reliability-report.md). M29 is active for the two
+remaining claim-consistency issue groups; primary passes do not close that gate.
+
+M27 broader probes and telemetry (2026-10-21), PARTIAL.
+Public live 23/24 primary passes, retaining an out-of-domain clean-control false
+positive; original backend 749/750, retaining a five-second CLI test timeout.
+Optional thinking usage preserves missing/null separately from explicit zero.
+Exactly two approved metadata traces were written/read back; no model/source
+trace payloads or repeated writes. M28 addressed constraint delivery and fragile
+test coordination. See [M27 report](m27-reliability-report.md).
+
+M26 Targeted schema recovery and fresh controls (2026-10-21), COMPLETE for scoped verification.
+Backend 745 passed; live 27/27 strict passes.
+Cost US$0.30157800; shared US$6.42173700 / US$9, old holds intact.
+Report: [m26-reliability-report.md](m26-reliability-report.md). External evidence limits retained.
+
+M25 supported claims and safe fixes (2026-10-21), COMPLETE for scoped regression.
+Positive canonical verifications require conservative counterexample review;
+source-bound shared citations survive without admitting unknown references.
+Final backend 743 passed; claims 8/8; natural second pass 6/8 then affected/control
+recheck 3/3, with all earlier semantic failures and cap refusal retained.
+Cost US$0.63778725; shared US$6.12015900 / US$9, old holds intact.
+Report: [m25-claim-safety-report.md](m25-claim-safety-report.md). M26 starts next.
+
+M24 repository completion and refusal diagnostics (2026-10-21), COMPLETE for scoped engineering/live regression.
+Read-source batching retains per-file paged receipts and acknowledgments. All roles
+fit remaining model headroom; ready investigations avoid redundant retrieval.
+Trusted typed local refusal releases only proven undispatched reservations; unknown
+effects stay charged. Final v4.7 backend 722 tests, frontend 55 tests/build and
+wire/compilation/diff checks pass. Final live 6/6; all campaigns retain 17/18 strict
+passes, including the earlier truncated repaired control. Whole source ranges are
+proved for these exact short fixtures. Scheduler effects remain an M25 semantic
+qualification. M24 cost US$0.56476725; conservative shared spend US$5.48237175;
+remaining US$3.51762825 of US$9, all old unknown holds intact. M25 begins next.
+Report: [m24-repository-reliability-report.md](m24-repository-reliability-report.md).
+
+M23 Comprehensive Evaluation and Final Validation (2026-10-21), PARTIAL.
+Started after the requested two-minute delay from clean dfde689. Preserved all
+37 original M11 artifacts and unchanged 12-case gold/input digest. New corpus has
+20 authored/witnessed held-out cases (10 positive, 10 control) plus a 12-file
+synthetic repository pair. Metrics retain partial/unavailable/unattempted reviews
+and separate programmed harness success from live model quality. All 26 new
+metric/witness checks pass. Preregistered matrix has 98 reviews, fixed thresholds,
+unchanged prompts and no response injection. User approved the 22 new payloads
+and US$1 addition: shared cap US$5, M23 cap US$1.20. Backend 708 tests,
+frontend 55 tests/build and original 24-run fixture replay pass. All 98 live
+attempts are retained; 95 normal. All original modes pass. Fresh screens have
+one schema miss and one scope-ambiguous advisory FP. The larger defect is missed
+after role budget exhaustion; its repaired control is incomplete after a known
+pre-dispatch campaign cap refusal. Author review preserves unsupported SQL impact
+and unsafe nested-copy remediation despite valid primary detections.
+Architecture audit confirms 7 identities, 11 parent nodes, 5 private specialist
+graphs and unchanged ASTs for all 37 production modules; all 178 frozen files
+match. Evaluation/reporting finished; release remains unvalidated. Estimated
+M23 US$1.15765125; cumulative US$4.91760450; shared remaining US$0.08239550 with
+all previous holds included and no new unknown usage. No shipping action.
+Report: [m23-final-validation-report.md](m23-final-validation-report.md).
+
 M22 Streaming, Observability, and Recovery (2026-10-21), COMPLETE for engineering
 and scoped canonical live recovery verification.
 Root/private nodes record paired events and bounded outcomes; synchronous workers

@@ -40,15 +40,16 @@ def test_normal_seven_agent_review_captures_source_and_publishes_verified_format
         assert roles == set(FILES) | {"planner", "synthesizer_verifier"}
         kinds = [event["kind"] for event in events]
         assert kinds.index("finding_created") < kinds.index("verification_completed") < kinds.index("report_render_started") < kinds.index("job_completed")
-        assert done.ledger.total_tokens == 210 and not done.ledger.inflight
+        # Fifteen 15-token responses include the separate counterexample pass.
+        assert done.ledger.total_tokens == 225 and not done.ledger.inflight
         assert len([event for event in events if event["kind"] == "tool_called"]) == 7
         assert [event["sequence"] for event in events] == list(range(1, len(events) + 1))
         assert "items[0]" not in json.dumps(events)
         own = client.evidence(done, finding["evidence_refs"][0])
         assert own["provenance"]["agent_id"] == "synthesizer_verifier"
         assert client.submit(snapshot.snapshot_id, idempotency_key="normal").job_id == done.job_id
-        assert client.status(done.job_id).ledger.total_tokens == 210
-        print(json.dumps({"scenario": "normal", "events": len(events), "model_calls": 14, "tool_calls": 7, "tokens": done.ledger.total_tokens}))
+        assert client.status(done.job_id).ledger.total_tokens == 225
+        print(json.dumps({"scenario": "normal", "events": len(events), "model_calls": 15, "tool_calls": 7, "tokens": done.ledger.total_tokens}))
 
 
 def configured_limits(monkeypatch, **fields):

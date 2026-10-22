@@ -11,6 +11,14 @@ class ProviderError(Exception):
         self.raw_error = raw_error
 
 
+class ProviderBudgetRefusedError(ProviderError, RuntimeError):
+    """Trusted local admission guard proves this request was never dispatched.
+
+    Raise only before invoking a transport or downstream provider. Remote
+    responses, ambiguous transport errors and exception text cannot prove this.
+    """
+
+
 class ProviderAuthenticationError(ProviderError):
     """Raised when provider authentication fails (invalid or missing API key)."""
     pass

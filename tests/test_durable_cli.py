@@ -68,7 +68,8 @@ def test_cli_no_wait_leaves_job_running_and_job_command_fetches_report(tmp_path,
         request = json.loads(submitted.data)
         key = submitted.get_header("Idempotency-key")
         job = client.submit(request["snapshot_id"], request["changed_files"], idempotency_key=key)
-        complete = client.wait(job.job_id, wait_seconds=5, poll_seconds=.01)
+        # The assertion concerns durable completion, not a five-second host I/O SLA.
+        complete = client.wait(job.job_id, wait_seconds=30, poll_seconds=.01)
         result = runner.invoke(cli, ["job", complete.job_id, "--report", "--format", "json"])
         assert result.exit_code == 0, result.output
         assert json.loads(result.output)["snapshot_id"] == request["snapshot_id"]

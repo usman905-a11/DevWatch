@@ -18,6 +18,7 @@ from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
 
 from devwatch.review.budgets import BudgetManager
+from devwatch.review.declared_context import load_declared_context
 from devwatch.review.contracts import (
     AgentId, AgentPrivateState, AgentWorkItem, ReviewPlan, ReviewTask, SpecialistResult,
     VerificationPhaseResult, VerificationSynthesisResult, VerificationDecision, ReportDraft,
@@ -30,7 +31,8 @@ from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
 from devwatch.review.subgraphs import AgentSubgraphs
 from devwatch.review.tool_runtime import TrustedToolRuntime
 from devwatch.review.database_tools import DatabaseTools
-from devwatch.review.verification import validate_decision, validate_relations
+from devwatch.review.verification import (validate_decision, validate_relations,
+    checkpoint_verification, CHALLENGE_POLICY)
 
 
 class ReviewExecutionError(RuntimeError):
@@ -170,7 +172,7 @@ class CanonicalReviewExecutor:
             raw = final_checkpoint["state"]
             current = {key: candidate.model_dump(mode="json") for key, candidate in session.board.candidates.items()}
             if raw.get("candidates") == current and raw.get("verification") is not None:
-                verification = VerificationPhaseResult.model_validate(raw["verification"])
+                verification = checkpoint_verification(raw)
         result = session.partial_result(private, phase="review", verification=verification)
         result.coverage_summary.failed["__job"] = "review_time_exhausted"
         async def partial(state):
@@ -189,7 +191,7 @@ class CanonicalReviewExecutor:
         return (await workflow.run())["rendered"]
 
     async def __call__(self, job: JobRecord):
-        if job.workflow_version != "seven-agent-v1" or set(job.request) - {"snapshot_id", "changed_files"}:
+        if job.workflow_version != "seven-agent-v1" or set(job.request) - {"snapshot_id", "changed_files", "context_files"}:
             raise ReviewExecutionError("unsupported workflow version or request")
         repository = RepositoryContext(self.artifacts, self.cache, job.request["snapshot_id"], owner=job.owner)
         changed = job.request.get("changed_files", sorted(repository.manifest.entries))
@@ -217,6 +219,7 @@ class CanonicalReviewExecutor:
 class _ReviewSession:
     def __init__(self, executor, job, repository, budget, changed):
         self.executor, self.job, self.repository, self.budget, self.changed = executor, job, repository, budget, changed
+        self.declared_context = load_declared_context(repository, job.request.get('context_files'))
         self.thread_id = sha256((job.owner + "\0" + job.job_id).encode()).hexdigest()
         self.board = SharedBlackboard(StructuralEvidenceGate(repository), runtime_limitations=(
             ("Worker crash recovered; uncertain elapsed time and outstanding model usage are charged conservatively.",)
@@ -226,7 +229,8 @@ class _ReviewSession:
         self.command_runtime = TrustedToolRuntime(repository, executor.jobs, job, commands=executor.trusted_commands)
         self.database_runtime = DatabaseTools(repository, job, policies=executor.databases)
         self.agents = AgentSubgraphs(executor.provider, repository.tools(self.command_runtime, self.database_runtime), budget, self.context,
-            models=executor.models, persist=self.persist_agent, model_slots=executor.model_slots, emit=self.emit)
+            models=executor.models, persist=self.persist_agent, model_slots=executor.model_slots, emit=self.emit,
+            require_verification_challenge=True)
 
     def emit(self, kind, **payload):
         if kind == "model_call_completed":
@@ -262,6 +266,8 @@ class _ReviewSession:
         selected = self.repository.context(state)
         if not isinstance(selected, dict):
             return selected
+        if self.declared_context is not None:
+            selected['declared_context'] = self.declared_context
         from devwatch.review.contracts import AGENT_CONTRACTS
         selected["approved_commands"] = [{"command_id": command.command_id, "tool": command.tool,
                                           "files": command.files, "timeout_seconds": command.timeout_seconds}
@@ -510,7 +516,7 @@ class _ReviewSession:
             checkpoint = self.executor.checkpoints.load(self.thread_id, "__final")
             restored = (checkpoint["state"] if checkpoint and checkpoint["generation"] == self.budget.ledger.review_round
                         and checkpoint["state"].get("candidates") == candidates else None)
-            if restored is not None and restored.get("output"):
+            if restored is not None and restored.get("output") and restored.get('verification_policy') == CHALLENGE_POLICY:
                 result = VerificationSynthesisResult.model_validate(restored["output"])
                 private = AgentPrivateState.model_validate(restored["private_state"])
                 self.emit("agent_reused", agent_id=AgentId.SYNTHESIZER_VERIFIER, task_id="__final",
@@ -544,7 +550,7 @@ class _ReviewSession:
             if (checkpoint and checkpoint["generation"] == self.budget.ledger.review_round
                     and checkpoint["state"].get("candidates") == current
                     and checkpoint["state"].get("verification") is not None):
-                recorded = VerificationPhaseResult.model_validate(checkpoint["state"]["verification"])
+                recorded = checkpoint_verification(checkpoint["state"])
             def gate_for(records, groups, *, verification=None, allow_unreviewed=False):
                 refs = {ref for candidate in self.board.candidates.values() for ref in candidate.evidence_refs}
                 work = AgentWorkItem(task_id='__final', agent_id=AgentId.SYNTHESIZER_VERIFIER,

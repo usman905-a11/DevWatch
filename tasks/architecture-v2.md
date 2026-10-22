@@ -623,3 +623,97 @@ calls/tokens; M22 US$0.01919550, cumulative US$3.75995325, shared remaining
 US$0.24004675 including all historical holds. No remote LangSmith ingestion or
 live abrupt-crash/accuracy/latency guarantee is claimed. M23 is not started.
 Report: [m22-observability-recovery-report.md](m22-observability-recovery-report.md).
+
+## M23 final architecture/evaluation supplement (2026-10-21)
+
+Actual compiled architecture remains seven identities, eleven parent nodes, five
+private specialist graphs and one shared task-scoped control graph. All 37
+production Python modules are AST-identical to M22; 178 frozen source/consumer
+inputs and 37 M11 artifacts are preserved. M23 adds only local evaluation corpus,
+metrics, witnesses and reports. Typed custom LangGraph loops remain the runtime;
+there is no eighth identity or migration to `langchain.create_agent`.
+
+Engineering checks pass: 708 backend tests, 55 frontend tests/build, 24 original
+scripted fixture trials, generated-wire parity, compilation and graph audit.
+All 98 planned natural Gemini trials are retained and 95 finish normally. All
+three original regression modes pass; fresh primary screens meet their frozen
+thresholds while retaining one schema miss and one scope-ambiguous advisory FP.
+The larger 12-file synthetic defect is missed after specialist budget exhaustion;
+its control is incomplete after a known pre-dispatch campaign cap refusal.
+Accepted SQL impact and nested-copy remediation still contain material semantic
+limitations. Structural acceptance and source-validity screens do not establish
+every impact/fix claim. M23 is **PARTIAL**, not a validated release.
+
+Known usage costs US$1.15765125, cumulative conservative US$4.91760450 of US$5;
+remaining US$0.08239550. Earlier holds remain charged; no new unknown API usage.
+Now-exposed cases must remain regressions; later generalization claims need a
+fresh holdout. No production/prompt/gold tuning or shipping action occurred.
+Report: [m23-final-validation-report.md](m23-final-validation-report.md).
+
+
+## M24 reliability supplement (2026-10-21)
+
+The seven identities and graph topology are unchanged. read_source may batch a
+primary and three extra assigned paths; each keeps its own immutable paged artifact
+and explicit inspection receipts. Permission checks cover the full batch before
+artifact creation. Every role bounds output reservations by remaining headroom.
+ProviderBudgetRefusedError is a trusted pre-transport adapter signal, never inferred
+from model output or exception text. It records zero tokens/not_dispatched; other
+ambiguous failures retain conservative charges. Final report/event wire schemas
+are unchanged. See the M24 report for scoped results and retained M25 semantics.
+
+
+## M25 reliability supplement
+
+Canonical positive judgments remain provisional until a rationale-withheld
+counterexample pass. Candidate bindings must match; reconciliation chooses the
+weaker verdict and confidence and drops unproven relations on disagreement.
+Checkpoint recovery and partitioned batches retain that policy and all spent
+budgets. Final source citations can use any actually inspected receipt, while
+snapshot/scope and candidate-covering source validation remain authoritative.
+The same seven identities and existing report/event wire contracts remain.
+See [M25's evidence and limitations](m25-claim-safety-report.md).
+
+
+## M26 reliability supplement
+
+Candidate repair now reports bounded known-schema validation paths and error types, never candidate values or arbitrary keys. The existing one-repair ceiling and conservative admission remain. See [M26](m26-reliability-report.md).
+
+## M27 measurement availability and M28 caller context
+
+Missing or null provider reasoning-token usage remains unavailable; an explicit
+zero and a positive count have separate denominators. No hidden reasoning text
+is requested. The LangSmith deprecated wrapper import originated in a test guard;
+the guard now uses a forbidden synthetic wrapper module without importing the
+upstream deprecated shim. The approved two-trace remote probe has already been
+written and read back; its receipt does not prove UI rendering or a delivery SLA.
+
+M27's clean Python bitcount false positive exposed a constraint propagation bug:
+the Planner delegated the contract to one role, while another specialist and the
+verifier judged an excluded negative input without receiving that contract.
+Relying on Planner delegation does not make caller constraints globally available.
+
+Jobs may now declare context_files: at most four paths belonging to the owned
+immutable snapshot, with at most 6000 UTF-8 content bytes in total. The service
+validates before job creation; the executor revalidates before loading. Snapshot
+hash, file hashes and text accompany every role's selected context. Guidance is
+conditional on that context, preserving compact stable policies. Prompt admission
+never drops the declared context; insufficient headroom fails closed.
+
+This bounded document channel was chosen instead of widening every specialist's
+source scope or trusting Planner to repeat constraints. It changes neither tool
+authority nor task files and creates no inspection receipt. Documents remain
+untrusted data, never permission to alter instructions. The optional request is
+part of durable idempotency intent; existing callers omit it. API, Python client
+and CLI submit --context-file use the same field. Report/event wire contracts
+remain unchanged. It prevents accidental contract loss, not arbitrary semantic
+errors: a correlated model can still approve an incorrect explanatory clause.
+
+M29 tested stronger arithmetic/cross-field derivation guidance. A correct trace
+again coexisted with a false abstract explanation, and both verifier passes
+accepted it. The experiment changes no evidence contract, tool authority or
+publication rule; its unsuccessful policy was withdrawn after all 757 experimental
+backend tests passed. Final runtime bytes match verified M28, with 42 fresh
+focused checks after restoration. Structural assessments cannot supply independent semantic
+proof merely because every model-produced status says supported. Future changes
+must address that evidence boundary explicitly; see the M29 causal diagnosis.

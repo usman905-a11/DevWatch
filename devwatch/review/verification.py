@@ -10,6 +10,7 @@ from devwatch.review.contracts import FindingCandidate, VerificationPhaseResult
 
 
 CLAIM_FIELDS = frozenset(('title', 'description', 'impact', 'remediation'))
+CHALLENGE_POLICY = 'counterexample-v1'
 
 
 def candidate_digest(candidate):
@@ -50,6 +51,50 @@ def combine_verification(previous, current):
         return current.model_copy(deep=True)
     return VerificationPhaseResult(**{field: getattr(previous, field) + getattr(current, field)
                                      for field in VerificationPhaseResult.model_fields})
+
+
+def checkpoint_verification(raw):
+    """Legacy positive checkpoints cannot bypass canonical challenge admission."""
+    value = raw.get('verification')
+    if value is None:
+        return None
+    result = VerificationPhaseResult.model_validate(value)
+    if raw.get('verification_policy') != CHALLENGE_POLICY and any(
+            item.verdict in {'confirmed', 'advisory'} for item in result.decisions):
+        return None
+    return result
+
+
+def reconcile_challenge(candidates, previous, current):
+    """A second review may veto or weaken a first judgment, never upgrade it."""
+    passes = []
+    for result in (previous, current):
+        by_id = {item.finding_id: item for item in result.decisions}
+        if set(by_id) != set(candidates) or len(by_id) != len(result.decisions):
+            raise ValueError('Challenge requires the same distinct candidate set.')
+        for identity, item in by_id.items():
+            validate_decision(candidates[identity], item)
+        passes.append(by_id)
+    rank = {'rejected': 0, 'uncertain': 1, 'advisory': 2, 'confirmed': 3}
+    result = current.model_copy(deep=True)
+    result.decisions = []
+    changed = False
+    for identity in candidates:
+        first, second = (items[identity] for items in passes)
+        selected = first if rank[first.verdict] < rank[second.verdict] else second
+        selected = selected.model_copy(deep=True, update={'confidence': min(first.confidence, second.confidence)})
+        validate_decision(candidates[identity], selected)
+        result.decisions.append(selected)
+        changed |= first.verdict != second.verdict
+    result.conflicts = list(dict.fromkeys(previous.conflicts + current.conflicts))
+    result.followup_requests = []
+    for request in previous.followup_requests + current.followup_requests:
+        if request not in result.followup_requests:
+            result.followup_requests.append(request.model_copy(deep=True))
+    if changed:
+        result.duplicate_groups, result.duplicate_reviews, result.disagreements = [], [], []
+        result.conflicts.append('Counterexample review changed a verdict; unproven group and disagreement relations were discarded.')
+    return result
 
 
 def validate_relations(candidates, result, inspected_evidence):

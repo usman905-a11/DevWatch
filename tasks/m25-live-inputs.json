@@ -1,0 +1,284 @@
+{
+  "destination": "Google Gemini Developer API",
+  "campaign_cap_usd": 0.65,
+  "milestone_cap_usd": 0.9,
+  "shared_cap_usd": 9,
+  "additional_grant_usd": 0,
+  "scope": "Synthetic files/contracts, eight fixture-derived candidate claims, static agent policies and fixture-derived evidence/results. No working-repository source, secrets, gold labels or private reasoning.",
+  "cases": [
+    {
+      "case_id": "indirect_query-defect",
+      "mode": "full",
+      "payload": {
+        "files": {
+          "subject.py": "def lookup(db, request):\n    name = request[\"query\"]\n    statement = \"SELECT id FROM users WHERE name = '\" + name + \"'\"\n    return db.execute(statement).fetchone()\n"
+        },
+        "contract": "request is a mapping whose query value is untrusted text. Look up a user by that name and keep SQL data separate from query syntax."
+      }
+    },
+    {
+      "case_id": "indirect_query-clean",
+      "mode": "full",
+      "payload": {
+        "files": {
+          "subject.py": "def lookup(db, request):\n    name = request[\"query\"]\n    statement = \"SELECT id FROM users WHERE name = ?\"\n    return db.execute(statement, (name,)).fetchone()\n"
+        },
+        "contract": "request is a mapping whose query value is untrusted text. Look up a user by that name and keep SQL data separate from query syntax."
+      }
+    },
+    {
+      "case_id": "cross-file-units-defect",
+      "mode": "full",
+      "payload": {
+        "files": {
+          "schedule.py": "from constants import MILLISECONDS_PER_SECOND\n\ndef schedule(now_ms, delay_seconds):\n    return now_ms + delay_seconds\n",
+          "constants.py": "MILLISECONDS_PER_SECOND = 1000\n"
+        },
+        "contract": "schedule(now_ms, delay_seconds) returns the deadline in milliseconds. now_ms and delay_seconds are nonnegative numbers; constants.py defines the conversion."
+      }
+    },
+    {
+      "case_id": "cross-file-units-clean",
+      "mode": "full",
+      "payload": {
+        "files": {
+          "schedule.py": "from constants import MILLISECONDS_PER_SECOND\n\ndef schedule(now_ms, delay_seconds):\n    return now_ms + delay_seconds * MILLISECONDS_PER_SECOND\n",
+          "constants.py": "MILLISECONDS_PER_SECOND = 1000\n"
+        },
+        "contract": "schedule(now_ms, delay_seconds) returns the deadline in milliseconds. now_ms and delay_seconds are nonnegative numbers; constants.py defines the conversion."
+      }
+    },
+    {
+      "case_id": "nested-copy-defect",
+      "mode": "full",
+      "payload": {
+        "files": {
+          "orders.py": "def with_item(order, item):\n    updated = dict(order)\n    updated[\"items\"].append(item)\n    return updated\n"
+        },
+        "contract": "with_item(order, item) returns an independent order with item appended to its items list. The caller-owned order and nested items list must remain unchanged. Orders contain only ordinary dictionaries, lists, numbers and strings."
+      }
+    },
+    {
+      "case_id": "nested-copy-clean",
+      "mode": "full",
+      "payload": {
+        "files": {
+          "orders.py": "from copy import deepcopy\n\ndef with_item(order, item):\n    updated = deepcopy(order)\n    updated[\"items\"].append(item)\n    return updated\n"
+        },
+        "contract": "with_item(order, item) returns an independent order with item appended to its items list. The caller-owned order and nested items list must remain unchanged. Orders contain only ordinary dictionaries, lists, numbers and strings."
+      }
+    },
+    {
+      "case_id": "prefix-sums-defect",
+      "mode": "full",
+      "payload": {
+        "files": {
+          "totals.py": "def prefix_sums(values):\n    return [sum(values[:i + 1]) for i in range(len(values))]\n"
+        },
+        "contract": "prefix_sums(values) returns all inclusive prefix sums in order. Input can contain millions of integers. Report unmeasured algorithmic complexity as an advisory; do not invent measured latency or memory limits."
+      }
+    },
+    {
+      "case_id": "prefix-sums-clean",
+      "mode": "full",
+      "payload": {
+        "files": {
+          "totals.py": "from itertools import accumulate\n\ndef prefix_sums(values):\n    return list(accumulate(values))\n"
+        },
+        "contract": "prefix_sums(values) returns all inclusive prefix sums in order. Input can contain millions of integers. Report unmeasured algorithmic complexity as an advisory; do not invent measured latency or memory limits."
+      }
+    },
+    {
+      "case_id": "sql-impact-adverse",
+      "mode": "supplied_claim",
+      "payload": {
+        "files": {
+          "subject.py": "def lookup(db, request):\n    name = request[\"query\"]\n    statement = \"SELECT id FROM users WHERE name = '\" + name + \"'\"\n    return db.execute(statement).fetchone()\n"
+        },
+        "contract": "request is a mapping whose query value is untrusted text. Look up a user by that name and keep SQL data separate from query syntax.",
+        "claim": {
+          "category": "security",
+          "kind": "defect",
+          "title": "Untrusted name is concatenated into SQL syntax",
+          "description": "lookup copies request[\"query\"] to name, interpolates it into statement and executes that SQL without a bound data parameter.",
+          "impact": "A quote changes SQL syntax and retrieves records the caller is not authorized to access.",
+          "remediation": "Use a placeholder in statement and pass name as a bound data parameter to execute.",
+          "confidence": 0.9
+        },
+        "claim_location": {
+          "file_path": "subject.py",
+          "start_line": 3,
+          "end_line": 4
+        }
+      }
+    },
+    {
+      "case_id": "sql-impact-supported",
+      "mode": "supplied_claim",
+      "payload": {
+        "files": {
+          "subject.py": "def lookup(db, request):\n    name = request[\"query\"]\n    statement = \"SELECT id FROM users WHERE name = '\" + name + \"'\"\n    return db.execute(statement).fetchone()\n"
+        },
+        "contract": "request is a mapping whose query value is untrusted text. Look up a user by that name and keep SQL data separate from query syntax.",
+        "claim": {
+          "category": "security",
+          "kind": "defect",
+          "title": "Untrusted name is concatenated into SQL syntax",
+          "description": "lookup copies request[\"query\"] to name, interpolates it into statement and executes that SQL without a bound data parameter.",
+          "impact": "A quote in the untrusted name can change SQL syntax instead of remaining a data value.",
+          "remediation": "Use a placeholder in statement and pass name as a bound data parameter to execute.",
+          "confidence": 0.9
+        },
+        "claim_location": {
+          "file_path": "subject.py",
+          "start_line": 3,
+          "end_line": 4
+        }
+      }
+    },
+    {
+      "case_id": "copy-fix-adverse",
+      "mode": "supplied_claim",
+      "payload": {
+        "files": {
+          "orders.py": "def with_item(order, item):\n    updated = dict(order)\n    updated[\"items\"].append(item)\n    return updated\n"
+        },
+        "contract": "with_item(order, item) returns an independent order with item appended to its items list. The caller-owned order and nested items list must remain unchanged. Orders contain only ordinary dictionaries, lists, numbers and strings.",
+        "claim": {
+          "category": "logic",
+          "kind": "defect",
+          "title": "Shallow order copy still shares the items list",
+          "description": "dict(order) copies the outer mapping while updated[\"items\"] still aliases the caller-owned list, so append mutates that original list.",
+          "impact": "Calling with_item changes the original order items list, contrary to its independence contract.",
+          "remediation": "Deep-copy the whole order, or return {\"items\": order[\"items\"] + [item]}.",
+          "confidence": 0.9
+        },
+        "claim_location": {
+          "file_path": "orders.py",
+          "start_line": 3,
+          "end_line": 3
+        }
+      }
+    },
+    {
+      "case_id": "copy-fix-supported",
+      "mode": "supplied_claim",
+      "payload": {
+        "files": {
+          "orders.py": "def with_item(order, item):\n    updated = dict(order)\n    updated[\"items\"].append(item)\n    return updated\n"
+        },
+        "contract": "with_item(order, item) returns an independent order with item appended to its items list. The caller-owned order and nested items list must remain unchanged. Orders contain only ordinary dictionaries, lists, numbers and strings.",
+        "claim": {
+          "category": "logic",
+          "kind": "defect",
+          "title": "Shallow order copy still shares the items list",
+          "description": "dict(order) copies the outer mapping while updated[\"items\"] still aliases the caller-owned list, so append mutates that original list.",
+          "impact": "Calling with_item changes the original order items list, contrary to its independence contract.",
+          "remediation": "Deep-copy the whole order before appending, preserving every order field and independent nested values.",
+          "confidence": 0.9
+        },
+        "claim_location": {
+          "file_path": "orders.py",
+          "start_line": 3,
+          "end_line": 3
+        }
+      }
+    },
+    {
+      "case_id": "materialization-adverse",
+      "mode": "supplied_claim",
+      "payload": {
+        "files": {
+          "totals.py": "def prefix_sums(values):\n    return [sum(values[:i + 1]) for i in range(len(values))]\n"
+        },
+        "contract": "prefix_sums(values) returns all inclusive prefix sums in order. Input can contain millions of integers. Report unmeasured algorithmic complexity as an advisory; do not invent measured latency or memory limits.",
+        "claim": {
+          "category": "performance",
+          "kind": "advisory",
+          "title": "Prefix sums repeat growing slices and sums",
+          "description": "For n values, the list comprehension slices and sums prefixes of lengths 1 through n, doing quadratic total work; a running sum does linear total work.",
+          "impact": "Total prefix-processing work grows quadratically on long input; this is an unmeasured scaling concern, not a measured latency result.",
+          "remediation": "Return itertools.accumulate(values) after importing itertools to preserve the result while avoiding repeated sums.",
+          "confidence": 0.9
+        },
+        "claim_location": {
+          "file_path": "totals.py",
+          "start_line": 2,
+          "end_line": 2
+        }
+      }
+    },
+    {
+      "case_id": "materialization-supported",
+      "mode": "supplied_claim",
+      "payload": {
+        "files": {
+          "totals.py": "def prefix_sums(values):\n    return [sum(values[:i + 1]) for i in range(len(values))]\n"
+        },
+        "contract": "prefix_sums(values) returns all inclusive prefix sums in order. Input can contain millions of integers. Report unmeasured algorithmic complexity as an advisory; do not invent measured latency or memory limits.",
+        "claim": {
+          "category": "performance",
+          "kind": "advisory",
+          "title": "Prefix sums repeat growing slices and sums",
+          "description": "For n values, the list comprehension slices and sums prefixes of lengths 1 through n, doing quadratic total work; a running sum does linear total work.",
+          "impact": "Total prefix-processing work grows quadratically on long input; this is an unmeasured scaling concern, not a measured latency result.",
+          "remediation": "Return list(itertools.accumulate(values)) after importing itertools, preserving the eager list of all inclusive prefix sums.",
+          "confidence": 0.9
+        },
+        "claim_location": {
+          "file_path": "totals.py",
+          "start_line": 2,
+          "end_line": 2
+        }
+      }
+    },
+    {
+      "case_id": "peak-memory-adverse",
+      "mode": "supplied_claim",
+      "payload": {
+        "files": {
+          "totals.py": "def prefix_sums(values):\n    return [sum(values[:i + 1]) for i in range(len(values))]\n"
+        },
+        "contract": "prefix_sums(values) returns all inclusive prefix sums in order. Input can contain millions of integers. Report unmeasured algorithmic complexity as an advisory; do not invent measured latency or memory limits.",
+        "claim": {
+          "category": "performance",
+          "kind": "advisory",
+          "title": "Prefix sums repeat growing slices and sums",
+          "description": "For n values, the list comprehension slices and sums prefixes of lengths 1 through n, doing quadratic total work; a running sum does linear total work.",
+          "impact": "The repeated prefixes cause quadratic peak memory, and a running sum returning all prefix sums reduces total peak memory to O(1).",
+          "remediation": "Return list(itertools.accumulate(values)) after importing itertools, preserving the eager list of all inclusive prefix sums.",
+          "confidence": 0.9
+        },
+        "claim_location": {
+          "file_path": "totals.py",
+          "start_line": 2,
+          "end_line": 2
+        }
+      }
+    },
+    {
+      "case_id": "peak-memory-supported",
+      "mode": "supplied_claim",
+      "payload": {
+        "files": {
+          "totals.py": "def prefix_sums(values):\n    return [sum(values[:i + 1]) for i in range(len(values))]\n"
+        },
+        "contract": "prefix_sums(values) returns all inclusive prefix sums in order. Input can contain millions of integers. Report unmeasured algorithmic complexity as an advisory; do not invent measured latency or memory limits.",
+        "claim": {
+          "category": "performance",
+          "kind": "advisory",
+          "title": "Prefix sums repeat growing slices and sums",
+          "description": "For n values, the list comprehension slices and sums prefixes of lengths 1 through n, doing quadratic total work; a running sum does linear total work.",
+          "impact": "The repeated prefixes cause quadratic total work. The old and eager replacement both retain a linear-sized output, so no constant peak-memory claim follows.",
+          "remediation": "Return list(itertools.accumulate(values)) after importing itertools, preserving the eager list of all inclusive prefix sums.",
+          "confidence": 0.9
+        },
+        "claim_location": {
+          "file_path": "totals.py",
+          "start_line": 2,
+          "end_line": 2
+        }
+      }
+    }
+  ]
+}

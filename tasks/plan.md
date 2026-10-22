@@ -1,5 +1,30 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## Current request: reliability remediation M24–M27 (2026-10-21)
+
+User authorized fixes and US$4 more live budget. Shared cap US$9, starting
+available US$4.08239550, prior holds intact. Follow
+[the three-issues-per-milestone plan](reliability-remediation-plan.md).
+M24 is complete for its bounded regression scope; see [its report](m24-repository-reliability-report.md). M25 is complete for scoped claims/citation regressions; see [its report](m25-claim-safety-report.md). M26 is complete; see [its report](m26-reliability-report.md). M27-M29 are archived PARTIAL; [M28](m28-reliability-report.md) fixes constraint delivery but retains explanatory-clause failures. [M29](m29-reliability-report.md) reproduced the semantic failure and withdrew its policy experiment. Next work is independent-claim-evidence architecture review, not more prompt-only edits. M24 addressed larger-repository coverage, its incomplete control and accurate
+local-refusal diagnostics. M25 covers impact/fix/advisory correctness; M26 covers
+schema recovery and fresh controls; M27 covers broader evidence and telemetry.
+Existing M23 evidence/labels remain immutable. No claim of full reliability,
+automatic prompt tuning on holdout, commit, push, PR or deployment.
+
+## Current request: M23 Comprehensive Evaluation and Final Validation (2026-10-21)
+
+**PARTIAL — release gate not met.** Started after the requested two-minute wait;
+evaluation/reporting are finished. See [the final report](m23-final-validation-report.md)
+and [validation plan](m23-validation-plan.md). Backend 708, frontend 55/build,
+24 fixture trials and all three original live regression modes pass. The 98 live
+trials retain a schema miss, a scope-ambiguous advisory FP, a larger-repository
+miss and an incomplete larger control. Unsupported SQL impact and unsafe
+nested-copy remediation remain material semantic limitations. All 37 production
+modules, 178 frozen inputs and 37 M11 artifacts are unchanged. No prompt/gold tuning.
+M23 US$1.15765125; cumulative US$4.91760450 of US$5; remaining US$0.08239550,
+including all earlier unknown holds. Next work is M23 remediation, not a release
+or a new milestone. No shipping action requested.
+
 ## Current request: M22 Streaming, Observability, and Recovery (2026-10-21)
 
 Complete for engineering and scoped live recovery: 682 backend tests pass in the

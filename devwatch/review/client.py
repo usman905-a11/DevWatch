@@ -109,10 +109,12 @@ class ReviewClient:
         except (ValueError, ValidationError):
             raise ClientError("Service returned an invalid job response") from None
 
-    def submit(self, snapshot_id, changed_files=None, *, idempotency_key):
+    def submit(self, snapshot_id, changed_files=None, *, idempotency_key, context_files=None):
         body = {"snapshot_id": _identity(snapshot_id)}
         if changed_files is not None:
             body["changed_files"] = changed_files
+        if context_files is not None:
+            body['context_files'] = context_files
         job = self._job("POST", "/api/jobs", payload=body, key=idempotency_key)
         if job.snapshot_id != snapshot_id:
             raise ClientError("Service returned a job for another snapshot")
