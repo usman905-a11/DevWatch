@@ -1619,3 +1619,34 @@ M31 US$0.20862375, shared US$7.524597, remaining US$1.475403 of US$9. No new unk
 effects; historical US$0.12293325 holds retained. The original automatic-confirmation
 quality gate remains unmet; independent whole-claim proof is a future capability.
 See [M31 report](m31-completion-report.md). No shipping or new trace exports.
+
+# M32 previous-milestone reliability closure (2026-10-24)
+
+Closed three reproduced policy gaps: uncertain confidence above 0.5, follow-up
+remediation overwrite under the same candidate identity, and duplicate handling
+that either discarded exact copies or let model equivalence suppress different
+uncertain claims. Canonical normalization/recovery and final acceptance cap
+confidence, retain complete claim versions, and compare exact claims with equal
+locations/verdicts/evidence gaps. All contributor decisions/provenance survive.
+Verification checkpoints move to independent-claims-v4; no model vote is proof.
+
+Seven red failures preceded the fixes. Focused 46 and additional 10 regressions
+pass. The full frozen 811-test run retained five failures: two obsolete duplicate
+count expectations and three client-wait timing failures under parallel load.
+Both M14 assertions now test one displayed copy plus all contributors. Complete
+four-file isolated recheck: 43 passed, no larger deadline/retry limits and no
+production changes. All 811 identities reconcile to a pass without omissions,
+duplicates, errors or skips. First suite command failure stays archived. Frontend
+57 tests/build and wire freshness pass; configured-credential scan has zero leaks.
+
+Two previously approved public defect/clean fixtures passed the live conservative
+policy; original strict score remains 1/2 because the defect stays uncertain.
+TP1/FP0/FN0, no duplicate in these two runs, complete source coverage, 11 calls,
+zero new unknown effects/refusals. Estimated US$0.04930275; shared US$7.57389975,
+remaining US$1.42610025 of US$9; historical US$0.12293325 holds retained. No new
+payload class, repository-source transfer, trace export, commit, push or deployment.
+
+General independent whole-claim proof, representative unseen accuracy and semantic
+equivalence remain unestablished. Previous historical partial statuses stand.
+Stop here: full-folder upload/tree redesign and expanded streaming were not begun.
+See [M32 report](m32-reliability-report.md).

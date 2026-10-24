@@ -1,5 +1,39 @@
 # DevWatch seven-agent remediation: active implementation plan
 
+## M32: close reproducible reliability gaps before workspace/UI changes (2026-10-24)
+
+**COMPLETE for the three reproduced conservative-policy gaps.** Verification is
+811 backend identities across full run/rechecks, 57 frontend tests/build, fresh
+wire schema and two live exposed-policy passes. The original confirmation gate
+remains unmet. See [M32 report](m32-reliability-report.md). Stop as requested;
+folder/tree/streaming work awaits the user's decision.
+
+The user requests previous-milestone remediation, then a stop. Preserve the M31
+conservative publication policy and historical failed results. Folder ingestion,
+file-tree redesign, expanded streaming, editing agents and local inference are
+outside this change. No claim of universal proof or population accuracy.
+
+1. Protect candidate identity and uncertainty through follow-up and recovery.
+   Reproduce remediation overwrite and already-uncertain confidence above 0.5;
+   bind all claim fields to finding identity, normalize uncertain confidence, and
+   enforce the ceiling again at final acceptance. Verify real blackboard,
+   final-agent and recovery/acceptance paths using failing regressions first.
+2. Deduplicate only independently comparable claims under the conservative policy.
+   Runtime may merge byte-identical claim fields at the same immutable location,
+   with equal verdicts/evidence-gap classifications and retained decisions and
+   provenance. Different remediation, scope, or prose remains separate. Do not
+   use a model equivalence vote to silently discard different uncertain claims.
+   Verify normal reports, partial recovery, replay/idempotence and negative cases.
+3. Close verification honestly. Audit evaluation fail-open cases, run focused and
+   full backend checks, existing frontend tests/build and wire freshness, then
+   retain bounded live rechecks of previously approved payloads if the configured
+   model and original shared/envelope budget permit them. Record every failure.
+   A fresh representative semantic holdout and trusted whole-claim proof remain
+   capability limits; do not mislabel historical milestones complete.
+
+Stop after the report. No commit, push, deployment, new payload transfer or trace
+export. Any live recheck uses the previously approved fixture envelope only.
+
 ## M31: complete existing reliability issues (2026-10-22)
 
 **COMPLETE for the user-selected conservative publication scope.** Structured

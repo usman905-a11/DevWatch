@@ -383,7 +383,7 @@ class SharedBlackboard:
             except (ValueError, FileNotFoundError, PermissionError) as exc:
                 result.quarantined.append(CandidateRejection(index=index, title=candidate.title[:200], reason=str(exc)[:1000]))
                 continue
-            claim = candidate.model_dump(mode="json", exclude={"evidence_refs", "confidence", "remediation"})
+            claim = candidate.model_dump(mode="json", exclude={"evidence_refs", "confidence"})
             identity = "finding-" + sha256(_json({"task_id": task.task_id, "claim": claim}).encode()).hexdigest()[:24]
             previous = self.candidates.get(identity)
             if previous is None and len(self.candidates) >= Config.MAX_CANDIDATE_FINDINGS:

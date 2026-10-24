@@ -7,12 +7,32 @@ from hashlib import sha256
 import json
 
 from devwatch.review.contracts import (FindingCandidate, VerificationPhaseResult,
-    CausalReview, ClaimAssessment, ReviewObservation, ArithmeticReceipt)
+    CausalReview, ClaimAssessment, ReviewObservation, ArithmeticReceipt, DuplicateReview)
 from devwatch.review.arithmetic import ArithmeticCheck, check_claim, check_counterexample
 
 
 CLAIM_FIELDS = frozenset(('title', 'description', 'impact', 'remediation'))
-CHALLENGE_POLICY = 'independent-claims-v3'
+CHALLENGE_POLICY = 'independent-claims-v4'
+
+
+def exact_duplicate_groups(candidates, decisions):
+    """Compare complete claims, including remedies and immutable locations.
+
+    Different evidence references or confidence do not change identical wording.
+    Keep different verdicts or evidence gaps separate even when prose matches.
+    This establishes equality only, never that an equal claim is true.
+    """
+    groups = {}
+    for decision in decisions:
+        if decision.verdict == 'rejected' or decision.causal_review is None:
+            continue
+        claim = FindingCandidate.model_validate(candidates[decision.finding_id])
+        key = (json.dumps(claim.model_dump(mode='json', exclude={'evidence_refs', 'confidence'}),
+                          sort_keys=True, ensure_ascii=False, separators=(',', ':')),
+               decision.verdict, tuple(sorted((item.field, item.status)
+                   for item in decision.causal_review.assessments)))
+        groups.setdefault(key, []).append(decision.finding_id)
+    return sorted(sorted(group) for group in groups.values() if len(group) > 1)
 
 
 def candidate_digest(candidate):
@@ -146,11 +166,26 @@ def require_independent_verification(candidates, result):
         if checked.verdict in {'confirmed', 'advisory'} or (checked.verdict == 'rejected' and not contradicted):
             checked = _uncertain(candidates[decision.finding_id], checked,
                 'Independent whole-claim adjudication is unavailable; model agreement alone establishes neither approval nor rejection of the complete candidate.')
+        if checked.verdict == 'uncertain':
+            checked.confidence = min(checked.confidence, .5)
         changed |= checked.verdict != decision.verdict
         result.decisions[index] = checked
     if changed:
         result.duplicate_groups, result.duplicate_reviews, result.disagreements = [], [], []
         result.conflicts.append('Model-only findings remain uncertain under the independent-support publication policy.')
+    # A model's equivalence judgment cannot silently remove a different claim.
+    # Recompute exact groups at every boundary, including after batching/recovery.
+    groups = exact_duplicate_groups(candidates, result.decisions)
+    if any(set(group) not in [set(exact) for exact in groups] for group in result.duplicate_groups):
+        note = 'Nonidentical candidate alternatives were retained; model-only duplicate equivalence is unproven.'
+        if note not in result.conflicts:
+            result.conflicts.append(note)
+    by_id = {decision.finding_id: decision for decision in result.decisions}
+    result.duplicate_groups = groups
+    result.duplicate_reviews = [DuplicateReview(finding_ids=group,
+        rationale='Runtime compared identical claim fields and immutable locations with equal verdicts and evidence gaps.',
+        evidence_refs=list(dict.fromkeys(ref for identity in group for ref in by_id[identity].evidence_refs))[:8])
+        for group in groups]
     return result
 
 

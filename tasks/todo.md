@@ -1,5 +1,19 @@
 # DevWatch seven-agent implementation checklist
 
+## M32 previous-milestone reliability closure
+
+- [x] Reproduce and fix remediation identity overwrite and uncertainty confidence above 0.5.
+- [x] Preserve exact-duplicate audit/provenance without merging different uncertain claims on model votes.
+- [x] Run regressions/consumer checks, retain evaluation limitations and live-budget accounting, report and stop.
+
+Scope and checks: [M32 plan](plan.md). Full-folder upload and expanded live
+streaming are deferred at the user's explicit request.
+Result: [M32 report](m32-reliability-report.md). All 811 backend identities pass
+across full collection plus four-file recheck; 57 frontend tests/build and wire
+freshness pass. Live exposed pair 2/2 policy passes, 1/2 original strict passes;
+no independent whole-claim proof or broad population-accuracy claim. New estimated
+cost US$0.04930275; shared US$7.57389975 of US$9, remaining US$1.42610025.
+
 ## M31 completion
 
 - [x] Structured, candidate-version-bound arithmetic; runtime audit rendering and private shape repair within one retry.

@@ -21,7 +21,7 @@ from devwatch.review.contracts import (
     AgentId, Coverage, FindingCandidate, FollowupRequest, ReportDraft, ReportFinding, ReviewTask,
     VerificationDecision, VerificationSynthesisResult, VerificationAudit, VerificationPhaseResult,
 )
-from devwatch.review.verification import validate_decision, validate_relations, arithmetic_receipts
+from devwatch.review.verification import validate_decision, validate_relations, arithmetic_receipts, exact_duplicate_groups
 
 
 class AcceptanceError(ValueError):
@@ -72,9 +72,15 @@ class FinalAcceptanceGate:
             raise AcceptanceError("duplicate verification decisions")
         if set(by_id) != set(self.candidates):
             raise AcceptanceError("every candidate must receive a verification decision")
+        if self.require_independent_support:
+            exact_groups = [set(group) for group in exact_duplicate_groups(self.candidates, decisions)]
+            if any(not any(set(group).issubset(exact) for exact in exact_groups) for group in self.duplicate_groups):
+                raise AcceptanceError('Conservative duplicate suppression requires identical complete claims.')
         for decision in decisions:
             if self.require_independent_support and decision.verdict in {'confirmed', 'advisory'}:
                 raise AcceptanceError('Positive publication requires independent whole-claim support, not model agreement.')
+            if self.require_independent_support and decision.verdict == 'uncertain' and decision.confidence > .5:
+                raise AcceptanceError('Unverified confidence must not exceed 0.5.')
             if (self.require_independent_support and decision.verdict == 'rejected' and not any(
                     receipt.result.status == 'contradicted' for receipt in arithmetic_receipts(
                         self.candidates[decision.finding_id], decision.arithmetic_counterexamples))):
