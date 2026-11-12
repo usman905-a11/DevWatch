@@ -77,16 +77,22 @@ def test_completed_review_records_root_and_nested_node_transitions(tmp_path):
             job = await manager.submit(owner='alice', request={'snapshot_id': snapshot.snapshot_id}, idempotency_key='m22')
             assert (await manager.wait(job.job_id, owner='alice')).status == 'completed'
             timeline = events.replay(job.job_id)
-            starts = [e for e in timeline if e.kind == 'graph_node_started']
-            ends = [e for e in timeline if e.kind == 'graph_node_completed']
+            node_names = {'repository_intelligence', 'deterministic_analysis', 'change_analyzer',
+                'planner_agent', 'context_manager', 'budget_manager', 'deterministic_router',
+                'specialist_subgraphs', 'shared_blackboard', 'structural_evidence_gate',
+                'completion_workflow', 'investigate', 'execute_action'}
+            starts = [e for e in timeline if getattr(e, 'type', None) == 'activity.started'
+                and e.data.message in node_names]
+            ends = [e for e in timeline if getattr(e, 'type', None) == 'activity.completed'
+                and e.activityId in {start.activityId for start in starts}]
             assert len(starts) == len(ends) and len(starts) > 11
-            assert len({e.payload.operation_id for e in starts}) == len(starts)
-            assert {e.payload.operation_id for e in starts} == {e.payload.operation_id for e in ends}
-            root = [e.payload.node for e in starts if e.payload.graph_scope == 'review']
+            assert len({e.activityId for e in starts}) == len(starts)
+            assert {e.activityId for e in starts} == {e.activityId for e in ends}
+            root = [e.data.message for e in starts if e.agentRunId == 'review']
             assert root == ['repository_intelligence', 'deterministic_analysis', 'change_analyzer',
                 'planner_agent', 'context_manager', 'budget_manager', 'deterministic_router',
                 'specialist_subgraphs', 'shared_blackboard', 'structural_evidence_gate', 'completion_workflow']
-            assert all(e.payload.outcome == 'succeeded' for e in ends)
+            assert all(e.data.outcome == 'succeeded' for e in ends)
             assert len(provider.requests) == 4
             assert all('return items[0]' not in e.model_dump_json() for e in timeline)
         finally:
@@ -150,7 +156,8 @@ def test_resume_preserves_nested_progress_and_trace_root_without_repeating_paid_
         before = jobs.get(job.job_id, owner='alice')
         assert before.status == 'interrupted'
         prefix = events.replay(job.job_id)
-        assert any(e.kind == 'graph_node_completed' and e.payload.outcome == 'cancelled' for e in prefix)
+        assert any(getattr(e, 'type', None) == 'activity.cancelled' and e.activityType == 'code_analysis'
+                   for e in prefix)
         second = ReviewProvider()
         resumed_executor = executor(second)
         resumed = DurableJobManager(jobs, events, resumed_executor)
@@ -162,8 +169,8 @@ def test_resume_preserves_nested_progress_and_trace_root_without_repeating_paid_
             timeline = events.replay(job.job_id)
             assert timeline[:len(prefix)] == prefix
             assert [e.sequence for e in timeline] == list(range(1, len(timeline) + 1))
-            assert sum(e.kind == 'job_queued' for e in timeline) == 2  # explicit resume has its own queued event
-            roots = {events.trace_ancestors(e)[0].event_id for e in timeline}
+            assert sum(getattr(e, 'kind', None) == 'job_queued' for e in timeline) == 2
+            roots = {events.trace_ancestors(e)[0].event_id for e in timeline if hasattr(e, 'kind')}
             assert roots == {prefix[0].event_id}
             final_checkpoints = []
             with initial.checkpoints._transaction() as db:
@@ -196,9 +203,12 @@ def test_root_failure_records_safe_node_diagnostic(tmp_path, monkeypatch):
             job = await manager.submit(owner='alice', request={'snapshot_id': snapshot.snapshot_id}, idempotency_key='failure')
             assert (await manager.wait(job.job_id, owner='alice')).status == 'failed'
             timeline = events.replay(job.job_id)
-            ends = [e.payload for e in timeline if e.kind == 'graph_node_completed']
-            assert len(ends) == 1 and ends[0].node == 'repository_intelligence'
-            assert ends[0].outcome == 'failed' and ends[0].error_code == 'execution_failed'
+            starts = [e for e in timeline if getattr(e, 'type', None) == 'activity.started'
+                      and e.data.message == 'repository_intelligence']
+            ends = [e for e in timeline if getattr(e, 'type', None) == 'activity.failed'
+                    and e.activityId in {start.activityId for start in starts}]
+            assert len(starts) == len(ends) == 1
+            assert ends[0].data.errorCode == 'execution_failed'
             assert provider.requests == []
             assert 'private source token' not in json.dumps([e.model_dump(mode='json') for e in timeline])
         finally:
@@ -225,14 +235,15 @@ def test_websocket_streams_nested_node_start_and_replays_after_disconnect(tmp_pa
         try:
             with client.websocket_connect(f'/api/jobs/{identity}/ws', headers=ALICE) as socket:
                 observed = []
-                while not observed or not (observed[-1]['kind'] == 'model_call_started'
-                        and observed[-1]['payload']['task_id'] == 'logic-1'):
+                while not observed or not (observed[-1].get('type') == 'activity.started'
+                        and observed[-1].get('activityType') == 'response'
+                        and observed[-1]['data'].get('taskId') == 'logic-1'):
                     observed.append(socket.receive_json())
-            nested = [e for e in observed if e['kind'] == 'graph_node_started'
-                and e['payload']['task_id'] == 'logic-1']
-            assert len(nested) == 1 and nested[0]['payload']['node'] == 'investigate'
-            assert not [e for e in observed if e['kind'] == 'graph_node_completed'
-                and e['payload']['operation_id'] == nested[0]['payload']['operation_id']]
+            nested = [e for e in observed if e.get('type') == 'activity.started'
+                and e['data'].get('taskId') == 'logic-1' and e['data'].get('message') == 'investigate']
+            assert len(nested) == 1
+            assert not [e for e in observed if e.get('type') == 'activity.completed'
+                and e.get('activityId') == nested[0]['activityId']]
             cursor = observed[-1]['sequence']
         finally:
             release.set()
@@ -240,8 +251,8 @@ def test_websocket_streams_nested_node_start_and_replays_after_disconnect(tmp_pa
         replay = client.get(f'/api/jobs/{identity}/events?after={cursor}&limit=1000', headers=ALICE).json()['events']
         sse = client.get(f'/api/jobs/{identity}/stream', headers={**ALICE, 'Last-Event-ID': str(cursor)})
         assert [json.loads(line[6:]) for line in sse.text.splitlines() if line.startswith('data: ')] == replay
-        assert any(e['kind'] == 'graph_node_completed'
-            and e['payload']['operation_id'] == nested[0]['payload']['operation_id'] for e in replay)
+        assert any(e.get('type') == 'activity.completed'
+            and e.get('activityId') == nested[0]['activityId'] for e in replay)
 
 
 def test_cancellation_drains_synchronous_node_before_publishing_completion():

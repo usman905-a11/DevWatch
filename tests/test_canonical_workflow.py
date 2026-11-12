@@ -9,6 +9,7 @@ import pytest
 from devwatch.providers.base import LLMResponse, LLMUsage
 from devwatch.review.contracts import AgentId, ModelTier
 from devwatch.review.jobs import DurableJobManager, EventStore, JobStore
+from devwatch.review.activity_stream import ActivityEvent
 from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
 from tests.test_control_agents import plan_payload
 from tests.verification_fixtures import reviewed
@@ -93,9 +94,20 @@ def test_full_graph_returns_an_accepted_report_and_persistent_agent_events(tmp_p
         assert completed.ledger.total_tokens == 60
         jobs.dispatch_events(events)
         stream = events.replay(job.job_id)
-        identities = {event.payload.agent_id for event in stream if event.kind == "agent_started"}
+        activities = [event for event in stream if isinstance(event, ActivityEvent)]
+        identities = {event.data.agentId for event in activities if event.type == "activity.started"
+                      and event.activityType == "result" and event.data.agentId}
         assert identities == {AgentId.PLANNER, AgentId.LOGIC_CORRECTNESS, AgentId.SYNTHESIZER_VERIFIER}
-        assert any(event.kind == "tool_called" for event in stream)
+        assert any(event.type == "activity.started" and event.activityType == "file_read" for event in activities)
+        final_responses = [event for event in activities if event.type == "activity.completed"
+                           and event.activityType == "response" and event.data.text]
+        assert len(final_responses) == 1
+        response = final_responses[0]
+        assert response.data.text == report["summary"]
+        assert "".join(event.data.text or "" for event in activities if event.activityId == response.activityId
+                       and event.type == "activity.delta") == response.data.text
+        assert not any(event.kind in {"agent_started", "tool_called", "tool_result"} for event in stream
+                       if not isinstance(event, ActivityEvent))
         assert all("return items[0]" not in event.model_dump_json() for event in stream)
         await manager.close()
     asyncio.run(scenario())

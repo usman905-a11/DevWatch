@@ -1,6 +1,6 @@
 /** Authenticated, bounded SSE replay. Stopping observation never cancels execution. */
 import { ConnectionError, DurableReviewClient } from './durable-client'
-import { identity, JobView, PersistedEvent, ProtocolError, ReportDraft, validateWire } from './wire'
+import { ActivityEvent, identity, JobView, PersistedEvent, ProtocolError, ReportDraft, StreamEvent, validateWire } from './wire'
 
 export interface SseFrame { id: string; kind: string; data: string }
 export class SseParser {
@@ -15,7 +15,7 @@ export class SseParser {
       if (this.skipLf && character === '\n') { this.skipLf = false; continue }
       this.skipLf = false
       this.bytes += new TextEncoder().encode(character).byteLength
-      if (this.bytes > 16384) throw new ProtocolError('Event frame byte limit exceeded')
+      if (this.bytes > 72000) throw new ProtocolError('Event frame byte limit exceeded')
       if (character === '\r' || character === '\n') {
         if (this.line === '') {
           if (this.data.length) frames.push({ ...this.frame, data: this.data.join('\n') })
@@ -37,9 +37,15 @@ export class SseParser {
   finish(): void { this.line = ''; this.data = []; this.frame = { id: '', kind: '', data: '' }; this.bytes = 0; this.skipLf = false }
 }
 
-export function parseEvent(frame: SseFrame, jobId: string): PersistedEvent {
+export function parseEvent(frame: SseFrame, jobId: string): StreamEvent {
   let data: unknown
   try { data = JSON.parse(frame.data) } catch { throw new ProtocolError() }
+  if (data && typeof data === 'object' && 'type' in data) {
+    const event = validateWire<ActivityEvent>('ActivityEvent', data)
+    if (event.runId !== jobId || !Number.isSafeInteger(event.sequence) || frame.id !== String(event.sequence)
+      || frame.kind !== event.type) throw new ProtocolError()
+    return event
+  }
   const event = validateWire<PersistedEvent>('PersistedEvent', data)
   if (event.job_id !== jobId || !Number.isSafeInteger(event.sequence) || frame.id !== String(event.sequence)
     || frame.kind !== event.kind) throw new ProtocolError()
@@ -47,7 +53,7 @@ export function parseEvent(frame: SseFrame, jobId: string): PersistedEvent {
 }
 
 export interface JobObserver {
-  onEvent(event: PersistedEvent): void | Promise<void>
+  onEvent(event: StreamEvent): void | Promise<void>
   onJob?(job: JobView): void | Promise<void>
   onReport?(report: ReportDraft): void | Promise<void>
   onConnection?(state: 'connecting' | 'connected' | 'reconnecting' | 'disconnected'): void
@@ -59,6 +65,7 @@ export function observeJob(client: DurableReviewClient, jobId: string, observer:
   options: { after?: number; retryDelayMs?: number } = {}): Observation {
   identity(jobId)
   let cursor = options.after ?? 0
+  const seenIds = new Set<string>()
   const retryDelay = options.retryDelayMs ?? 250
   if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isFinite(retryDelay) || retryDelay < 1 || retryDelay > 10000) throw new ProtocolError('Invalid replay options')
   const lifecycle = new AbortController()
@@ -111,10 +118,14 @@ export function observeJob(client: DurableReviewClient, jobId: string, observer:
             for (const frame of parser.feed(decoded)) {
               const event = parseEvent(frame, jobId)
               if (event.sequence <= cursor) continue
+              const eventId = 'type' in event ? event.eventId : event.event_id
+              if (seenIds.has(eventId)) { cursor = event.sequence; continue }
               await consume(observer.onEvent, event)
               if (lifecycle.signal.aborted) return
               cursor = event.sequence
-              if (event.kind === 'budget_updated' && observer.onJob && performance.now() - lastAccountingRefresh >= 1000) {
+              seenIds.add(eventId)
+              if (seenIds.size > 2000) seenIds.delete(seenIds.values().next().value!)
+              if ('kind' in event && event.kind === 'budget_updated' && observer.onJob && performance.now() - lastAccountingRefresh >= 1000) {
                 const currentJob = await client.status(jobId, lifecycle.signal)
                 await consume(observer.onJob, currentJob)
                 lastAccountingRefresh = performance.now()

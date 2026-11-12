@@ -207,7 +207,7 @@ def test_killed_service_resumes_saved_verification_snapshot_usage_and_replay(tmp
             assert client.post(prefix + "/resume", headers=BOB).status_code == 404
             assert client.get(prefix + "/report", headers=ALICE).status_code == 409
             before = client.get(prefix + "/events", headers=ALICE).json()["events"]
-            assert sum(event["kind"] == "job_interrupted" for event in before) == 1
+            assert sum(event.get("kind") == "job_interrupted" for event in before) == 1
             assert client.post(prefix + "/resume", headers=ALICE).status_code == 202
             result = completed(client, identities["active"])
             assert result["status"] == "completed"
@@ -226,8 +226,8 @@ def test_killed_service_resumes_saved_verification_snapshot_usage_and_replay(tmp
             assert report["snapshot_id"] == identities["snapshot"]
             assert any("crash" in item.lower() for item in report["coverage"]["limitations"])
             after = client.get(prefix + "/events", headers=ALICE, params={"after": before[-1]["sequence"]}).json()["events"]
-            assert [item["kind"] for item in after].count("job_completed") == 1
-            unknown_calls = [item for item in after if item["kind"] == "model_call_completed"
+            assert [item.get("kind") for item in after].count("job_completed") == 1
+            unknown_calls = [item for item in after if item.get("kind") == "model_call_completed"
                              and item["payload"].get("outcome") == "unknown"]
             assert {item["payload"]["operation_id"] for item in unknown_calls} == set(saved["ledger"]["inflight"])
             assert sum(item["payload"]["total_tokens"] for item in unknown_calls) == unknown

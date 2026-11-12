@@ -19,6 +19,7 @@ from uuid import uuid4
 from pydantic import Field
 
 from devwatch.review.budgets import BudgetLedger
+from devwatch.review.activity_stream import ActivityData, ActivityEvent, InvalidActivity, TERMINAL
 from devwatch.review.contracts import AgentId, BalancedLimits, ContractModel, FollowupRequest, StopReason
 from devwatch.review.leases import execution_lock, runtime_lock
 
@@ -102,6 +103,18 @@ class PersistedEvent(ContractModel):
     kind: EventKind
     payload: EventPayload
     timestamp: float
+
+
+StoredEvent = PersistedEvent | ActivityEvent
+
+
+def _stored_event(raw: str) -> StoredEvent:
+    value = json.loads(raw)
+    return ActivityEvent.model_validate(value) if "type" in value else PersistedEvent.model_validate(value)
+
+
+def _event_job_id(event: StoredEvent) -> str:
+    return event.runId if isinstance(event, ActivityEvent) else event.job_id
 
 
 class JobRecord(ContractModel):
@@ -209,6 +222,33 @@ class JobStore(_SQLiteStore):
                    (event.event_id, job_id, sequence, event.model_dump_json()))
         return event
 
+    def _enqueue_activity(self, db, event: ActivityEvent) -> ActivityEvent:
+        sequence = db.execute("SELECT COALESCE(MAX(sequence),0)+1 FROM outbox WHERE job_id=?", (event.runId,)).fetchone()[0]
+        saved = event.model_copy(update={"sequence": sequence})
+        db.execute("INSERT INTO outbox(event_id,job_id,sequence,event) VALUES(?,?,?,?)",
+                   (saved.eventId, saved.runId, sequence, saved.model_dump_json(exclude_none=True)))
+        return saved
+
+    def _settle_activities(self, db, job_id: str, status: JobStatus) -> None:
+        active: dict[str, ActivityEvent] = {}
+        for row in db.execute("SELECT event FROM outbox WHERE job_id=? AND json_extract(event,'$.type') IS NOT NULL ORDER BY sequence", (job_id,)):
+            event = ActivityEvent.model_validate_json(row[0])
+            if event.type == "activity.started":
+                active[event.activityId] = event
+            elif event.type in TERMINAL:
+                active.pop(event.activityId, None)
+        if status == "completed" and active:
+            raise InvalidActivity("job cannot complete with active activities")
+        if status not in {"failed", "cancelled", "interrupted"}:
+            return
+        for started in active.values():
+            self._enqueue_activity(db, ActivityEvent(eventId=uuid4().hex, sequence=0, timestamp=time.time(),
+                runId=job_id, agentRunId=started.agentRunId, activityId=started.activityId,
+                parentActivityId=started.parentActivityId,
+                type="activity.failed" if status == "failed" else "activity.cancelled",
+                activityType=started.activityType,
+                data=ActivityData(errorCode="execution_failed") if status == "failed" else ActivityData()))
+
     def submit(self, *, owner: str, request: dict[str, Any], idempotency_key: str,
                limits: BalancedLimits | None = None) -> JobRecord:
         if not owner or not idempotency_key or len(owner) > 256 or len(idempotency_key) > 256:
@@ -243,6 +283,7 @@ class JobStore(_SQLiteStore):
             record = self._get(db, job_id, owner)
             if record.status != expected_status or status not in _TRANSITIONS[record.status]:
                 raise JobConflict("job transition is no longer valid")
+            self._settle_activities(db, job_id, status)
             record.status = status
             if result is not None:
                 record.result = result
@@ -304,6 +345,7 @@ class JobStore(_SQLiteStore):
                 lease["elapsed_seconds"], lease["initial_elapsed"] + max(0, time.time() - lease["started_at"]))
             record.ledger.elapsed_seconds = max(record.ledger.elapsed_seconds, min(record.limits.review_seconds, estimate))
             record.crash_recoveries += 1
+            self._settle_activities(db, job_id, "interrupted")
             record.status = "interrupted"
             self._save(db, record)
             db.execute("DELETE FROM execution_leases WHERE job_id=?", (job_id,))
@@ -415,11 +457,26 @@ class JobStore(_SQLiteStore):
             self._get(db, job_id, owner)
             return self._enqueue_event(db, job_id, kind, parsed)
 
-    def pending_events(self, limit: int = 1000) -> list[PersistedEvent]:
+    def publish_activity(self, job_id: str, *, owner: str, event: ActivityEvent) -> ActivityEvent:
+        if event.runId != job_id or event.sequence != 0:
+            raise JobConflict("activity must belong to the requested run and be unsequenced")
+        with self._transaction() as db:
+            record = self._get(db, job_id, owner)
+            if record.status != "running":
+                raise JobConflict("activity requires a running job")
+            previous = db.execute("SELECT event FROM outbox WHERE event_id=?", (event.eventId,)).fetchone()
+            if previous is not None:
+                saved = _stored_event(previous[0])
+                if not isinstance(saved, ActivityEvent) or saved.model_copy(update={"sequence": 0}) != event:
+                    raise JobConflict("activity event identity reused with different data")
+                return saved
+            return self._enqueue_activity(db, event)
+
+    def pending_events(self, limit: int = 1000) -> list[StoredEvent]:
         if not 1 <= limit <= 1000:
             raise ValueError("event batch limit must be between 1 and 1000")
         with self._transaction() as db:
-            return [PersistedEvent.model_validate_json(row[0]) for row in db.execute(
+            return [_stored_event(row[0]) for row in db.execute(
                 "SELECT event FROM outbox WHERE delivered=0 ORDER BY rowid LIMIT ?", (limit,))]
 
     def dispatch_events(self, target: "EventStore") -> int:
@@ -429,7 +486,8 @@ class JobStore(_SQLiteStore):
         for event in self.pending_events():
             target.append(event)
             with self._transaction() as db:
-                db.execute("UPDATE outbox SET delivered=1 WHERE event_id=?", (event.event_id,))
+                db.execute("UPDATE outbox SET delivered=1 WHERE event_id=?",
+                           (event.eventId if isinstance(event, ActivityEvent) else event.event_id,))
             delivered += 1
         return delivered
 
@@ -444,23 +502,26 @@ class EventStore(_SQLiteStore):
             CREATE TABLE IF NOT EXISTS telemetry_attempts (event_id TEXT PRIMARY KEY, outcome TEXT NOT NULL);
         """)
 
-    def append(self, event: PersistedEvent) -> None:
+    def append(self, event: StoredEvent) -> None:
+        event_id = event.eventId if isinstance(event, ActivityEvent) else event.event_id
+        job_id = _event_job_id(event)
+        encoded = event.model_dump_json(exclude_none=True) if isinstance(event, ActivityEvent) else event.model_dump_json()
         with self._transaction() as db:
             previous = db.execute("SELECT event FROM events WHERE event_id=? OR (job_id=? AND sequence=?)",
-                                  (event.event_id, event.job_id, event.sequence)).fetchone()
+                                  (event_id, job_id, event.sequence)).fetchone()
             if previous is not None:
-                if previous[0] != event.model_dump_json():
+                if previous[0] != encoded:
                     raise JobConflict("event identity reused with a different payload")
                 return
             db.execute("INSERT INTO events(event_id,job_id,sequence,event) VALUES(?,?,?,?)",
-                       (event.event_id, event.job_id, event.sequence, event.model_dump_json()))
+                       (event_id, job_id, event.sequence, encoded))
 
-    def replay(self, job_id: str, *, after: int = 0, limit: int = 1000) -> list[PersistedEvent]:
+    def replay(self, job_id: str, *, after: int = 0, limit: int = 1000) -> list[StoredEvent]:
         # Internal store API: a transport must check JobStore.get(owner=...) first.
         if type(after) is not int or not 0 <= after <= MAX_EVENT_CURSOR or not 1 <= limit <= 1000:
             raise ValueError("invalid replay cursor or page size")
         with self._transaction() as db:
-            return [PersistedEvent.model_validate_json(row[0]) for row in db.execute(
+            return [_stored_event(row[0]) for row in db.execute(
                 "SELECT event FROM events WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT ?",
                 (job_id, after, limit))]
 
@@ -469,7 +530,7 @@ class EventStore(_SQLiteStore):
         if not 1 <= limit <= 100:
             raise ValueError("invalid telemetry batch")
         with self._transaction() as db:
-            rows = list(db.execute("SELECT event FROM events WHERE event_id NOT IN "
+            rows = list(db.execute("SELECT event FROM events WHERE json_extract(event,'$.kind') IS NOT NULL AND event_id NOT IN "
                 "(SELECT event_id FROM telemetry_attempts) ORDER BY rowid LIMIT ?", (limit,)))
             events = [PersistedEvent.model_validate_json(row[0]) for row in rows]
             db.executemany("INSERT INTO telemetry_attempts VALUES(?, 'unknown')", [(event.event_id,) for event in events])

@@ -7,12 +7,13 @@ from pydantic.json_schema import models_json_schema
 
 from devwatch.review.contracts import ReportDraft
 from devwatch.review.jobs import JobView, PersistedEvent
+from devwatch.review.activity_stream import ActivityEvent
 from devwatch.review.stores import SnapshotManifest
 
 
 def export() -> str:
     _, schema = models_json_schema([(model, "validation") for model in
-        (JobView, PersistedEvent, SnapshotManifest, ReportDraft)])
+        (JobView, PersistedEvent, ActivityEvent, SnapshotManifest, ReportDraft)])
     # Responses serialize every field, including defaults/nulls. Requiring them
     # prevents optional input defaults becoming undefined browser state.
     for name, definition in schema["$defs"].items():
@@ -22,6 +23,10 @@ def export() -> str:
             definition["required"] = (sorted({"status", "agent_id", "task_id", "tool", "evidence_ref",
                 "error_code", "duration_seconds", "total_tokens"}) if name == "EventPayload"
                 else sorted(definition["properties"]))
+            if name == "ActivityData":
+                definition["required"] = []
+            if name == "ActivityEvent":
+                definition["required"].remove("parentActivityId")
             if name == "BalancedLimits":
                 # M13 adds an optional policy knob. Older job views remain
                 # readable; the service fills its default on restored jobs.

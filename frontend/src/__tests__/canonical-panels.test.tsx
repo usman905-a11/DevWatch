@@ -4,9 +4,23 @@ import fixture from './fixtures/canonical-wire.json'
 import { ReportPanel } from '../review/ReportPanel'
 import { JobActivity } from '../review/JobActivity'
 import { SnapshotSource } from '../review/SnapshotSource'
-import { PersistedEvent } from '../review/wire'
+import { ActivityEvent, PersistedEvent } from '../review/wire'
 
 describe('canonical review presentation', () => {
+  it('uses the completed response as the authoritative text after deltas', () => {
+    const started: ActivityEvent = { version: 1, eventId: 'start', sequence: 1, timestamp: 1,
+      runId: 'run', agentRunId: 'agent', activityId: 'response', type: 'activity.started',
+      activityType: 'response', data: { agentId: 'planner' } }
+    const delta: ActivityEvent = { ...started, eventId: 'delta', sequence: 2, type: 'activity.delta',
+      data: { text: 'draft' } }
+    const completed: ActivityEvent = { ...started, eventId: 'complete', sequence: 3,
+      type: 'activity.completed', data: { text: 'accepted final text' } }
+    const html = renderToStaticMarkup(<JobActivity events={[started, delta, completed]}
+      job={null} connection="connected" />)
+    expect(html).toContain('Planner')
+    expect(html).toContain('accepted final text')
+    expect(html).not.toContain('<pre class="activity-output">draft</pre>')
+  })
   it('shows graph progress and completion outcomes in the existing activity panel', () => {
     const event: PersistedEvent = { ...fixture.events[0], kind: 'graph_node_completed',
       payload: { ...fixture.events[0].payload, status: null, agent_id: 'logic_correctness',

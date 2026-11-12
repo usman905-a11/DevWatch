@@ -320,9 +320,10 @@ class RepositoryContext:
             tools.register(name, partial(facts, name))
         if command_runtime is not None:
             from devwatch.review.tool_runtime import COMMAND_TOOLS
-            async def command(name, arguments, work):
+            async def command(name, arguments, work, *, progress=None):
                 from devwatch.review.contracts import AgentAction
-                return await command_runtime.execute(work, AgentAction(kind="call_tool", tool=name, arguments=arguments))
+                return await command_runtime.execute(work, AgentAction(kind="call_tool", tool=name, arguments=arguments),
+                                                     progress=progress)
             def command_available(name, work):
                 return any(definition.tool == name and set(definition.files).issubset(work.files)
                            for definition in command_runtime.commands.values())

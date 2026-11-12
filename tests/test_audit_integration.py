@@ -85,6 +85,8 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
         assert done.ledger.total_tokens==15*len(provider.requests)
         assert len(AGENT_CONTRACTS)==7
         assert all('items[0]' not in event.model_dump_json() for event in events.replay(job.job_id))
-        assert {event.kind for event in events.replay(job.job_id)} >= {
-            'tool_result', 'evidence_delivered', 'evidence_inspected', 'validation_passed'}
+        timeline = events.replay(job.job_id)
+        assert any(getattr(event, 'type', None) == 'activity.completed' and event.data.tool for event in timeline)
+        assert {'evidence_delivered', 'evidence_inspected', 'validation_passed'} <= {
+            event.data.message for event in timeline if getattr(event, 'type', None) == 'activity.started'}
     asyncio.run(run())

@@ -25,6 +25,21 @@ def client_api():
     return importlib.import_module("devwatch.review.client")
 
 
+def test_client_accepts_owned_activity_envelope():
+    job_id = "a" * 32
+    event = dict(version=1, eventId="event-1", sequence=1, timestamp=1,
+                 runId=job_id, agentRunId="agent-1", activityId="activity-1",
+                 type="activity.completed", activityType="response", data={"text": "final"})
+
+    def response(request, timeout):
+        stream = io.BytesIO(json.dumps({"events": [event], "next_cursor": 1}).encode())
+        stream.status, stream.headers = 200, {"content-type": "application/json"}
+        return stream
+
+    client = client_api().ReviewClient("http://localhost:8000", opener=response)
+    assert client.events(job_id)["events"] == [event]
+
+
 def test_client_submits_snapshot_once_polls_and_downloads_validated_report(tmp_path):
     capture = importlib.import_module("devwatch.review.capture").CapturedSource(
         root=tmp_path, files={"service.py": "def first(items):\n    return items[0]\n"},

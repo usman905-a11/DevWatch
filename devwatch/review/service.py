@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from devwatch.review.activity_stream import ActivityEvent
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -300,7 +301,8 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
     @app.get("/api/jobs/{identity}/events")
     async def events(identity: str, after: int = Query(0, ge=0, le=MAX_EVENT_CURSOR), limit: int = Query(100, ge=1, le=1000), principal=Depends(owner)):
         page = replay(identity, principal, after, limit)
-        return {"events": page, "next_cursor": page[-1].sequence if page else after}
+        return {"events": [event.model_dump(mode="json", exclude_none=isinstance(event, ActivityEvent))
+                           for event in page], "next_cursor": page[-1].sequence if page else after}
 
     async def persisted_events(identity, principal, after):
         while True:
@@ -321,7 +323,9 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         replay(identity, principal, after)
         async def frames():
             async for event in persisted_events(identity, principal, after):
-                yield f"id: {event.sequence}\nevent: {event.kind}\ndata: {event.model_dump_json()}\n\n"
+                kind = event.type if isinstance(event, ActivityEvent) else event.kind
+                data = event.model_dump_json(exclude_none=True) if isinstance(event, ActivityEvent) else event.model_dump_json()
+                yield f"id: {event.sequence}\nevent: {kind}\ndata: {data}\n\n"
         return StreamingResponse(frames(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
@@ -354,7 +358,8 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
                 await socket.accept()
             async def send_events():
                 async for event in persisted_events(identity, principal, cursor):
-                    await socket.send_json(event.model_dump(mode="json"))
+                    await asyncio.wait_for(socket.send_json(
+                        event.model_dump(mode="json", exclude_none=isinstance(event, ActivityEvent))), timeout=5)
                 await socket.close(code=1000)
             async def disconnect():
                 message = await socket.receive()
@@ -369,7 +374,9 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
                     await socket.close(code=1008)
         except WebSocketDisconnect:
             return
-        except (HTTPException, JobNotFound, ValueError, TimeoutError):
+        except TimeoutError:
+            await socket.close(code=1013)
+        except (HTTPException, JobNotFound, ValueError):
             await socket.close(code=1008)
         finally:
             for viewer in viewers:

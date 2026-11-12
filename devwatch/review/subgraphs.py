@@ -134,11 +134,14 @@ class PermissionedTools:
                 raise PermissionError("source is outside the assigned scope")
             return parsed.model_dump(mode="json", exclude_unset=True)
 
-    async def execute(self, task: ReviewTask, action: AgentAction) -> ToolObservation:
+    async def execute(self, task: ReviewTask, action: AgentAction, *, progress=None) -> ToolObservation:
         arguments = self.authorize(task, action)
         handler = self._handlers.get(action.tool)
         if handler is None:
             raise ToolFailure("tool_unavailable", "Choose another permitted tool or report unavailable coverage.")
+        if progress is not None and action.tool in {"run_tests", "run_command", "lint", "type_check", "coverage",
+                                                     "sast", "profile", "benchmark"}:
+            return ToolObservation.model_validate(await handler(arguments, task, progress=progress))
         return ToolObservation.model_validate(await handler(arguments, task))
 
 
@@ -836,7 +839,9 @@ class AgentSubgraphs:
                     observation = ToolObservation.model_validate(await asyncio.wait_for(
                         _resolve(self.context(state)), timeout=self.budget.timeout_for("command")))
                 else:
-                    observation = await asyncio.wait_for(self.tools.execute(task, action),
+                    async def progress(channel, text):
+                        await self._event("tool_progress", state, operation_id=operation_id, stream=channel, text=text)
+                    observation = await asyncio.wait_for(self.tools.execute(task, action, progress=progress),
                                                          timeout=self.budget.timeout_for("command"))
                 for identity in [observation.evidence_ref, *observation.additional_evidence_refs]:
                     if identity in private.evidence_refs:
@@ -967,14 +972,14 @@ class AgentSubgraphs:
             return self._stop(state, "tools_unavailable")
         finally:
             if operation_id is not None:
+                if observation is not None:
+                    await self._event("evidence_retrieved", state, tool=action.tool or "read_source",
+                                      evidence_ref=observation.evidence_ref, operation_id=operation_id, offset=observation.offset)
                 await self._event("tool_result", state, tool=action.tool or "read_source", operation_id=operation_id,
                     outcome="succeeded" if observation is not None else "cancelled" if private.stop_reason == "cancelled" else "failed",
                     error_code=tool_error, evidence_ref=observation.evidence_ref if observation is not None else None,
                     stop_reason=safe_stop_reason(private.stop_reason) if private.stop_reason else None,
                     duration_seconds=time.monotonic() - started)
-                if observation is not None:
-                    await self._event("evidence_retrieved", state, tool=action.tool or "read_source",
-                                      evidence_ref=observation.evidence_ref, operation_id=operation_id, offset=observation.offset)
             await self._save(state)
 
     def _tool_diagnostic(self, state, error, fingerprint=None):

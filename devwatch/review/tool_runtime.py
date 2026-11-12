@@ -1,9 +1,11 @@
 """Operator-approved exact commands; this trusted-host runner is not a sandbox."""
 import asyncio
+import codecs
 from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import time
 from typing import Literal
@@ -15,6 +17,14 @@ from devwatch.review.stores import validate_source_path
 from devwatch.review.subgraphs import ToolObservation
 
 COMMAND_TOOLS = {"run_tests", "run_command", "lint", "type_check", "coverage", "sast", "profile", "benchmark", "db_analyze", "query_analyze"}
+
+
+def _public_line(line: str) -> str:
+    # Command output is untrusted. Raw output stays in owner-bound evidence.
+    if (len(line) > 2048 or re.search(r"(?i)(api.?key|token|secret|password|credential|authorization|bearer)", line)
+            or re.search(r"[A-Za-z0-9_-]{24,}", line)):
+        return "[output redacted]\n"
+    return line
 
 
 class TrustedCommand(ContractModel):
@@ -140,7 +150,7 @@ class TrustedToolRuntime:
         return self.repo._record({"tool": "write_artifact", "source_scope": record["source_scope"],
                                   "data": {"artifact_ref": identity}}, work=task)
 
-    async def execute(self, task, action):
+    async def execute(self, task, action, *, progress=None):
         AGENT_CONTRACTS[task.agent_id].validate_action(action)
         if set(action.arguments) != {"command_id"}:
             raise ValueError("Command tools accept only an approved command_id")
@@ -170,13 +180,44 @@ class TrustedToolRuntime:
         readers = []
         captured = {"stdout": bytearray(), "stderr": bytearray()}
         remaining, truncated, timed_out = self.output_bytes, False, False
+        public_remaining = 16000
         async def read(name, stream):
-            nonlocal remaining, truncated
+            nonlocal remaining, truncated, public_remaining
+            decoder = codecs.getincrementaldecoder("utf-8")("replace")
+            pending = ""
+            redact_until_newline = False
+
+            async def publish(line):
+                nonlocal public_remaining
+                if progress is None or public_remaining <= 0:
+                    return
+                safe = _public_line(line)[:public_remaining]
+                public_remaining -= len(safe)
+                if safe:
+                    await progress(name, safe)
+
             while chunk := await stream.read(8192):
                 keep = min(remaining, len(chunk))
                 captured[name].extend(chunk[:keep])
                 remaining -= keep
                 truncated |= keep < len(chunk)
+                if progress is not None and keep:
+                    pending += decoder.decode(chunk[:keep])
+                    if redact_until_newline:
+                        if "\n" not in pending:
+                            pending = ""
+                            continue
+                        pending = pending.split("\n", 1)[1]
+                        redact_until_newline = False
+                    while "\n" in pending:
+                        line, pending = pending.split("\n", 1)
+                        await publish(line + "\n")
+                    if len(pending) > 2048:
+                        await publish("[output redacted]\n")
+                        pending = ""
+                        redact_until_newline = True
+            if progress is not None and pending and not redact_until_newline:
+                await publish(pending)
         try:
             process = await asyncio.shield(spawn)
             if os.name == "nt":

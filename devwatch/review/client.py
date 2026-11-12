@@ -139,23 +139,26 @@ class ReviewClient:
 
     def events(self, job_id, *, after=0):
         from devwatch.review.jobs import PersistedEvent, MAX_EVENT_CURSOR
+        from devwatch.review.activity_stream import ActivityEvent
         if type(after) is not int or not 0 <= after <= MAX_EVENT_CURSOR:
             raise ValueError("invalid replay cursor")
         data = self._json("GET", f"/api/jobs/{_identity(job_id)}/events?after={after}&limit=100")
         if not isinstance(data, dict) or set(data) != {"events", "next_cursor"} or not isinstance(data["events"], list) or len(data["events"]) > 100:
             raise ClientError("Service returned an invalid event page")
         try:
-            parsed = [PersistedEvent.model_validate(event) for event in data["events"]]
+            parsed = [ActivityEvent.model_validate(event) if isinstance(event, dict) and "type" in event
+                      else PersistedEvent.model_validate(event) for event in data["events"]]
         except ValidationError:
             raise ClientError("Service returned invalid event metadata") from None
         cursor = after
         for event in parsed:
-            if event.job_id != job_id or event.sequence <= cursor:
+            if (event.runId if isinstance(event, ActivityEvent) else event.job_id) != job_id or event.sequence <= cursor:
                 raise ClientError("Service returned invalid event ordering")
             cursor = event.sequence
         if type(data["next_cursor"]) is not int or data["next_cursor"] != cursor:
             raise ClientError("Service returned an invalid replay cursor")
-        return {"events": [event.model_dump(mode="json") for event in parsed], "next_cursor": cursor}
+        return {"events": [event.model_dump(mode="json", exclude_none=isinstance(event, ActivityEvent))
+                           for event in parsed], "next_cursor": cursor}
 
     def evidence(self, job, reference):
         import re

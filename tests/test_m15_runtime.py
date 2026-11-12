@@ -78,11 +78,13 @@ async def test_sdk_range_correction_preserves_delivery_accounting_through_report
         assert request["max_tokens"] >= 512
     jobs.dispatch_events(events)
     stream = events.replay(job.job_id)
-    results = [event.payload for event in stream if event.kind == "tool_result"]
+    results = [event.data for event in stream if getattr(event, "type", None) in
+               {"activity.completed", "activity.failed"} and event.data.tool == "read_source"]
     assert len(results) == 2
-    assert results[0].outcome == "failed" and results[0].evidence_ref is None
-    assert results[1].outcome == "succeeded" and results[1].evidence_ref
-    acknowledged = [event for event in stream if event.kind == "evidence_inspected"
-                    and event.payload.agent_id.value == "logic_correctness"]
+    assert results[0].outcome == "failed" and results[0].evidenceRef is None
+    assert results[1].outcome == "succeeded" and results[1].evidenceRef
+    acknowledged = [event for event in stream if getattr(event, "type", None) == "activity.started"
+                    and event.data.message == "evidence_inspected"
+                    and event.data.agentId == "logic_correctness"]
     assert acknowledged
     assert all(client.is_closed for client in clients)

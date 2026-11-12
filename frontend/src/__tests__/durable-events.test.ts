@@ -25,6 +25,15 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 async function events() { return import('../review/durable-events') }
 
 describe('persistent authenticated event observation', () => {
+  it('accepts owned activity envelopes and rejects private data fields', async () => {
+    const { parseEvent } = await events()
+    const activity = { version: 1, eventId: 'event-1', sequence: 2, timestamp: 1,
+      runId: jobId, agentRunId: 'agent-1', activityId: 'activity-1',
+      type: 'activity.completed', activityType: 'response', data: { text: 'final answer' } }
+    expect(parseEvent({ id: '2', kind: activity.type, data: JSON.stringify(activity) }, jobId)).toMatchObject(activity)
+    expect(() => parseEvent({ id: '2', kind: activity.type, data: JSON.stringify({ ...activity,
+      data: { systemPrompt: 'private' } }) }, jobId)).toThrow(/invalid/i)
+  })
   it('refreshes owned accounting during an open stream on budget updates', async () => {
     const { observeJob } = await events()
     let push!: ReadableStreamDefaultController<Uint8Array>
@@ -140,6 +149,21 @@ describe('persistent authenticated event observation', () => {
     expect(states).toContain('reconnecting')
   })
 
+  it('ignores a repeated event identity even when it has a later sequence', async () => {
+    const { observeJob } = await events()
+    const duplicate = { ...event(2), event_id: 'e1' }
+    const seen: number[] = []
+    const api = new DurableReviewClient('http://localhost:8000', '', async url =>
+      String(url).includes('/stream?')
+        ? stream(frame(event(1)) + frame(duplicate) + frame(event(3)))
+        : new Response(JSON.stringify({ ...fixture.job, job_id: jobId }),
+          { headers: { 'Content-Type': 'application/json' } }))
+    const subscription = observeJob(api, jobId, { onEvent: value => { seen.push(value.sequence) } })
+    await subscription.finished
+    expect(seen).toEqual([1, 3])
+    expect(subscription.cursor).toBe(3)
+  })
+
   it('stopping observation aborts pending transport and makes no cancel request', async () => {
     const { observeJob } = await events()
     const paths: string[] = [], errors: Error[] = []
@@ -157,7 +181,7 @@ describe('persistent authenticated event observation', () => {
 
   it('fails closed on malformed or unbounded frames, without retrying protocol failures', async () => {
     const { SseParser, observeJob } = await events()
-    expect(() => new SseParser().feed('data: ' + 'x'.repeat(16385))).toThrow(/limit/i)
+    expect(() => new SseParser().feed('data: ' + 'x'.repeat(72001))).toThrow(/limit/i)
     let calls = 0
     const errors: Error[] = []
     const api = new DurableReviewClient('http://localhost:8000', '', async () => { calls++; return stream('id: 1\nevent: agent_started\ndata: private-source\n\n') })

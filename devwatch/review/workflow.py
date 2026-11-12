@@ -18,6 +18,7 @@ from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
 
 from devwatch.review.budgets import BudgetManager
+from devwatch.review.activity_stream import ActivityEvent, ActivityStream, AgentActivityPublisher
 from devwatch.review.declared_context import load_declared_context
 from devwatch.review.contracts import (
     AgentId, AgentPrivateState, AgentWorkItem, ReviewPlan, ReviewTask, SpecialistResult,
@@ -25,7 +26,7 @@ from devwatch.review.contracts import (
 )
 from devwatch.review.finalization import FinalAcceptanceGate, FinalizationWorkflow, assemble_report, render_accepted_report
 from devwatch.review.pdf import render_accepted_pdf_async
-from devwatch.review.jobs import EventStore, JobConflict, JobRecord, JobStore, _SQLiteStore, safe_stop_reason
+from devwatch.review.jobs import EventPayload, EventStore, JobConflict, JobRecord, JobStore, _SQLiteStore, safe_stop_reason
 from devwatch.review.repository import RepositoryContext, SharedBlackboard, StructuralEvidenceGate
 from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
 from devwatch.review.subgraphs import AgentSubgraphs
@@ -110,14 +111,17 @@ class CanonicalReviewExecutor:
         return {**rendered, "pdf_artifact": reference}
 
     def reconcile_models(self, job, budget):
-        pending, started, cursor = dict(budget.ledger.inflight), {}, 0
+        pending, started, cursor = dict(budget.ledger.inflight), set(), 0
         if pending:
             self.jobs.dispatch_events(self.events)
             while True:
                 page = self.events.replay(job.job_id, after=cursor)
                 for event in page:
-                    if event.kind == "model_call_started" and event.payload.operation_id in pending:
-                        started[event.payload.operation_id] = event.payload
+                    if isinstance(event, ActivityEvent):
+                        if event.type == "activity.started" and event.activityType == "response" and event.activityId in pending:
+                            started.add(event.activityId)
+                    elif event.kind == "model_call_started" and event.payload.operation_id in pending:
+                        started.add(event.payload.operation_id)
                 if not page or len(started) == len(pending):
                     break
                 cursor = page[-1].sequence
@@ -125,7 +129,8 @@ class CanonicalReviewExecutor:
         for ticket, reservation in pending.items():
             budget.record_model(ticket, prompt_tokens=reservation.tokens, completion_tokens=0)
             if ticket in started:
-                reconciled.append(started[ticket].model_copy(update={"outcome": "unknown", "total_tokens": reservation.tokens}))
+                reconciled.append(EventPayload(agent_id=reservation.agent_id, operation_id=ticket,
+                    outcome="unknown", total_tokens=reservation.tokens))
         # Cost settlement and its unknown-completion events share the Job Store
         # transaction/outbox. Reservations without a start never invent a call.
         self.jobs.update_ledger(job.job_id, owner=job.owner, ledger=budget.ledger, model_completions=reconciled)
@@ -189,7 +194,10 @@ class CanonicalReviewExecutor:
                 require_independent_support=True).accept(draft, decisions)
         workflow = FinalizationWorkflow(partial, no_followup, accept, budget=budget, tasks=tasks,
                                         renderer=lambda accepted: self.render_report(job, accepted), emit=session.emit)
-        return (await workflow.run())["rendered"]
+        rendered = (await workflow.run())["rendered"]
+        session.activity.public_response(json.loads(rendered["json"])["summary"])
+        session.activity.finish()
+        return rendered
 
     async def __call__(self, job: JobRecord):
         if job.workflow_version != "seven-agent-v1" or set(job.request) - {"snapshot_id", "changed_files", "context_files"}:
@@ -209,8 +217,12 @@ class CanonicalReviewExecutor:
                 previous = await graph.aget_state(config)
                 try:
                     if previous.values.get("rendered") and not previous.next:
+                        session.activity.public_response(json.loads(previous.values["rendered"]["json"])["summary"])
+                        session.activity.finish()
                         return previous.values["rendered"]
                     result = await graph.ainvoke(None if previous.values else {"snapshot_id": repository.snapshot_id}, config)
+                    session.activity.public_response(json.loads(result["rendered"]["json"])["summary"])
+                    session.activity.finish()
                     return result["rendered"]
                 finally:
                     budget.refresh_time()
@@ -227,6 +239,8 @@ class _ReviewSession:
             if job.crash_recoveries else ()))
         self.review_tasks = {}
         self._persistence_lock = asyncio.Lock()
+        self.activity = AgentActivityPublisher(ActivityStream(job.job_id,
+            lambda event: executor.jobs.publish_activity(job.job_id, owner=job.owner, event=event)))
         self.command_runtime = TrustedToolRuntime(repository, executor.jobs, job, commands=executor.trusted_commands)
         self.database_runtime = DatabaseTools(repository, job, policies=executor.databases)
         self.agents = AgentSubgraphs(executor.provider, repository.tools(self.command_runtime, self.database_runtime), budget, self.context,
@@ -238,8 +252,7 @@ class _ReviewSession:
             self.budget.refresh_time()
             self.executor.jobs.update_ledger(self.job.job_id, owner=self.job.owner,
                 ledger=self.budget.ledger, model_completions=[payload])
-        else:
-            self.executor.jobs.emit(self.job.job_id, owner=self.job.owner, kind=kind, payload=payload)
+        self.activity.record(kind, **payload)
         self.executor.jobs.dispatch_events(self.executor.events)
 
     async def persist_agent(self, state, ledger):

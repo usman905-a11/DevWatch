@@ -1,10 +1,10 @@
 import { DurableReviewClient, SubmissionIntent } from './durable-client'
 import { observeJob, Observation } from './durable-events'
-import { CaptureCoverage, JobView, PersistedEvent, ReportDraft, SnapshotManifest, SourceExcerpt } from './wire'
+import { CaptureCoverage, JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StreamEvent } from './wire'
 
 export interface SessionState {
   job: JobView | null; manifest: SnapshotManifest | null; report: ReportDraft | null
-  source: SourceExcerpt | null; sourceError: string | null; events: PersistedEvent[]
+  source: SourceExcerpt | null; sourceError: string | null; events: StreamEvent[]
   intent: SubmissionIntent | null; busy: boolean; error: string | null; connection: string
 }
 const empty = (): SessionState => ({ job: null, manifest: null, report: null, source: null, sourceError: null,

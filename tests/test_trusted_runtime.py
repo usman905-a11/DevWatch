@@ -53,6 +53,53 @@ def test_exact_approval_and_clean_environment_do_not_mutate_snapshot(tmp_path, m
     asyncio.run(scenario())
 
 
+def test_command_publishes_stdout_and_stderr_before_exit(tmp_path):
+    api = runtime_api()
+    source = "import sys,time\nprint('hello', flush=True)\nprint('warning', file=sys.stderr, flush=True)\ntime.sleep(.4)\n"
+    _, _, repo, jobs, job, task = setup(tmp_path, source)
+    command = api.TrustedCommand(command_id="stream-probe", tool="run_tests",
+                                  argv=(sys.executable, "probe.py"), files=("probe.py",))
+    runtime = api.TrustedToolRuntime(repo, jobs, job, commands=(command,))
+
+    async def scenario():
+        observed, ready = [], asyncio.Event()
+
+        async def progress(channel, text):
+            observed.append((channel, text))
+            if {name for name, _ in observed} == {"stdout", "stderr"}:
+                ready.set()
+
+        running = asyncio.create_task(runtime.execute(task,
+            AgentAction(kind="call_tool", tool="run_tests", arguments={"command_id": "stream-probe"}), progress=progress))
+        await asyncio.wait_for(ready.wait(), 2)
+        assert not running.done()
+        await running
+        assert any(channel == "stdout" and "hello" in text for channel, text in observed)
+        assert any(channel == "stderr" and "warning" in text for channel, text in observed)
+
+    asyncio.run(scenario())
+
+
+def test_long_output_line_does_not_leak_its_later_tail(tmp_path):
+    api = runtime_api()
+    source = "import time\nprint('x'*3000, end='', flush=True)\ntime.sleep(.1)\nprint('tail-value', flush=True)\n"
+    _, _, repo, jobs, job, task = setup(tmp_path, source)
+    command = api.TrustedCommand(command_id="long-line", tool="run_tests",
+                                  argv=(sys.executable, "probe.py"), files=("probe.py",))
+    runtime = api.TrustedToolRuntime(repo, jobs, job, commands=(command,))
+
+    async def scenario():
+        observed = []
+        async def progress(channel, text):
+            observed.append(text)
+        await runtime.execute(task, AgentAction(kind="call_tool", tool="run_tests",
+            arguments={"command_id": "long-line"}), progress=progress)
+        assert "tail-value" not in "".join(observed)
+        assert "[output redacted]" in "".join(observed)
+
+    asyncio.run(scenario())
+
+
 def test_cancellation_drains_process_and_unknown_operation_is_not_replayed(tmp_path):
     api = runtime_api()
     source = "import time\nfrom pathlib import Path\nPath('entered').write_text('ready')\nwhile True: time.sleep(.01)\n"

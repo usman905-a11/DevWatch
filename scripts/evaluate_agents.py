@@ -300,22 +300,24 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     while page := events.replay(job.job_id, after=cursor):
         timeline.extend(page)
         cursor = page[-1].sequence
-    calls = [event for event in timeline if event.kind == "tool_result"]
-    successes = sum(event.payload.outcome == "succeeded" for event in calls)
+    calls = [event for event in timeline if getattr(event, "type", None) in
+             {"activity.completed", "activity.failed"} and event.data.tool]
+    successes = sum(event.data.outcome == "succeeded" for event in calls)
     seen, repeated = set(), 0
     for event in calls:
-        payload = event.payload
+        payload = event.data
         if payload.outcome == "succeeded" and payload.tool != "read_evidence":
-            identity = (payload.agent_id, payload.task_id, payload.tool, payload.evidence_ref)
+            identity = (payload.agentId, payload.taskId, payload.tool, payload.evidenceRef)
             repeated += identity in seen
             seen.add(identity)
     usage = {model: {key: value - usage_before.get(model, {}).get(key, 0) for key, value in tokens.items()}
              for model, tokens in meter.usage.items()}
     categories = set()
-    if any(event.payload.outcome == "failed" for event in calls) or invalid_evidence:
+    if any(event.data.outcome == "failed" for event in calls) or invalid_evidence:
         categories.add("tool_harness" if not invalid_evidence else "evidence_retrieval")
     missing = bool(score["false_negative"])
-    provider_errors = sorted({e.payload.error_code for e in timeline if e.kind == "model_call_completed" and e.payload.error_code})
+    provider_errors = sorted({e.payload.error_code for e in timeline
+        if getattr(e, "kind", None) == "model_call_completed" and e.payload.error_code})
     local_refusal = meter.budget_refusals > budget_refusals_before
     if local_refusal:
         categories.add('evaluation_budget')
@@ -335,7 +337,8 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     if score["false_positive"]:
         categories.add("model_reasoning")
     if report.get("coverage", {}).get("failed", {}).get("__final") or any(
-            event.payload.stop_reason == "final_consistency_failure" for event in timeline):
+            getattr(event, "kind", None) == "agent_completed"
+            and event.payload.stop_reason == "final_consistency_failure" for event in timeline):
         categories.add("finalization")
     if finished.status != "completed" and not categories:
         categories.add("tool_harness")
@@ -350,7 +353,9 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         "inspected_source_fraction": len(inspected.intersection(public["files"])) / len(public["files"]),
         "prompt_tokens": sum(u["prompt_tokens"] for u in usage.values()),
         "completion_tokens": sum(u["completion_tokens"] for u in usage.values()),
-        "ledger_total_tokens": finished.ledger.total_tokens, "model_calls": sum(e.kind == "model_call_started" for e in timeline),
+        "ledger_total_tokens": finished.ledger.total_tokens,
+        "model_calls": sum(getattr(e, "type", None) == "activity.started"
+            and e.activityType == "response" and e.agentRunId != "review" for e in timeline),
         "unknown_provider_calls": meter.unknown_calls - unknown_before,
         "cost_guard_charged_usd": meter.charged_usd if live else None,
         "approximate_cost_usd": estimate_cost(usage, meter.rates) if live and meter.unknown_calls == unknown_before else None,

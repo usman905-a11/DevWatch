@@ -166,18 +166,29 @@ def test_full_timeline_tracks_publication_verification_and_final_acceptance(tmp_
         identity, _ = submit(client)
         assert completed(client, identity)["status"] == "completed"
         events = client.get(f"/api/jobs/{identity}/events?limit=1000", headers=ALICE).json()["events"]
-        kinds = [e["kind"] for e in events]
-        assert kinds.count("agent_started") == kinds.count("agent_completed") == 3
-        assert kinds.count("model_call_started") == kinds.count("model_call_completed") == (5 if invalid else 4)
-        assert ("candidate_submitted" in kinds) is (not invalid)
-        assert "verification_completed" in kinds
-        assert kinds.count("finding_created") == (0 if invalid else 1)
-        assert kinds.count("candidate_rejected") == (1 if invalid else 0)
-        gate = [e for e in events if e["payload"].get("phase") == "structural_gate" and e["kind"].startswith("validation_")]
-        assert gate[-1]["kind"] == ("validation_failed" if invalid else "validation_passed")
-        assert kinds.index("finalization_started") < kinds.index("finalization_completed") < kinds.index("job_completed")
-        assert kinds.index("report_render_started") < kinds.index("report_render_completed")
-        accepted = [e for e in events if e["kind"] == "validation_passed" and e["payload"].get("phase") == "acceptance"]
+        activities = [e for e in events if "type" in e]
+        starts = [e for e in activities if e["type"] == "activity.started"]
+        ends = [e for e in activities if e["type"] in {"activity.completed", "activity.failed", "activity.cancelled"}]
+        agents = [e for e in starts if e["activityType"] == "result" and e["data"].get("agentId")]
+        assert len(agents) == 3 and all(any(end["activityId"] == agent["activityId"] for end in ends) for agent in agents)
+        models = [e for e in starts if e["activityType"] == "response" and e["data"].get("message") == "Model response pending"]
+        assert len(models) == (5 if invalid else 4)
+        assert all(any(end["activityId"] == model["activityId"] for end in ends) for model in models)
+        messages = [e["data"].get("message") for e in starts]
+        assert ("candidate_submitted" in messages) is (not invalid)
+        assert "verification_completed" in messages
+        assert messages.count("finding_created") == (0 if invalid else 1)
+        assert messages.count("candidate_rejected") == (1 if invalid else 0)
+        gate = [e for e in starts if e["data"].get("phase") == "structural_gate"
+                and str(e["data"].get("message", "")).startswith("validation_")]
+        assert gate[-1]["data"]["message"] == ("validation_failed" if invalid else "validation_passed")
+        for name in ("finalization_started", "report_render_started"):
+            begin = next(e for e in starts if e["data"].get("message") == name)
+            end = next(e for e in ends if e["activityId"] == begin["activityId"])
+            assert begin["sequence"] < end["sequence"]
+        assert max(e["sequence"] for e in ends) < next(e["sequence"] for e in events if e.get("kind") == "job_completed")
+        accepted = [e for e in starts if e["data"].get("message") == "validation_passed"
+                    and e["data"].get("phase") == "acceptance"]
         assert len(accepted) == 1
         assert "return items[0]" not in json.dumps(events)
 
@@ -261,9 +272,13 @@ def test_websocket_delivers_model_start_before_completion_and_disconnect_keeps_w
         try:
             with client.websocket_connect(f"/api/jobs/{identity}/ws", headers=ALICE) as socket:
                 observed = []
-                while not observed or observed[-1]["kind"] != "model_call_started":
+                while not observed or not (observed[-1].get("type") == "activity.started"
+                        and observed[-1].get("activityType") == "response"
+                        and observed[-1].get("agentRunId") != "review"):
                     observed.append(socket.receive_json())
-            assert not [e for e in observed if e["kind"] == "model_call_completed"]
+            activity = observed[-1]["activityId"]
+            assert not [e for e in observed if e.get("activityId") == activity
+                        and e.get("type") in {"activity.completed", "activity.failed"}]
             assert client.get(f"/api/jobs/{identity}", headers=ALICE).json()["status"] == "running"
             last = observed[-1]["sequence"]
         finally:
@@ -274,7 +289,7 @@ def test_websocket_delivers_model_start_before_completion_and_disconnect_keeps_w
         streamed = [json.loads(line[6:]) for line in stream.text.splitlines() if line.startswith("data: ")]
         assert streamed == replay
         assert replay[0]["sequence"] == last + 1
-        assert any(e["kind"] == "model_call_completed" for e in replay)
+        assert any(e.get("activityId") == activity and e.get("type") == "activity.completed" for e in replay)
 
 
 @pytest.mark.parametrize("interrupt", [False, True])
@@ -331,9 +346,12 @@ def test_report_render_failure_closes_finalization_as_failed(tmp_path, monkeypat
         identity, _ = submit(client)
         assert completed(client, identity)["status"] == "failed"
         events = client.get(f"/api/jobs/{identity}/events?limit=1000", headers=ALICE).json()["events"]
-        for kind in ("report_render_completed", "finalization_completed"):
-            ended = [event for event in events if event["kind"] == kind]
-            assert len(ended) == 1 and ended[0]["payload"]["outcome"] == "failed"
+        starts = {event["activityId"]: event["data"].get("message") for event in events
+                  if event.get("type") == "activity.started"}
+        for phase in ("report_render_started", "finalization_started"):
+            ended = [event for event in events if event.get("type") == "activity.failed"
+                     and starts.get(event["activityId"]) == phase]
+            assert len(ended) == 1 and ended[0]["data"]["errorCode"] == "execution_failed"
         assert "private report path" not in json.dumps(events)
 
 

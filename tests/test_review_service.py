@@ -5,6 +5,7 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
+from devwatch.review.activity_stream import ActivityStream
 
 from tests.test_canonical_workflow import ReviewProvider
 from tests.test_control_agents import MODELS
@@ -126,10 +127,43 @@ def test_sse_and_websocket_replay_identical_persisted_stream(tmp_path):
         assert "id: 1\n" not in stream.text
         for event in events:
             assert f"id: {event['sequence']}\n" in stream.text
-            assert f"event: {event['kind']}\n" in stream.text
+            assert f"event: {event.get('type', event.get('kind'))}\n" in stream.text
         with client.websocket_connect(f"/api/jobs/{identity}/ws?after=1", headers=ALICE) as socket:
             replayed = [socket.receive_json() for _ in events]
             assert replayed == events
+
+
+def test_activity_uses_owned_sse_and_websocket_replay(tmp_path):
+    import asyncio
+    entered, release = threading.Event(), threading.Event()
+
+    class PausedProvider(ReviewProvider):
+        async def generate_completion(self, request):
+            entered.set()
+            while not release.is_set():
+                await asyncio.sleep(.01)
+            return await super().generate_completion(request)
+
+    with TestClient(app(tmp_path, PausedProvider())) as client:
+        identity, _ = submit(client)
+        assert entered.wait(3)
+        cursor = client.get(f"/api/jobs/{identity}/events?limit=1000", headers=ALICE).json()["next_cursor"]
+        owner = next(job.owner for job in client.app.state.jobs.running() if job.job_id == identity)
+        publisher = ActivityStream(identity, lambda event: client.app.state.jobs.publish_activity(identity, owner=owner, event=event))
+        publisher.begin_agent("agent-run")
+        activity = publisher.start("agent-run", "response", {})
+        publisher.delta(activity, {"text": "part"})
+        publisher.complete(activity, {"text": "complete"})
+        client.app.state.jobs.dispatch_events(client.app.state.events)
+        with client.websocket_connect(f"/api/jobs/{identity}/ws?after={cursor}", headers=ALICE) as socket:
+            messages = [socket.receive_json() for _ in range(3)]
+        assert [item["type"] for item in messages] == ["activity.started", "activity.delta", "activity.completed"]
+        assert [item["activityId"] for item in messages] == [activity] * 3
+        release.set()
+        completed(client, identity)
+        stream = client.get(f"/api/jobs/{identity}/stream?after={cursor}", headers=ALICE)
+        assert "event: activity.completed\n" in stream.text
+        assert f'"activityId":"{activity}"' in stream.text
 
 
 def test_websocket_disconnect_does_not_cancel_durable_job(tmp_path):

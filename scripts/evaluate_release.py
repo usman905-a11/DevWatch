@@ -117,7 +117,14 @@ def summarize_release(rows, planned, *, live):
 
 def trace_metrics(events):
     """Count real tool outcomes and scoped recoveries, not success-by-absence."""
-    tools = [e['payload'] for e in events if e['kind'] == 'tool_result']
+    tools = []
+    for event in events:
+        if event.get('kind') == 'tool_result':
+            tools.append(event['payload'])  # Historical release fixtures.
+        elif event.get('type') in {'activity.completed', 'activity.failed'} and event['data'].get('tool'):
+            data = event['data']
+            tools.append(dict(agent_id=data.get('agentId'), task_id=data.get('taskId'),
+                tool=data.get('tool'), outcome=data.get('outcome'), error_code=data.get('errorCode')))
     recoverable = recovered = 0
     for index, call in enumerate(tools):
         if call.get('error_code') != 'recoverable_tool_error':
@@ -126,7 +133,10 @@ def trace_metrics(events):
         scope = tuple(call.get(k) for k in ('agent_id','task_id','tool'))
         recovered += any(later.get('outcome') == 'succeeded' and
             tuple(later.get(k) for k in ('agent_id','task_id','tool')) == scope for later in tools[index+1:])
-    model_ends = [e['payload'] for e in events if e['kind'] == 'model_call_completed']
+    model_ends = [e['data'] for e in events if e.get('type') in {'activity.completed', 'activity.failed'}
+        and e.get('activityType') == 'response' and e.get('agentRunId') != 'review']
+    if not model_ends:
+        model_ends = [e['payload'] for e in events if e.get('kind') == 'model_call_completed']
     return dict(tool_attempts=len(tools), tool_successes=sum(t.get('outcome') == 'succeeded' for t in tools),
         tool_call_success_rate=sum(t.get('outcome') == 'succeeded' for t in tools)/len(tools) if tools else None,
         recoverable_tool_failures=recoverable, recovered_tool_failures=recovered,

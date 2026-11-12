@@ -76,6 +76,19 @@ export interface PersistedEvent {
     finding_id?: string | null; verdict?: string | null; offset?: number | null; end_offset?: number | null
     graph_scope?: 'review' | 'agent' | null; node?: string | null }
 }
+export interface ActivityEvent {
+  version: 1; eventId: string; sequence: number; timestamp: number
+  runId: string; agentRunId: string; activityId: string; parentActivityId?: string | null
+  type: 'activity.started' | 'activity.delta' | 'activity.completed' | 'activity.failed' | 'activity.cancelled'
+  activityType: 'planning' | 'file_search' | 'code_search' | 'file_read' | 'web_search' | 'command'
+    | 'tool_call' | 'test_execution' | 'code_analysis' | 'finding' | 'response' | 'result'
+  data: { text?: string; stdout?: string; stderr?: string; path?: string; query?: string; tool?: string
+    agentId?: string; taskId?: string; phase?: string; verdict?: string; outcome?: string
+    commandId?: string; evidenceRef?: string; findingId?: string; errorCode?: string; message?: string
+    count?: number; progress?: number; exitCode?: number; durationSeconds?: number; totalTokens?: number
+    truncated?: boolean }
+}
+export type StreamEvent = PersistedEvent | ActivityEvent
 export interface SourceExcerpt {
   snapshot_id: string; snapshot_hash: string; source_scope: string[]; tool: 'read_source'
   file_path: string; start_line: number; end_line: number; content_hash: string; data: string
