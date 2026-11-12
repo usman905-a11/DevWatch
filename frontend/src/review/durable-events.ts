@@ -1,6 +1,196 @@
 /** Authenticated, bounded SSE replay. Stopping observation never cancels execution. */
 import { ConnectionError, DurableReviewClient } from './durable-client'
-import { ActivityEvent, identity, JobView, PersistedEvent, ProtocolError, ReportDraft, StreamEvent, validateWire } from './wire'
+import {
+  ActivityEvent,
+  identity,
+  JobStatus,
+  JobView,
+  PersistedEvent,
+  ProtocolError,
+  ReportDraft,
+  StepStatus,
+  StepType,
+  StepUpdatePayload,
+  StreamEvent,
+  validateWire,
+} from './wire'
+
+const LIVE_STEP_OUTPUT_CAP_BYTES = 65536
+
+export interface TrajectoryStep {
+  stepIdx: number
+  parentStepIdx: number | null
+  agentName: string
+  stepType: StepType
+  status: StepStatus
+  lastDeltaSeq: number
+  title: string
+  subtitle?: string
+  command?: string
+  stdout: string
+  stderr: string
+  truncated: boolean
+  exitCode?: number
+  files: string[]
+  matchCount?: number
+  query?: string
+  durationMs?: number
+  evidenceRef?: string
+  errorDetails?: string | null
+}
+
+function appendBoundedStream(
+  currentStdout: string,
+  currentStderr: string,
+  stdoutAppend?: string | null,
+  stderrAppend?: string | null,
+  alreadyTruncated = false,
+): { stdout: string; stderr: string; truncated: boolean } {
+  let stdout = currentStdout
+  let stderr = currentStderr
+  let truncated = alreadyTruncated
+  const encoder = new TextEncoder()
+  let usedBytes = encoder.encode(stdout).byteLength + encoder.encode(stderr).byteLength
+
+  const appendChunk = (target: 'stdout' | 'stderr', chunk?: string | null) => {
+    if (!chunk) return
+    if (usedBytes >= LIVE_STEP_OUTPUT_CAP_BYTES) {
+      truncated = true
+      return
+    }
+    const chunkBytes = encoder.encode(chunk).byteLength
+    if (usedBytes + chunkBytes <= LIVE_STEP_OUTPUT_CAP_BYTES) {
+      if (target === 'stdout') stdout += chunk
+      else stderr += chunk
+      usedBytes += chunkBytes
+    } else {
+      const remaining = Math.max(0, LIVE_STEP_OUTPUT_CAP_BYTES - usedBytes)
+      const slice = chunk.slice(0, remaining)
+      if (target === 'stdout') stdout += slice
+      else stderr += slice
+      usedBytes = LIVE_STEP_OUTPUT_CAP_BYTES
+      truncated = true
+    }
+  }
+
+  appendChunk('stdout', stdoutAppend)
+  appendChunk('stderr', stderrAppend)
+  return { stdout, stderr, truncated }
+}
+
+export function applyStepUpdate(
+  stepsByIdx: Map<number, TrajectoryStep>,
+  payload: StepUpdatePayload,
+  fallbackAgentName?: string | null,
+): Map<number, TrajectoryStep> {
+  const next = new Map(stepsByIdx)
+  const existing = next.get(payload.step_idx)
+  if (existing && payload.delta_seq <= existing.lastDeltaSeq) {
+    return next
+  }
+  const info = payload.render_info ?? {}
+  const appended = appendBoundedStream(
+    existing?.stdout ?? '',
+    existing?.stderr ?? '',
+    info.stdout_append,
+    info.stderr_append,
+    Boolean(existing?.truncated || info.truncated || info.output_truncated),
+  )
+  const step: TrajectoryStep = {
+    stepIdx: payload.step_idx,
+    parentStepIdx: payload.parent_step_idx !== undefined ? payload.parent_step_idx : (existing?.parentStepIdx ?? null),
+    agentName: payload.agent_name || info.agent_name || existing?.agentName || fallbackAgentName || 'review',
+    stepType: payload.step_type ?? existing?.stepType ?? 'tool',
+    status: payload.status ?? existing?.status ?? 'RUNNING',
+    lastDeltaSeq: payload.delta_seq,
+    title: info.title ?? existing?.title ?? payload.step_type,
+    subtitle: info.subtitle ?? existing?.subtitle,
+    command: info.command ?? existing?.command,
+    stdout: appended.stdout,
+    stderr: appended.stderr,
+    truncated: appended.truncated,
+    exitCode: info.exit_code !== undefined && info.exit_code !== null ? info.exit_code : existing?.exitCode,
+    files: info.files ?? existing?.files ?? [],
+    matchCount: info.match_count !== undefined && info.match_count !== null ? info.match_count : existing?.matchCount,
+    query: info.query ?? existing?.query,
+    durationMs: info.duration_ms !== undefined && info.duration_ms !== null ? info.duration_ms : existing?.durationMs,
+    evidenceRef: info.evidence_ref ?? existing?.evidenceRef,
+    errorDetails: payload.error_details !== undefined ? payload.error_details : existing?.errorDetails,
+  }
+  next.set(payload.step_idx, step)
+  return next
+}
+
+export function pruneTrajectorySteps(
+  stepsByIdx: Map<number, TrajectoryStep>,
+  maxCompleted = 200,
+): Map<number, TrajectoryStep> {
+  const running: TrajectoryStep[] = []
+  const completed: TrajectoryStep[] = []
+  for (const step of [...stepsByIdx.values()].sort((a, b) => a.stepIdx - b.stepIdx)) {
+    if (step.status === 'RUNNING') running.push(step)
+    else completed.push(step)
+  }
+  const retainedCompleted = completed.slice(-maxCompleted)
+  const next = new Map<number, TrajectoryStep>()
+  for (const step of [...running, ...retainedCompleted].sort((a, b) => a.stepIdx - b.stepIdx)) {
+    next.set(step.stepIdx, step)
+  }
+  return next
+}
+
+export function reconcileTerminalJobSteps(
+  stepsByIdx: Map<number, TrajectoryStep>,
+  jobStatus?: JobStatus | null,
+): Map<number, TrajectoryStep> {
+  if (!jobStatus || !['completed', 'failed', 'cancelled', 'interrupted'].includes(jobStatus)) {
+    return stepsByIdx
+  }
+  let changed = false
+  const next = new Map(stepsByIdx)
+  for (const [idx, step] of next.entries()) {
+    if (step.status === 'RUNNING') {
+      changed = true
+      next.set(idx, {
+        ...step,
+        status: 'ERROR',
+        errorDetails: step.errorDetails || 'Interrupted by job termination',
+      })
+    }
+  }
+  return changed ? next : stepsByIdx
+}
+
+export function reduceTrajectorySteps(
+  events: StreamEvent[],
+  jobStatus?: JobStatus | null,
+  maxCompleted = 200,
+): TrajectoryStep[] {
+  let map = new Map<number, TrajectoryStep>()
+  for (const event of events) {
+    if (!('kind' in event) || event.kind !== 'step_update') continue
+    const p = event.payload
+    if (p.step_idx == null || !p.step_type) continue
+    const stepStatus = (p.step_status ?? (p.status as StepStatus | null) ?? 'RUNNING') as StepStatus
+    map = applyStepUpdate(
+      map,
+      {
+        step_idx: p.step_idx,
+        parent_step_idx: p.parent_step_idx ?? null,
+        agent_name: p.agent_name ?? p.agent_id ?? undefined,
+        step_type: p.step_type,
+        status: stepStatus,
+        delta_seq: p.delta_seq ?? 0,
+        render_info: p.render_info ?? {},
+        error_details: p.error_details ?? null,
+      },
+      p.agent_id,
+    )
+  }
+  map = pruneTrajectorySteps(map, maxCompleted)
+  map = reconcileTerminalJobSteps(map, jobStatus)
+  return [...map.values()].sort((a, b) => a.stepIdx - b.stepIdx)
+}
 
 export interface SseFrame { id: string; kind: string; data: string }
 export class SseParser {

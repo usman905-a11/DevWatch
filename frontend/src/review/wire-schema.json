@@ -1017,6 +1017,19 @@
           ],
           "default": null
         },
+        "agent_name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Name"
+        },
         "attempt": {
           "anyOf": [
             {
@@ -1042,6 +1055,19 @@
           ],
           "default": null,
           "title": "Count"
+        },
+        "delta_seq": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delta Seq"
         },
         "duration_seconds": {
           "anyOf": [
@@ -1110,6 +1136,19 @@
           ],
           "default": null,
           "title": "Error Code"
+        },
+        "error_details": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Details"
         },
         "evidence_ref": {
           "anyOf": [
@@ -1257,6 +1296,19 @@
           "default": null,
           "title": "Outcome"
         },
+        "parent_step_idx": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Step Idx"
+        },
         "phase": {
           "anyOf": [
             {
@@ -1278,6 +1330,17 @@
           ],
           "default": null,
           "title": "Phase"
+        },
+        "render_info": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StepRenderInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "run_id": {
           "anyOf": [
@@ -1306,11 +1369,75 @@
               "type": "string"
             },
             {
+              "enum": [
+                "RUNNING",
+                "DONE",
+                "ERROR",
+                "CANCELING"
+              ],
+              "type": "string"
+            },
+            {
               "type": "null"
             }
           ],
           "default": null,
           "title": "Status"
+        },
+        "step_idx": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Idx"
+        },
+        "step_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "RUNNING",
+                "DONE",
+                "ERROR",
+                "CANCELING"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Status"
+        },
+        "step_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "agent_run",
+                "subagent",
+                "planner",
+                "run_command",
+                "code_search",
+                "repo_map",
+                "search",
+                "read_file",
+                "tool",
+                "system"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Type"
         },
         "stop_reason": {
           "anyOf": [
@@ -1648,7 +1775,8 @@
             "report_render_started",
             "report_render_completed",
             "graph_node_started",
-            "graph_node_completed"
+            "graph_node_completed",
+            "step_update"
           ],
           "title": "Kind",
           "type": "string"
@@ -1989,6 +2117,228 @@
         "task_id"
       ],
       "title": "SpecialistProvenance",
+      "type": "object"
+    },
+    "StepRenderInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Name"
+        },
+        "args_preview": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Args Preview"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "evidence_ref": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "pattern": "^[\\w.-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidence Ref"
+        },
+        "exit_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exit Code"
+        },
+        "files": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Files"
+        },
+        "match_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Match Count"
+        },
+        "output_truncated": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Truncated"
+        },
+        "query": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Query"
+        },
+        "stderr_append": {
+          "anyOf": [
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stderr Append"
+        },
+        "stdout_append": {
+          "anyOf": [
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stdout Append"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtitle"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "truncated": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Truncated"
+        }
+      },
+      "required": [],
+      "title": "StepRenderInfo",
       "type": "object"
     },
     "TokenUsage": {

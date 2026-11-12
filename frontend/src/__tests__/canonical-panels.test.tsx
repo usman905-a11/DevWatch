@@ -58,4 +58,106 @@ describe('canonical review presentation', () => {
     expect(html).not.toContain('<script>')
     expect(html).toContain('Read-only snapshot')
   })
+  it('renders nested trajectory steps with terminal drawer, search match pill, planner row, and error callout', () => {
+    const base = fixture.events[0]
+    const stepEvents: PersistedEvent[] = [
+      {
+        ...base,
+        event_id: 'st-0',
+        sequence: 1,
+        kind: 'step_update',
+        payload: {
+          ...base.payload,
+          status: 'RUNNING',
+          step_status: 'RUNNING',
+          agent_id: 'bug_reliability',
+          agent_name: 'bug_reliability',
+          step_idx: 0,
+          parent_step_idx: null,
+          step_type: 'agent_run',
+          delta_seq: 0,
+          render_info: { title: 'Running bug_reliability (bug-1)', subtitle: 'bug-1' },
+        },
+      },
+      {
+        ...base,
+        event_id: 'st-1-0',
+        sequence: 2,
+        kind: 'step_update',
+        payload: {
+          ...base.payload,
+          status: 'DONE',
+          step_status: 'DONE',
+          agent_id: 'bug_reliability',
+          agent_name: 'bug_reliability',
+          step_idx: 1,
+          parent_step_idx: 0,
+          step_type: 'planner',
+          delta_seq: 1,
+          render_info: { title: 'Selected tool: code_search', duration_ms: 15 },
+        },
+      },
+      {
+        ...base,
+        event_id: 'st-2-0',
+        sequence: 3,
+        kind: 'step_update',
+        payload: {
+          ...base.payload,
+          status: 'DONE',
+          step_status: 'DONE',
+          agent_id: 'bug_reliability',
+          agent_name: 'bug_reliability',
+          step_idx: 2,
+          parent_step_idx: 0,
+          step_type: 'code_search',
+          delta_seq: 1,
+          render_info: {
+            title: "Searching for 'compute'",
+            query: 'compute',
+            match_count: 3,
+            files: ['service.py', 'utils.py'],
+            duration_ms: 8,
+            evidence_ref: 'evidence-' + 'a'.repeat(64),
+          },
+        },
+      },
+      {
+        ...base,
+        event_id: 'st-3-0',
+        sequence: 4,
+        kind: 'step_update',
+        payload: {
+          ...base.payload,
+          status: 'ERROR',
+          step_status: 'ERROR',
+          agent_id: 'bug_reliability',
+          agent_name: 'bug_reliability',
+          step_idx: 3,
+          parent_step_idx: 0,
+          step_type: 'run_command',
+          delta_seq: 1,
+          render_info: {
+            title: 'Running run_tests (pytest-unit)',
+            command: 'pytest -q',
+            stdout_append: '1 failed\n',
+            stderr_append: 'AssertionError\n',
+            exit_code: 1,
+            truncated: true,
+            duration_ms: 120,
+          },
+          error_details: 'Command exited with code 1',
+        },
+      },
+    ]
+    const html = renderToStaticMarkup(<JobActivity events={stepEvents} job={null} connection="connected" />)
+    expect(html).toContain('Trajectory steps')
+    expect(html).toContain('Selected tool: code_search')
+    expect(html).toContain('Found 3 matches across 2 files')
+    expect(html).toContain('$ pytest -q')
+    expect(html).toContain('1 failed')
+    expect(html).toContain('AssertionError')
+    expect(html).toContain('Command exited with code 1')
+    expect(html).toContain('Output truncated at 64KB')
+  })
 })

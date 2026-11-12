@@ -136,7 +136,7 @@ export function DurableApp() {
       <SnapshotSource source={state.source?.file_path === path ? state.source : null} error={state.sourceError} path={path}
         onRead={(start, end) => { if (state.job) void session.openSource(path, start, end) }} />
       <div className="review-column">
-        <JobActivity job={state.job} events={state.events} connection={state.connection} onEvidence={reference => { void openEvidence(reference) }} />
+        <JobActivity job={state.job} events={state.events} steps={state.steps} connection={state.connection} onEvidence={reference => { void openEvidence(reference) }} />
         {evidence != null && <section className="tool-evidence" aria-label="Tool evidence"><h2>Tool evidence</h2>
           <button type="button" className="header-button" onClick={() => { evidenceRequest.current?.abort(); setEvidence(null) }}>Close evidence</button>
           <pre>{evidence}</pre></section>}

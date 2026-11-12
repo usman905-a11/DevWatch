@@ -23,7 +23,7 @@ def export() -> str:
             definition["required"] = (sorted({"status", "agent_id", "task_id", "tool", "evidence_ref",
                 "error_code", "duration_seconds", "total_tokens"}) if name == "EventPayload"
                 else sorted(definition["properties"]))
-            if name == "ActivityData":
+            if name in {"ActivityData", "StepRenderInfo"}:
                 definition["required"] = []
             if name == "ActivityEvent":
                 definition["required"].remove("parentActivityId")

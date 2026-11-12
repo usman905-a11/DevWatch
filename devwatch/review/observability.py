@@ -77,7 +77,7 @@ class MetadataExporter:
             metadata = {key: value for key, value in event.payload.model_dump(mode="json").items()
                 if value is not None and key in {"status", "agent_id", "tool", "error_code", "duration_seconds", "total_tokens",
                     "phase", "iteration", "attempt", "run_id", "operation_id", "outcome", "stop_reason", "finish_reason",
-                    "count", "verdict", "node", "graph_scope"}}
+                    "count", "verdict", "node", "graph_scope", "step_idx", "parent_step_idx", "step_type", "step_status", "delta_seq"}}
             # run_id/operation_id are generated random UUIDs, not job/task/source
             # fingerprints. Full review/evidence correlation remains local only.
             metadata.update(event=event.kind, sequence=event.sequence, entry_point="durable_event_export")
@@ -92,8 +92,14 @@ class MetadataExporter:
                     hierarchy["parent_run_id"] = str(UUID(lineage[-1].event_id))
             if event.payload.outcome in {"failed", "cancelled", "unknown"}:
                 hierarchy["error"] = event.payload.error_code or event.payload.outcome
+            elif event.kind == "step_update" and (event.payload.status or event.payload.step_status) in {"ERROR", "CANCELING"}:
+                hierarchy["error"] = event.payload.error_code or (event.payload.status or event.payload.step_status)
+            is_tool_run = event.kind.startswith("tool_") or (
+                event.kind == "step_update"
+                and event.payload.step_type in {"run_command", "code_search", "repo_map", "read_file", "tool"}
+            )
             task = asyncio.create_task(asyncio.to_thread(self.client.create_run,
-                id=str(UUID(event.event_id)), name=event.kind, run_type="tool" if event.kind.startswith("tool_") else "chain",
+                id=str(UUID(event.event_id)), name=event.kind, run_type="tool" if is_tool_run else "chain",
                 inputs={}, outputs={}, start_time=stamp, end_time=stamp,
                 project_name=self.project, extra={"metadata": metadata}, **hierarchy))
             try:

@@ -17,6 +17,7 @@ from uuid import uuid4
 
 from devwatch.config import Config
 from devwatch.review.contracts import CandidateRejection, Coverage, FindingCandidate, ReviewTask, SpecialistResult
+from devwatch.review.jobs import StepRenderInfo
 from devwatch.review.stores import ArtifactStore, CacheKey, RepoCache, validate_source_path
 from devwatch.review.subgraphs import PermissionedTools, ToolObservation
 from devwatch.review.tool_errors import ToolFailure
@@ -148,7 +149,8 @@ class RepositoryContext:
             self._scoped_path(path, work)
         observations = [self._read_source({**parsed, 'file_path':path}, work) for path in paths]
         return observations[0].model_copy(update={
-            'additional_evidence_refs':[item.evidence_ref for item in observations[1:]]})
+            'additional_evidence_refs':[item.evidence_ref for item in observations[1:]],
+            'render_info': StepRenderInfo(files=paths[:25], evidence_ref=observations[0].evidence_ref)})
 
     def evidence_page(self, identity, work, *, offset=0, max_chars=1500):
         record = self.scoped_evidence(identity, work)
@@ -229,7 +231,8 @@ class RepositoryContext:
             identity = arguments["evidence_ref"]
             offset = arguments.get("offset", 0)
             self.evidence_page(identity, work, offset=offset, max_chars=arguments.get("max_chars", 1500))
-            return ToolObservation(evidence_ref=identity, offset=offset, max_chars=arguments.get("max_chars", 1500))
+            return ToolObservation(evidence_ref=identity, offset=offset, max_chars=arguments.get("max_chars", 1500),
+                                   render_info=StepRenderInfo(evidence_ref=identity))
         async def facts(name, arguments, work):
             allowed = {"file_path", "symbol"} if name == "symbol_lookup" else {"file_path"}
             if set(arguments) - allowed or "file_path" not in arguments:
@@ -254,9 +257,10 @@ class RepositoryContext:
             elif name == "complexity":
                 data = {"cyclomatic_lower_bound": 1 + data["branch_count"], "symbol_count": len(data["symbols"]),
                         "limitations": ["Syntactic complexity estimate, not a maintainability verdict"]}
-            return self._record({"tool": name, "file_path": path, "source_scope": scope, "inspected": scope, "start_line": 1,
+            obs = self._record({"tool": name, "file_path": path, "source_scope": scope, "inspected": scope, "start_line": 1,
                                  "end_line": self.manifest.entries[path].line_count,
                                  "content_hash": self.manifest.entries[path].content_hash, "data": data}, work=work)
+            return obs.model_copy(update={"render_info": StepRenderInfo(files=scope[:25], evidence_ref=obs.evidence_ref)})
         async def config(arguments, work):
             if set(arguments) != {"file_path"}:
                 raise ValueError("config_read requires exactly file_path")
@@ -276,7 +280,8 @@ class RepositoryContext:
                     return {key: "[redacted]" if re.search(r"secret|password|token|api.?key|credential|private.?key", key, re.I)
                             else redact(item) for key, item in value.items()}
                 return [redact(item) for item in value] if isinstance(value, list) else value
-            return self._record({"tool": "config_read", "file_path": path, "data": redact(data)}, work=work)
+            obs = self._record({"tool": "config_read", "file_path": path, "data": redact(data)}, work=work)
+            return obs.model_copy(update={"render_info": StepRenderInfo(files=[path], evidence_ref=obs.evidence_ref)})
         async def git(name, arguments, work):
             if set(arguments) != {"file_path"}:
                 raise ValueError("Git tools require exactly file_path")
@@ -285,13 +290,17 @@ class RepositoryContext:
             value = metadata.diffs.get(path) if name == "git_diff" else metadata.history.get(path)
             if value is None:
                 raise LookupError("No immutable Git metadata captured for this source")
-            return self._record({"tool": name, "file_path": path, "data": value.model_dump(mode="json") if hasattr(value, "model_dump") else value,
+            obs = self._record({"tool": name, "file_path": path, "data": value.model_dump(mode="json") if hasattr(value, "model_dump") else value,
                 "limitations": ["Git metadata is client-reported context, not causal verification", *metadata.limitations]}, work=work)
+            return obs.model_copy(update={"render_info": StepRenderInfo(files=[path], evidence_ref=obs.evidence_ref)})
         async def repo_map(arguments, work):
             if arguments:
                 raise ValueError("repository map takes no arguments")
-            return self._record({"tool": "repo_map", "source_scope": list(work.files), "data": {path: entry.model_dump(mode="json")
-                                for path, entry in self.manifest.entries.items() if path in work.files}}, work=work)
+            entries = {path: entry.model_dump(mode="json") for path, entry in self.manifest.entries.items() if path in work.files}
+            obs = self._record({"tool": "repo_map", "source_scope": list(work.files), "data": entries}, work=work)
+            top_files = list(entries.keys())[:25]
+            return obs.model_copy(update={"render_info": StepRenderInfo(
+                files=top_files, match_count=len(entries), evidence_ref=obs.evidence_ref)})
         async def search(arguments, work):
             if set(arguments) - {"query", "file_path"} or not isinstance(arguments.get("query"), str) or not 1 <= len(arguments["query"]) <= 256:
                 raise ValueError("bounded literal query required")
@@ -307,8 +316,11 @@ class RepositoryContext:
                             break
                 if len(matches) >= 20:
                     break
-            return self._record({"tool": "code_search", "data": matches, "source_scope": scanned, "inspected": scanned,
+            obs = self._record({"tool": "code_search", "data": matches, "source_scope": scanned, "inspected": scanned,
                                  "limitations": ["Search result is bounded to 20 matches"]}, work=work)
+            matched_files = list(dict.fromkeys(item["file_path"] for item in matches))[:25]
+            return obs.model_copy(update={"render_info": StepRenderInfo(
+                query=arguments["query"], match_count=len(matches), files=matched_files, evidence_ref=obs.evidence_ref)})
         tools.register("read_source", read_source)
         tools.register("read_evidence", read_evidence)
         tools.register("repo_map", repo_map)
@@ -320,10 +332,10 @@ class RepositoryContext:
             tools.register(name, partial(facts, name))
         if command_runtime is not None:
             from devwatch.review.tool_runtime import COMMAND_TOOLS
-            async def command(name, arguments, work, *, progress=None):
+            async def command(name, arguments, work, *, progress=None, step_handle=None):
                 from devwatch.review.contracts import AgentAction
                 return await command_runtime.execute(work, AgentAction(kind="call_tool", tool=name, arguments=arguments),
-                                                     progress=progress)
+                                                     progress=progress, step_handle=step_handle)
             def command_available(name, work):
                 return any(definition.tool == name and set(definition.files).issubset(work.files)
                            for definition in command_runtime.commands.values())

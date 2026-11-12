@@ -1,3 +1,4 @@
+import { reduceTrajectorySteps, TrajectoryStep } from './durable-events'
 import { ActivityEvent, AgentId, JobView, PersistedEvent, StreamEvent } from './wire'
 
 export const agentNames: Record<AgentId, string> = {
@@ -30,16 +31,129 @@ function visibleActivities(events: StreamEvent[]): ActivityRow[] {
   return [...rows.values()]
 }
 
-export function JobActivity({ events, job, connection, onEvidence }: { events: StreamEvent[]; job: JobView | null; connection: string;
-  onEvidence?: (reference: string) => void }) {
+function renderTrajectoryStep(
+  step: TrajectoryStep,
+  childrenByParent: Map<number, TrajectoryStep[]>,
+  onEvidence?: (reference: string) => void,
+) {
+  const agentLabel = step.agentName in agentNames ? agentNames[step.agentName as AgentId] : step.agentName
+  const children = childrenByParent.get(step.stepIdx) ?? []
+  const isSearchOrFile = ['code_search', 'search', 'repo_map', 'read_file'].includes(step.stepType)
+  const isCommand = step.stepType === 'run_command'
+  const drawerOpen = step.status === 'RUNNING' || step.status === 'ERROR' || (step.exitCode != null && step.exitCode !== 0)
+
+  return (
+    <li key={step.stepIdx} className={`trajectory-step status-${step.status.toLowerCase()}`}>
+      <div className="trajectory-step-header">
+        <span className="step-status-badge">{step.status}</span>
+        {' · '}
+        <strong>{step.title}</strong>
+        {step.subtitle && <span> ({step.subtitle})</span>}
+        {' · '}
+        <span>{agentLabel}</span>
+        {step.durationMs != null && <span className="step-duration-badge"> · {step.durationMs}ms</span>}
+      </div>
+      {isSearchOrFile && (
+        <div className="step-search-meta">
+          {step.query && <code className="step-query-pill">{step.query}</code>}
+          {step.matchCount != null && (
+            <span className="step-match-badge">
+              {' '}Found {step.matchCount} matches across {step.files.length} files
+            </span>
+          )}
+          {step.files.length > 0 && (
+            <details>
+              <summary>Files ({step.files.length})</summary>
+              <ul>
+                {step.files.map(file => (
+                  <li key={file}><code>{file}</code></li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+      {isCommand && (
+        <details className="step-terminal-drawer" open={drawerOpen}>
+          <summary>
+            <code>$ {step.command ?? step.title}</code>
+            {step.exitCode != null && <span> · exit {step.exitCode}</span>}
+          </summary>
+          {step.stdout && <pre className="activity-output" aria-label="step-stdout">{step.stdout}</pre>}
+          {step.stderr && <pre className="activity-output" aria-label="step-stderr">{step.stderr}</pre>}
+          {step.truncated && (
+            <p className="step-truncated-notice">
+              [Output truncated at 64KB — view full artifact]
+            </p>
+          )}
+        </details>
+      )}
+      {(step.status === 'ERROR' || step.errorDetails) && step.errorDetails && (
+        <div className="step-error-box" role="alert">
+          {step.errorDetails}
+        </div>
+      )}
+      {step.evidenceRef && (
+        <div className="step-evidence-actions">
+          <code>{step.evidenceRef}</code>
+          {onEvidence && (
+            <button type="button" className="header-button" onClick={() => onEvidence(step.evidenceRef!)}>
+              View tool evidence
+            </button>
+          )}
+        </div>
+      )}
+      {children.length > 0 && (
+        <ol className="trajectory-substeps">
+          {children.map(child => renderTrajectoryStep(child, childrenByParent, onEvidence))}
+        </ol>
+      )}
+    </li>
+  )
+}
+
+export function JobActivity({
+  events,
+  steps,
+  job,
+  connection,
+  onEvidence,
+}: {
+  events: StreamEvent[]
+  steps?: TrajectoryStep[]
+  job: JobView | null
+  connection: string
+  onEvidence?: (reference: string) => void
+}) {
   const latest = events[events.length - 1]
   const legacy = events.filter((event): event is PersistedEvent => 'kind' in event)
   const activities = visibleActivities(events)
+  const trajectorySteps = steps ?? reduceTrajectorySteps(events, job?.status)
+  const stepIdxSet = new Set(trajectorySteps.map(s => s.stepIdx))
+  const childrenByParent = new Map<number, TrajectoryStep[]>()
+  const rootSteps: TrajectoryStep[] = []
+  for (const step of trajectorySteps) {
+    if (step.parentStepIdx != null && stepIdxSet.has(step.parentStepIdx)) {
+      const list = childrenByParent.get(step.parentStepIdx) ?? []
+      list.push(step)
+      childrenByParent.set(step.parentStepIdx, list)
+    } else {
+      rootSteps.push(step)
+    }
+  }
   const tokens = job ? Object.values(job.ledger.agent_usage).reduce((total, usage) => total + (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0), 0) : 0
   return <section className="review-progress" aria-label="Agent activity">
     <p role="status" aria-live="polite">Job: {job?.status ?? 'not submitted'} · Connection: {connection}</p>
     {latest && <p>{'type' in latest ? `${latest.activityType.replace(/_/g, ' ')}: ${latest.type}`
       : `${latest.payload.agent_id ? agentNames[latest.payload.agent_id] : 'Review service'}: ${latest.kind}`}</p>}
+    {trajectorySteps.length > 0 && (
+      <details open>
+        <summary>Trajectory steps ({trajectorySteps.length})</summary>
+        <ol className="trajectory-step-list">
+          {rootSteps.map(step => renderTrajectoryStep(step, childrenByParent, onEvidence))}
+        </ol>
+      </details>
+    )}
     <details open={activities.length > 0}><summary>Live activities ({activities.length})</summary><ol>{activities.map(row => {
       const event = row.final ?? row.last
       const data = event.data

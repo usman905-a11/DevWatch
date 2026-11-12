@@ -5,13 +5,16 @@ poll or explicitly cancel; cancelling a polling coroutine has no job side effect
 """
 
 import asyncio
-from contextlib import closing, contextmanager
+from contextlib import asynccontextmanager, closing, contextmanager
 from hashlib import sha256
+import inspect
 import json
 import logging
 import math
 from pathlib import Path
+import re
 import sqlite3
+from threading import Lock
 import time
 from typing import Any, Awaitable, Callable, Literal, get_args
 from uuid import uuid4
@@ -42,6 +45,20 @@ MAX_EVENT_CURSOR = 2**63 - 1
 
 
 JobStatus = Literal["queued", "running", "interrupted", "completed", "failed", "cancelled"]
+StepType = Literal[
+    "agent_run",
+    "subagent",
+    "planner",
+    "run_command",
+    "code_search",
+    "repo_map",
+    "search",
+    "read_file",
+    "tool",
+    "system",
+]
+StepStatus = Literal["RUNNING", "DONE", "ERROR", "CANCELING"]
+
 EventKind = Literal[
     "job_queued", "job_running", "job_interrupted", "job_completed", "job_failed", "job_cancelled",
     "agent_started", "agent_status_changed", "reasoning_step", "tool_called", "tool_result",
@@ -52,6 +69,7 @@ EventKind = Literal[
     "candidate_rejected", "verification_completed", "finalization_started", "finalization_completed",
     "report_render_started", "report_render_completed",
     "graph_node_started", "graph_node_completed",
+    "step_update",
 ]
 
 def safe_stop_reason(value):
@@ -59,10 +77,307 @@ def safe_stop_reason(value):
     return value if value in get_args(StopReason) else "other"
 
 
+class _DictAccessModel(ContractModel):
+    def __getitem__(self, key: str) -> Any:
+        if key in type(self).model_fields:
+            return getattr(self, key)
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key in type(self).model_fields:
+            value = getattr(self, key)
+            return default if value is None else value
+        return default
+
+    def __contains__(self, key: object) -> bool:
+        return isinstance(key, str) and key in type(self).model_fields and getattr(self, key) is not None
+
+    def keys(self):
+        return self.model_dump(exclude_none=True).keys()
+
+    def items(self):
+        return self.model_dump(exclude_none=True).items()
+
+    def values(self):
+        return self.model_dump(exclude_none=True).values()
+
+
+class StepRenderInfo(_DictAccessModel):
+    title: str | None = Field(default=None, max_length=512)
+    subtitle: str | None = Field(default=None, max_length=512)
+    agent_name: str | None = Field(default=None, max_length=128)
+    command: str | None = Field(default=None, max_length=1024)
+    args_preview: dict[str, str | int | float | bool | None] | None = None
+    stdout_append: str | None = Field(default=None, max_length=65536)
+    stderr_append: str | None = Field(default=None, max_length=65536)
+    exit_code: int | None = None
+    truncated: bool | None = None
+    output_truncated: bool | None = None
+    query: str | None = Field(default=None, max_length=512)
+    files: list[str] | None = Field(default=None, max_length=100)
+    match_count: int | None = Field(default=None, ge=0)
+    evidence_ref: str | None = Field(default=None, max_length=128, pattern=r"^[\w.-]+$")
+    duration_ms: int | None = Field(default=None, ge=0)
+
+
+class StepUpdatePayload(_DictAccessModel):
+    step_idx: int = Field(ge=0)
+    parent_step_idx: int | None = Field(default=None, ge=0)
+    agent_name: str | None = Field(default=None, max_length=128)
+    step_type: StepType
+    status: StepStatus
+    delta_seq: int = Field(ge=0)
+    render_info: StepRenderInfo = Field(default_factory=StepRenderInfo)
+    error_details: str | None = Field(default=None, max_length=1024)
+
+
+_SECRET_ERROR_RE = re.compile(
+    r"(?i)(private[^\r\n]*|api[._-]?key[^\s,;]*|token[^\s,;]*|secret[^\s,;]*|password[^\s,;]*|"
+    r"credential[^\s,;]*|authorization[^\s,;]*|bearer\s+\S+|[A-Za-z0-9_=-]{24,})"
+)
+
+
+def scrub_step_error(exc: BaseException | str) -> str:
+    if isinstance(exc, BaseException):
+        type_name = type(exc).__name__
+        raw_msg = str(exc).strip()
+        if not raw_msg:
+            return type_name
+        scrubbed = _SECRET_ERROR_RE.sub("[redacted]", raw_msg)
+        return f"{type_name}: {scrubbed}"[:512]
+    scrubbed = _SECRET_ERROR_RE.sub("[redacted]", str(exc).strip())
+    return (scrubbed or "Execution failed")[:512]
+
+
+class StepHandle:
+    def __init__(
+        self,
+        tracker: "TrajectoryStepTracker",
+        *,
+        step_idx: int,
+        parent_step_idx: int | None,
+        step_type: StepType,
+        agent_name: str | None,
+        initial_info: dict[str, Any],
+        extra_metadata: dict[str, Any],
+    ):
+        self._tracker = tracker
+        self.step_idx = step_idx
+        self.parent_step_idx = parent_step_idx
+        self.step_type = step_type
+        self.agent_name = agent_name
+        self.delta_seq = 0
+        self._completion_info: dict[str, Any] = {"title": initial_info.get("title")}
+        self._terminal_status: StepStatus | None = None
+        self._error_details: str | None = None
+        self._extra_metadata = extra_metadata
+
+    async def emit_delta(self, render_info: dict[str, Any] | StepRenderInfo | None = None, **kwargs: Any) -> None:
+        await self.update(render_info, status="RUNNING", **kwargs)
+
+    async def update(
+        self,
+        render_info: dict[str, Any] | StepRenderInfo | None = None,
+        *,
+        status: StepStatus = "RUNNING",
+        error_details: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self.delta_seq += 1
+        merged = dict(render_info.model_dump(exclude_none=True) if isinstance(render_info, StepRenderInfo) else (render_info or {}))
+        merged.update(kwargs)
+        await self._tracker._emit_step(
+            step_idx=self.step_idx,
+            parent_step_idx=self.parent_step_idx,
+            step_type=self.step_type,
+            agent_name=self.agent_name,
+            status=status,
+            delta_seq=self.delta_seq,
+            render_info=merged,
+            error_details=error_details,
+            extra_metadata=self._extra_metadata,
+        )
+
+    def set_completion_info(self, render_info: dict[str, Any] | StepRenderInfo | None = None, **kwargs: Any) -> None:
+        merged = dict(render_info.model_dump(exclude_none=True) if isinstance(render_info, StepRenderInfo) else (render_info or {}))
+        merged.update(kwargs)
+        self._completion_info.update({k: v for k, v in merged.items() if v is not None})
+
+    def mark_error(self, error_details: str, render_info: dict[str, Any] | StepRenderInfo | None = None, **kwargs: Any) -> None:
+        self._terminal_status = "ERROR"
+        self._error_details = scrub_step_error(error_details)
+        if render_info or kwargs:
+            self.set_completion_info(render_info, **kwargs)
+
+
+class TrajectoryStepTracker:
+    def __init__(self, emit: Callable[..., Any] | None = None):
+        self.emit = emit
+        self._lock = Lock()
+        self._next_idx = 0
+
+    def allocate_step_idx(self) -> int:
+        with self._lock:
+            idx = self._next_idx
+            self._next_idx += 1
+            return idx
+
+    async def _emit_step(
+        self,
+        *,
+        step_idx: int,
+        parent_step_idx: int | None,
+        step_type: StepType,
+        agent_name: str | None,
+        status: StepStatus,
+        delta_seq: int,
+        render_info: dict[str, Any],
+        error_details: str | None = None,
+        extra_metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if self.emit is None:
+            return
+        clean_info = StepRenderInfo.model_validate({k: v for k, v in render_info.items() if v is not None})
+        payload: dict[str, Any] = {
+            **(extra_metadata or {}),
+            "step_idx": step_idx,
+            "parent_step_idx": parent_step_idx,
+            "agent_name": agent_name,
+            "step_type": step_type,
+            "status": status,
+            "step_status": status,
+            "delta_seq": delta_seq,
+            "render_info": clean_info.model_dump(exclude_none=True),
+            "error_details": error_details,
+        }
+        res = self.emit("step_update", **payload)
+        if inspect.isawaitable(res):
+            await res
+
+    @asynccontextmanager
+    async def step_scope(
+        self,
+        step_type: StepType,
+        title: str,
+        parent_step_idx: int | None = None,
+        *,
+        initial_render_info: dict[str, Any] | StepRenderInfo | None = None,
+        agent_name: str | None = None,
+        agent_id: AgentId | str | None = None,
+        task_id: str | None = None,
+        run_id: str | None = None,
+        **extra_render_info: Any,
+    ):
+        step_idx = self.allocate_step_idx()
+        started = time.monotonic()
+        init_dict = dict(
+            initial_render_info.model_dump(exclude_none=True)
+            if isinstance(initial_render_info, StepRenderInfo)
+            else (initial_render_info or {})
+        )
+        for key, value in extra_render_info.items():
+            if key in StepRenderInfo.model_fields and value is not None:
+                init_dict[key] = value
+        init_dict["title"] = title
+        if agent_name and "agent_name" not in init_dict:
+            init_dict["agent_name"] = agent_name
+        extra_meta: dict[str, Any] = {}
+        if agent_id is not None:
+            extra_meta["agent_id"] = agent_id
+        if task_id is not None:
+            extra_meta["task_id"] = task_id
+        if run_id is not None:
+            extra_meta["run_id"] = run_id
+
+        handle = StepHandle(
+            self,
+            step_idx=step_idx,
+            parent_step_idx=parent_step_idx,
+            step_type=step_type,
+            agent_name=agent_name,
+            initial_info=init_dict,
+            extra_metadata=extra_meta,
+        )
+        await self._emit_step(
+            step_idx=step_idx,
+            parent_step_idx=parent_step_idx,
+            step_type=step_type,
+            agent_name=agent_name,
+            status="RUNNING",
+            delta_seq=0,
+            render_info=init_dict,
+            extra_metadata=extra_meta,
+        )
+        try:
+            yield handle
+        except asyncio.CancelledError:
+            duration_ms = max(0, int((time.monotonic() - started) * 1000))
+            handle.delta_seq += 1
+            final_info = {**handle._completion_info, "duration_ms": duration_ms}
+            try:
+                await self._emit_step(
+                    step_idx=step_idx,
+                    parent_step_idx=parent_step_idx,
+                    step_type=step_type,
+                    agent_name=agent_name,
+                    status="CANCELING",
+                    delta_seq=handle.delta_seq,
+                    render_info=final_info,
+                    error_details="Step cancelled",
+                    extra_metadata=extra_meta,
+                )
+            except Exception:
+                pass
+            raise
+        except Exception as exc:
+            duration_ms = max(0, int((time.monotonic() - started) * 1000))
+            handle.delta_seq += 1
+            final_info = {**handle._completion_info, "duration_ms": duration_ms}
+            try:
+                await self._emit_step(
+                    step_idx=step_idx,
+                    parent_step_idx=parent_step_idx,
+                    step_type=step_type,
+                    agent_name=agent_name,
+                    status="ERROR",
+                    delta_seq=handle.delta_seq,
+                    render_info=final_info,
+                    error_details=scrub_step_error(exc),
+                    extra_metadata=extra_meta,
+                )
+            except Exception:
+                pass
+            raise
+        else:
+            duration_ms = max(0, int((time.monotonic() - started) * 1000))
+            handle.delta_seq += 1
+            final_info = {**handle._completion_info, "duration_ms": duration_ms}
+            exit_code = final_info.get("exit_code")
+            if handle._terminal_status == "ERROR" or (step_type == "run_command" and exit_code not in (None, 0)):
+                status: StepStatus = "ERROR"
+                err = handle._error_details or f"Command exited with code {exit_code}"
+            else:
+                status = "DONE"
+                err = None
+            await self._emit_step(
+                step_idx=step_idx,
+                parent_step_idx=parent_step_idx,
+                step_type=step_type,
+                agent_name=agent_name,
+                status=status,
+                delta_seq=handle.delta_seq,
+                render_info=final_info,
+                error_details=err,
+                extra_metadata=extra_meta,
+            )
+
+    step = step_scope
+
+
 class EventPayload(ContractModel):
     # Raw arguments/output/source/errors are not accepted by this metadata stream.
     # Owner-authorized evidence access supplies separately redacted tool artifacts.
-    status: JobStatus | None = None
+    status: JobStatus | StepStatus | None = None
     agent_id: AgentId | None = None
     task_id: str | None = Field(default=None, max_length=128, pattern=r"^[\w.-]+$")
     tool: str | None = Field(default=None, max_length=64, pattern=r"^[a-z][a-z_]*$")
@@ -94,6 +409,14 @@ class EventPayload(ContractModel):
     node: Literal["repository_intelligence", "deterministic_analysis", "change_analyzer", "planner_agent",
         "context_manager", "budget_manager", "deterministic_router", "specialist_subgraphs", "shared_blackboard",
         "structural_evidence_gate", "completion_workflow", "investigate", "execute_action"] | None = None
+    step_idx: int | None = Field(default=None, ge=0)
+    parent_step_idx: int | None = Field(default=None, ge=0)
+    agent_name: str | None = Field(default=None, max_length=128)
+    step_type: StepType | None = None
+    step_status: StepStatus | None = None
+    delta_seq: int | None = Field(default=None, ge=0)
+    render_info: StepRenderInfo | None = None
+    error_details: str | None = Field(default=None, max_length=1024)
 
 
 class PersistedEvent(ContractModel):
@@ -239,6 +562,40 @@ class JobStore(_SQLiteStore):
                 active.pop(event.activityId, None)
         if status == "completed" and active:
             raise InvalidActivity("job cannot complete with active activities")
+        active_steps: dict[int, PersistedEvent] = {}
+        for row in db.execute("SELECT event FROM outbox WHERE job_id=? AND json_extract(event,'$.kind')='step_update' ORDER BY sequence", (job_id,)):
+            step_event = PersistedEvent.model_validate_json(row[0])
+            if step_event.payload.step_idx is None:
+                continue
+            step_status = step_event.payload.status or step_event.payload.step_status
+            if step_status == "RUNNING":
+                active_steps[step_event.payload.step_idx] = step_event
+            elif step_status in {"DONE", "ERROR", "CANCELING"}:
+                active_steps.pop(step_event.payload.step_idx, None)
+        if status in {"failed", "cancelled", "interrupted", "completed"} and active_steps:
+            terminal_step_status: StepStatus = "CANCELING" if status == "cancelled" else "ERROR"
+            for step_idx, last_step in sorted(active_steps.items()):
+                next_delta = (last_step.payload.delta_seq or 0) + 1
+                title = last_step.payload.render_info.title if last_step.payload.render_info else None
+                self._enqueue_event(
+                    db,
+                    job_id,
+                    "step_update",
+                    EventPayload(
+                        agent_id=last_step.payload.agent_id,
+                        task_id=last_step.payload.task_id,
+                        run_id=last_step.payload.run_id,
+                        step_idx=step_idx,
+                        parent_step_idx=last_step.payload.parent_step_idx,
+                        agent_name=last_step.payload.agent_name,
+                        step_type=last_step.payload.step_type or "tool",
+                        status=terminal_step_status,
+                        step_status=terminal_step_status,
+                        delta_seq=next_delta,
+                        render_info=StepRenderInfo(title=title),
+                        error_details="Interrupted by job termination",
+                    ),
+                )
         if status not in {"failed", "cancelled", "interrupted"}:
             return
         for started in active.values():
@@ -549,6 +906,38 @@ class EventStore(_SQLiteStore):
             if root is None:
                 return []
             ancestors = [PersistedEvent.model_validate_json(root[0])]
+            if event.kind == "step_update":
+                step_lineage: list[PersistedEvent] = []
+                if event.payload.delta_seq and event.payload.delta_seq > 0 and event.payload.step_idx is not None:
+                    start_row = db.execute(
+                        "SELECT event FROM events WHERE job_id=? AND sequence<? "
+                        "AND json_extract(event,'$.kind')='step_update' "
+                        "AND json_extract(event,'$.payload.step_idx')=? "
+                        "AND COALESCE(json_extract(event,'$.payload.delta_seq'),0)=0 "
+                        "ORDER BY sequence LIMIT 1",
+                        (event.job_id, event.sequence, event.payload.step_idx),
+                    ).fetchone()
+                    if start_row is not None:
+                        step_lineage.append(PersistedEvent.model_validate_json(start_row[0]))
+                parent_idx = event.payload.parent_step_idx
+                visited: set[int] = set()
+                while parent_idx is not None and parent_idx not in visited:
+                    visited.add(parent_idx)
+                    parent_row = db.execute(
+                        "SELECT event FROM events WHERE job_id=? AND sequence<? "
+                        "AND json_extract(event,'$.kind')='step_update' "
+                        "AND json_extract(event,'$.payload.step_idx')=? "
+                        "AND COALESCE(json_extract(event,'$.payload.delta_seq'),0)=0 "
+                        "ORDER BY sequence LIMIT 1",
+                        (event.job_id, event.sequence, parent_idx),
+                    ).fetchone()
+                    if parent_row is None:
+                        break
+                    parent_event = PersistedEvent.model_validate_json(parent_row[0])
+                    step_lineage.append(parent_event)
+                    parent_idx = parent_event.payload.parent_step_idx
+                ancestors.extend(reversed(step_lineage))
+                return ancestors
             if event.payload.run_id and event.kind != "agent_started":
                 agent = db.execute("SELECT event FROM events WHERE job_id=? AND sequence<? "
                     "AND json_extract(event,'$.kind')='agent_started' "

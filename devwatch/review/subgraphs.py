@@ -20,7 +20,7 @@ from devwatch.providers.base import LLMProvider, LLMRequest, LLMResponse
 from devwatch.providers.exceptions import (ProviderAuthenticationError, ProviderRateLimitError,
     ProviderQuotaExhaustedError, ProviderTemporaryError, ProviderTimeoutError, ProviderBudgetRefusedError)
 from devwatch.review.budgets import BudgetExceeded, BudgetManager
-from devwatch.review.jobs import UnknownToolCompletion, safe_stop_reason
+from devwatch.review.jobs import StepHandle, StepRenderInfo, StepType, TrajectoryStepTracker, UnknownToolCompletion, safe_stop_reason
 from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, CommandArguments, describe_tool
 from devwatch.review.tool_errors import ToolFailure, diagnose, failure_identity, safe_arguments
 from devwatch.review import investigation, tool_selection, prompts
@@ -39,6 +39,7 @@ class ToolObservation(ContractModel):
     inspected: list[str] = Field(default_factory=list)
     offset: int = Field(default=0, ge=0)
     max_chars: int = Field(default=1500, ge=1, le=3000)
+    render_info: StepRenderInfo | None = None
 
 
 ToolHandler = Callable[[dict[str, Any], ReviewTask | AgentWorkItem], Awaitable[ToolObservation]]
@@ -134,14 +135,27 @@ class PermissionedTools:
                 raise PermissionError("source is outside the assigned scope")
             return parsed.model_dump(mode="json", exclude_unset=True)
 
-    async def execute(self, task: ReviewTask, action: AgentAction, *, progress=None) -> ToolObservation:
+    async def execute(self, task: ReviewTask, action: AgentAction, *, progress=None, step_handle=None) -> ToolObservation:
         arguments = self.authorize(task, action)
         handler = self._handlers.get(action.tool)
         if handler is None:
             raise ToolFailure("tool_unavailable", "Choose another permitted tool or report unavailable coverage.")
-        if progress is not None and action.tool in {"run_tests", "run_command", "lint", "type_check", "coverage",
-                                                     "sast", "profile", "benchmark"}:
-            return ToolObservation.model_validate(await handler(arguments, task, progress=progress))
+        if action.tool in {"run_tests", "run_command", "lint", "type_check", "coverage",
+                           "sast", "profile", "benchmark"}:
+            kwargs: dict[str, Any] = {}
+            if progress is not None:
+                kwargs["progress"] = progress
+            if step_handle is not None:
+                kwargs["step_handle"] = step_handle
+            if kwargs:
+                try:
+                    return ToolObservation.model_validate(await handler(arguments, task, **kwargs))
+                except TypeError:
+                    if progress is not None:
+                        try:
+                            return ToolObservation.model_validate(await handler(arguments, task, progress=progress))
+                        except TypeError:
+                            pass
         return ToolObservation.model_validate(await handler(arguments, task))
 
 
@@ -171,6 +185,7 @@ class AgentExecutionState(TypedDict, total=False):
     tool_selection: dict[str, Any]
     tool_selections: list[dict[str, Any]]
     prompt_revision: dict[str, Any]
+    parent_step_idx: int | None
 
 
 class ModelRouter:
@@ -194,12 +209,16 @@ class AgentSubgraphs:
                  context: Callable[[AgentExecutionState], Any], *, models: dict[ModelTier, str],
                  persist: Callable[[AgentExecutionState, dict[str, Any]], Any] | None = None,
                  model_slots: asyncio.Semaphore | None = None, emit: Callable | None = None,
-                 require_verification_challenge: bool = False, require_independent_support: bool = False):
+                 require_verification_challenge: bool = False, require_independent_support: bool = False,
+                 step_tracker: TrajectoryStepTracker | None = None):
         if set(models) != set(ModelTier) or any(not name.strip() for name in models.values()):
             raise ValueError("explicit small, medium and strong model names are required")
         self.provider, self.tools, self.budget, self.context = provider, tools, budget, context
         self.models, self.persist = dict(models), persist
         self.emit = emit
+        self.steps = step_tracker or TrajectoryStepTracker(emit)
+        self.step_scope = self.steps.step_scope
+        self.step = self.steps.step
         self.require_verification_challenge = require_verification_challenge
         self.require_independent_support = require_independent_support
         self.budget.begin_execution()
@@ -222,6 +241,7 @@ class AgentSubgraphs:
     async def _save(self, state: AgentExecutionState) -> None:
         if self.persist is not None:
             saved = dict(state)
+            saved.pop("parent_step_idx", None)
             action = state.get("action")
             if action is not None and action.kind in {"call_tool", "request_context"}:
                 arguments, _ = safe_arguments(action.arguments, state["task"].files)
@@ -239,17 +259,100 @@ class AgentSubgraphs:
             except Exception as exc:
                 raise EventPersistenceError("durable event persistence failed") from exc
 
+    def _step(
+        self,
+        step_type: StepType,
+        title: str,
+        state: AgentExecutionState,
+        *,
+        parent_step_idx: int | None = None,
+        initial_render_info: dict[str, Any] | StepRenderInfo | None = None,
+    ):
+        task = state["task"]
+        agent_name = task.agent_id.value if isinstance(task.agent_id, AgentId) else str(task.agent_id)
+        return self.steps.step_scope(
+            step_type,
+            title,
+            parent_step_idx=parent_step_idx,
+            initial_render_info=initial_render_info,
+            agent_name=agent_name,
+            agent_id=task.agent_id,
+            task_id=task.task_id,
+            run_id=state.get("run_id"),
+        )
+
+    @staticmethod
+    def _planner_completion_title(content: str) -> str:
+        try:
+            parsed = json.loads(content)
+        except (ValueError, RecursionError, TypeError):
+            return "Planned next action"
+        if not isinstance(parsed, dict):
+            return "Planned next action"
+        kind = parsed.get("kind")
+        tool = parsed.get("tool")
+        allowed_tools = set(TOOL_ARGUMENTS) | {"read_source", "read_evidence"}
+        if kind in {"call_tool", "request_context"} and isinstance(tool, str) and tool in allowed_tools:
+            return f"Selected tool: {tool}"
+        if kind == "request_context":
+            return "Selected tool: read_source"
+        if isinstance(kind, str) and kind in {
+            "submit_candidates",
+            "submit_plan",
+            "submit_verification",
+            "submit_synthesis",
+            "request_followup",
+            "finish",
+        }:
+            return f"Planned action: {kind}"
+        return "Planned next action"
+
+    @staticmethod
+    def _tool_step_metadata(
+        name: str,
+        arguments: dict[str, Any],
+        task: ReviewTask | AgentWorkItem,
+    ) -> tuple[StepType, str, dict[str, Any]]:
+        if name in {"run_tests", "run_command", "lint", "type_check", "coverage", "sast", "profile", "benchmark"}:
+            cmd_id = str(arguments.get("command_id") or name)
+            return "run_command", f"Running {name} ({cmd_id})", {"command": cmd_id}
+        if name == "code_search":
+            query = str(arguments.get("query") or "")
+            return "code_search", f"Searching for '{query}'", {"query": query}
+        if name == "repo_map":
+            return "repo_map", "Inspecting repository map", {}
+        if name in {"read_source", "read_evidence", "request_context"}:
+            path = arguments.get("file_path") or arguments.get("path")
+            files = [str(path)] if path and str(path) in task.files else list(task.files)[:25]
+            title = f"Reading {files[0]}" if len(files) == 1 else "Reading source files"
+            return "read_file", title, {"files": files}
+        return "tool", f"Running {name}", {}
+
     async def _invoke(self, graph, state):
         state["run_id"] = uuid4().hex
         started, outcome = time.monotonic(), "failed"
         await self._event("agent_started", state)
+        agent_name = state["task"].agent_id.value if isinstance(state["task"].agent_id, AgentId) else str(state["task"].agent_id)
         try:
-            with tracing_context(enabled=False, parent=False):
-                result = await graph.ainvoke(state, config={
-                    "recursion_limit": 2 * self.budget.limits.iterations_per_task + 4})
-            state = result
-            outcome = "succeeded" if state["private_state"].stop_reason == "evidence_complete" else "failed"
-            return result
+            async with self._step(
+                "agent_run",
+                f"Running {agent_name} ({state['task'].task_id})",
+                state,
+                initial_render_info={
+                    "subtitle": state["task"].task_id,
+                    "files": list(state["task"].files)[:25],
+                },
+            ) as agent_step:
+                state["parent_step_idx"] = agent_step.step_idx
+                with tracing_context(enabled=False, parent=False):
+                    result = await graph.ainvoke(state, config={
+                        "recursion_limit": 2 * self.budget.limits.iterations_per_task + 4})
+                state = result
+                outcome = "succeeded" if state["private_state"].stop_reason == "evidence_complete" else "failed"
+                if outcome != "succeeded":
+                    reason = state["private_state"].stop_reason or "execution_failed"
+                    agent_step.mark_error(f"Agent stopped: {safe_stop_reason(reason)}")
+                return result
         except asyncio.CancelledError:
             outcome = "cancelled"
             raise
@@ -550,93 +653,102 @@ class AgentSubgraphs:
             state["model_call_id"] = ticket
             started = time.monotonic()
             await self._event("model_call_started", state, operation_id=ticket, attempt=attempt)
-            try:
-                response = await asyncio.wait_for(self.provider.generate_completion(LLMRequest(
-                    prompt=prompt, system_prompt=contract.system_prompt,
-                    model=self.models[state.get("model_tier", contract.model_policy.initial_tier)], temperature=0,
-                    max_tokens=max_output,
-                    json_mode=True,
-                    reasoning_effort="low",
-                )), timeout=self.budget.timeout_for("provider"))
-                response = LLMResponse.model_validate(response)
-            except ProviderBudgetRefusedError as exc:
-                # Only trusted local admission proves zero remote consumption.
-                self.budget.record_model(ticket, prompt_tokens=0, completion_tokens=0)
-                call.update(status='not_dispatched', charged_tokens=0,
-                            duration_seconds=time.monotonic() - started)
-                state['provider_observation'] = dict(call)
-                private.coverage.limitations.append('Local provider budget refused before dispatch; no provider tokens consumed.')
-                await self._event('model_call_completed', state, operation_id=ticket, attempt=attempt,
-                    outcome='failed', stop_reason='budget_exhausted', total_tokens=0,
-                    duration_seconds=time.monotonic() - started)
-                raise BudgetExceeded('local provider budget refused before dispatch') from exc
-            except BaseException as exc:
-                # A timeout/cancel can still consume provider tokens. Charge the
-                # reservation conservatively; never free unknown consumption.
-                private.usage = TokenUsage(prompt_tokens=private.usage.prompt_tokens + reserved,
-                                           completion_tokens=private.usage.completion_tokens)
-                private.coverage.limitations.append("Provider completion unknown; reserved tokens charged conservatively.")
-                self.budget.record_model(ticket, prompt_tokens=reserved, completion_tokens=0)
-                call.update(status='unknown', charged_tokens=reserved, duration_seconds=time.monotonic() - started)
-                state['provider_observation'] = dict(call)
-                code = ("provider_authentication" if isinstance(exc, ProviderAuthenticationError) else
-                        "provider_quota" if isinstance(exc, ProviderQuotaExhaustedError) else
-                        "provider_rate_limit" if isinstance(exc, ProviderRateLimitError) else
-                        "provider_temporary" if isinstance(exc, ProviderTemporaryError) else
-                        "provider_timeout" if isinstance(exc, (TimeoutError, ProviderTimeoutError)) else "provider_failure")
-                await self._event("model_call_completed", state, operation_id=ticket, attempt=attempt,
-                    outcome="cancelled" if isinstance(exc, asyncio.CancelledError) else "failed",
-                    error_code=None if isinstance(exc, asyncio.CancelledError) else code,
-                    total_tokens=reserved, duration_seconds=time.monotonic() - started)
-                raise
-            finally:
-                self.budget.refresh_time()
-            reported = response.usage
-            call.update(self._provider_observation(response, max_output), status='returned',
-                        prompt_revision=state['prompt_revision'], duration_seconds=time.monotonic() - started)
-            state['provider_observation'] = call
-            prompt_tokens, completion_tokens = reported.prompt_tokens, reported.completion_tokens
-            split_total = prompt_tokens + completion_tokens
-            if min(prompt_tokens, completion_tokens, reported.total_tokens) < 0 or max(split_total, reported.total_tokens) == 0:
-                prompt_tokens, completion_tokens = reserved, 0
-                private.coverage.limitations.append("Provider token usage unavailable; reserved tokens charged conservatively.")
-            elif reported.total_tokens > split_total:
-                prompt_tokens += reported.total_tokens - split_total
-                private.coverage.limitations.append("Provider token split incomplete; total usage charged conservatively.")
-            elif "total_tokens" in reported.model_fields_set and reported.total_tokens != split_total:
-                private.coverage.limitations.append("Provider usage totals disagree; larger consumption charged.")
-            private.usage = TokenUsage(
-                prompt_tokens=private.usage.prompt_tokens + prompt_tokens,
-                completion_tokens=private.usage.completion_tokens + completion_tokens)
-            call['charged_tokens'] = prompt_tokens + completion_tokens
-            try:
-                self.budget.record_model(ticket, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-            finally:
-                await self._event("model_call_completed", state, operation_id=ticket, attempt=attempt,
-                    outcome="succeeded" if response.finish_reason == "stop" and not response.refusal else "failed",
-                    finish_reason=response.finish_reason if response.finish_reason in {"stop", "length", "content_filter"} else "other",
-                    total_tokens=prompt_tokens + completion_tokens, duration_seconds=time.monotonic() - started)
-            if isinstance(selected_context, dict):
-                for page in selected_context.get("evidence", []):
-                    if not isinstance(page, dict) or "excerpt" not in page:
-                        continue
-                    receipt = private.evidence_progress.setdefault(page["evidence_ref"], EvidenceProgress())
-                    span = (page["offset"], page["end_offset"])
-                    if span not in receipt.delivered:
-                        receipt.delivered.append(span)
-                    receipt.last_delivered = span
-                    receipt.source_scope = page.get("source_scope", [])
-                    if page.get("source_file") in task.files:
-                        receipt.source_file = page["source_file"]
-                    receipt.provenance = page.get("provenance", {})
-                    receipt.total_chars = page["total_chars"]
-                    await self._event("evidence_delivered", state, evidence_ref=page["evidence_ref"],
-                                      operation_id=ticket, offset=span[0], end_offset=span[1])
-            await self._save(state)
-            if response.finish_reason != "stop" or response.refusal:
-                raise IncompleteCompletion("provider_truncated" if response.finish_reason == "length" else "provider_incomplete",
-                    recoverable=not response.refusal and response.finish_reason in {"length", "unknown"})
-            return response.content
+            model_name = self.models[state.get("model_tier", contract.model_policy.initial_tier)]
+            async with self._step(
+                "planner",
+                "Planning next action...",
+                state,
+                parent_step_idx=state.get("parent_step_idx"),
+                initial_render_info={"subtitle": model_name},
+            ) as planner_step:
+                try:
+                    response = await asyncio.wait_for(self.provider.generate_completion(LLMRequest(
+                        prompt=prompt, system_prompt=contract.system_prompt,
+                        model=model_name, temperature=0,
+                        max_tokens=max_output,
+                        json_mode=True,
+                        reasoning_effort="low",
+                    )), timeout=self.budget.timeout_for("provider"))
+                    response = LLMResponse.model_validate(response)
+                except ProviderBudgetRefusedError as exc:
+                    # Only trusted local admission proves zero remote consumption.
+                    self.budget.record_model(ticket, prompt_tokens=0, completion_tokens=0)
+                    call.update(status='not_dispatched', charged_tokens=0,
+                                duration_seconds=time.monotonic() - started)
+                    state['provider_observation'] = dict(call)
+                    private.coverage.limitations.append('Local provider budget refused before dispatch; no provider tokens consumed.')
+                    await self._event('model_call_completed', state, operation_id=ticket, attempt=attempt,
+                        outcome='failed', stop_reason='budget_exhausted', total_tokens=0,
+                        duration_seconds=time.monotonic() - started)
+                    raise BudgetExceeded('local provider budget refused before dispatch') from exc
+                except BaseException as exc:
+                    # A timeout/cancel can still consume provider tokens. Charge the
+                    # reservation conservatively; never free unknown consumption.
+                    private.usage = TokenUsage(prompt_tokens=private.usage.prompt_tokens + reserved,
+                                               completion_tokens=private.usage.completion_tokens)
+                    private.coverage.limitations.append("Provider completion unknown; reserved tokens charged conservatively.")
+                    self.budget.record_model(ticket, prompt_tokens=reserved, completion_tokens=0)
+                    call.update(status='unknown', charged_tokens=reserved, duration_seconds=time.monotonic() - started)
+                    state['provider_observation'] = dict(call)
+                    code = ("provider_authentication" if isinstance(exc, ProviderAuthenticationError) else
+                            "provider_quota" if isinstance(exc, ProviderQuotaExhaustedError) else
+                            "provider_rate_limit" if isinstance(exc, ProviderRateLimitError) else
+                            "provider_temporary" if isinstance(exc, ProviderTemporaryError) else
+                            "provider_timeout" if isinstance(exc, (TimeoutError, ProviderTimeoutError)) else "provider_failure")
+                    await self._event("model_call_completed", state, operation_id=ticket, attempt=attempt,
+                        outcome="cancelled" if isinstance(exc, asyncio.CancelledError) else "failed",
+                        error_code=None if isinstance(exc, asyncio.CancelledError) else code,
+                        total_tokens=reserved, duration_seconds=time.monotonic() - started)
+                    raise
+                finally:
+                    self.budget.refresh_time()
+                reported = response.usage
+                call.update(self._provider_observation(response, max_output), status='returned',
+                            prompt_revision=state['prompt_revision'], duration_seconds=time.monotonic() - started)
+                state['provider_observation'] = call
+                prompt_tokens, completion_tokens = reported.prompt_tokens, reported.completion_tokens
+                split_total = prompt_tokens + completion_tokens
+                if min(prompt_tokens, completion_tokens, reported.total_tokens) < 0 or max(split_total, reported.total_tokens) == 0:
+                    prompt_tokens, completion_tokens = reserved, 0
+                    private.coverage.limitations.append("Provider token usage unavailable; reserved tokens charged conservatively.")
+                elif reported.total_tokens > split_total:
+                    prompt_tokens += reported.total_tokens - split_total
+                    private.coverage.limitations.append("Provider token split incomplete; total usage charged conservatively.")
+                elif "total_tokens" in reported.model_fields_set and reported.total_tokens != split_total:
+                    private.coverage.limitations.append("Provider usage totals disagree; larger consumption charged.")
+                private.usage = TokenUsage(
+                    prompt_tokens=private.usage.prompt_tokens + prompt_tokens,
+                    completion_tokens=private.usage.completion_tokens + completion_tokens)
+                call['charged_tokens'] = prompt_tokens + completion_tokens
+                try:
+                    self.budget.record_model(ticket, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+                finally:
+                    await self._event("model_call_completed", state, operation_id=ticket, attempt=attempt,
+                        outcome="succeeded" if response.finish_reason == "stop" and not response.refusal else "failed",
+                        finish_reason=response.finish_reason if response.finish_reason in {"stop", "length", "content_filter"} else "other",
+                        total_tokens=prompt_tokens + completion_tokens, duration_seconds=time.monotonic() - started)
+                if isinstance(selected_context, dict):
+                    for page in selected_context.get("evidence", []):
+                        if not isinstance(page, dict) or "excerpt" not in page:
+                            continue
+                        receipt = private.evidence_progress.setdefault(page["evidence_ref"], EvidenceProgress())
+                        span = (page["offset"], page["end_offset"])
+                        if span not in receipt.delivered:
+                            receipt.delivered.append(span)
+                        receipt.last_delivered = span
+                        receipt.source_scope = page.get("source_scope", [])
+                        if page.get("source_file") in task.files:
+                            receipt.source_file = page["source_file"]
+                        receipt.provenance = page.get("provenance", {})
+                        receipt.total_chars = page["total_chars"]
+                        await self._event("evidence_delivered", state, evidence_ref=page["evidence_ref"],
+                                          operation_id=ticket, offset=span[0], end_offset=span[1])
+                await self._save(state)
+                if response.finish_reason != "stop" or response.refusal:
+                    raise IncompleteCompletion("provider_truncated" if response.finish_reason == "length" else "provider_incomplete",
+                        recoverable=not response.refusal and response.finish_reason in {"length", "unknown"})
+                planner_step.set_completion_info({"title": self._planner_completion_title(response.content)})
+                return response.content
 
     @staticmethod
     def _provider_observation(response, max_output):
@@ -833,16 +945,31 @@ class AgentSubgraphs:
                 private.tool_call_count += 1
                 await self._save(state)
                 operation_id, started = uuid4().hex, time.monotonic()
-                await self._event("tool_called", state, tool=action.tool or "read_source", operation_id=operation_id)
-                if action.kind == "request_context":
-                    # Context Manager retrieves selected references; no extra AI identity.
-                    observation = ToolObservation.model_validate(await asyncio.wait_for(
-                        _resolve(self.context(state)), timeout=self.budget.timeout_for("command")))
-                else:
-                    async def progress(channel, text):
-                        await self._event("tool_progress", state, operation_id=operation_id, stream=channel, text=text)
-                    observation = await asyncio.wait_for(self.tools.execute(task, action, progress=progress),
-                                                         timeout=self.budget.timeout_for("command"))
+                tool_name = action.tool or "read_source"
+                await self._event("tool_called", state, tool=tool_name, operation_id=operation_id)
+                step_type, step_title, init_info = self._tool_step_metadata(tool_name, arguments, task)
+                async with self._step(
+                    step_type,
+                    step_title,
+                    state,
+                    parent_step_idx=state.get("parent_step_idx"),
+                    initial_render_info=init_info,
+                ) as tool_step:
+                    if action.kind == "request_context":
+                        # Context Manager retrieves selected references; no extra AI identity.
+                        observation = ToolObservation.model_validate(await asyncio.wait_for(
+                            _resolve(self.context(state)), timeout=self.budget.timeout_for("command")))
+                    else:
+                        async def progress(channel, text):
+                            await self._event("tool_progress", state, operation_id=operation_id, stream=channel, text=text)
+                        observation = await asyncio.wait_for(
+                            self.tools.execute(task, action, progress=progress, step_handle=tool_step),
+                            timeout=self.budget.timeout_for("command"),
+                        )
+                    if observation.render_info is not None:
+                        tool_step.set_completion_info(observation.render_info)
+                    else:
+                        tool_step.set_completion_info({"evidence_ref": observation.evidence_ref})
                 for identity in [observation.evidence_ref, *observation.additional_evidence_refs]:
                     if identity in private.evidence_refs:
                         private.evidence_refs.remove(identity)

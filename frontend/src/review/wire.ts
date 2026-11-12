@@ -4,6 +4,35 @@ import schema from './wire-schema.json'
 export type AgentId = 'planner' | 'bug_reliability' | 'logic_correctness' | 'quality_testability'
   | 'architecture_security' | 'performance_scalability' | 'synthesizer_verifier'
 export type JobStatus = 'queued' | 'running' | 'interrupted' | 'completed' | 'failed' | 'cancelled'
+export type StepType = 'agent_run' | 'subagent' | 'planner' | 'run_command' | 'code_search' | 'search' | 'repo_map' | 'read_file' | 'tool' | 'system'
+export type StepStatus = 'RUNNING' | 'DONE' | 'ERROR' | 'CANCELING'
+export interface StepRenderInfo {
+  title?: string | null
+  subtitle?: string | null
+  agent_name?: string | null
+  args_preview?: Record<string, unknown> | null
+  command?: string | null
+  stdout_append?: string | null
+  stderr_append?: string | null
+  truncated?: boolean | null
+  output_truncated?: boolean | null
+  exit_code?: number | null
+  files?: string[] | null
+  match_count?: number | null
+  query?: string | null
+  duration_ms?: number | null
+  evidence_ref?: string | null
+}
+export interface StepUpdatePayload {
+  step_idx: number
+  parent_step_idx?: number | null
+  agent_name?: string | null
+  step_type: StepType
+  status: StepStatus
+  delta_seq: number
+  render_info: StepRenderInfo
+  error_details?: string | null
+}
 export interface Coverage {
   inspected_files: string[]; inspected_symbols: string[]; skipped: Record<string, string>
   failed: Record<string, string>; limitations: string[]
@@ -67,14 +96,17 @@ export interface VerificationAudit {
 }
 export interface PersistedEvent {
   event_id: string; job_id: string; sequence: number; kind: string; timestamp: number
-  payload: { status: JobStatus | null; agent_id: AgentId | null; task_id: string | null
+  payload: { status: JobStatus | StepStatus | null; agent_id: AgentId | null; task_id: string | null
     tool: string | null; evidence_ref: string | null; error_code: string | null
     duration_seconds: number | null; total_tokens: number | null
     phase?: string | null; iteration?: number | null; attempt?: number | null
     run_id?: string | null; operation_id?: string | null; outcome?: string | null
     stop_reason?: string | null; finish_reason?: string | null; count?: number | null
     finding_id?: string | null; verdict?: string | null; offset?: number | null; end_offset?: number | null
-    graph_scope?: 'review' | 'agent' | null; node?: string | null }
+    graph_scope?: 'review' | 'agent' | null; node?: string | null
+    step_idx?: number | null; parent_step_idx?: number | null; agent_name?: string | null
+    step_type?: StepType | null; step_status?: StepStatus | null; delta_seq?: number | null
+    render_info?: StepRenderInfo | null; error_details?: string | null }
 }
 export interface ActivityEvent {
   version: 1; eventId: string; sequence: number; timestamp: number

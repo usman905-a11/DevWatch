@@ -13,10 +13,14 @@ from typing import Literal
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from devwatch.review.contracts import AGENT_CONTRACTS, AgentId, ContractModel
+from devwatch.review.jobs import StepRenderInfo
 from devwatch.review.stores import validate_source_path
 from devwatch.review.subgraphs import ToolObservation
 
 COMMAND_TOOLS = {"run_tests", "run_command", "lint", "type_check", "coverage", "sast", "profile", "benchmark", "db_analyze", "query_analyze"}
+LIVE_STREAM_CAP_BYTES = 65536
+COALESCE_INTERVAL_SECONDS = 0.2
+COALESCE_BUFFER_BYTES = 4096
 
 
 def _public_line(line: str) -> str:
@@ -150,7 +154,7 @@ class TrustedToolRuntime:
         return self.repo._record({"tool": "write_artifact", "source_scope": record["source_scope"],
                                   "data": {"artifact_ref": identity}}, work=task)
 
-    async def execute(self, task, action, *, progress=None):
+    async def execute(self, task, action, *, progress=None, step_handle=None):
         AGENT_CONTRACTS[task.agent_id].validate_action(action)
         if set(action.arguments) != {"command_id"}:
             raise ValueError("Command tools accept only an approved command_id")
@@ -160,12 +164,18 @@ class TrustedToolRuntime:
         executable = Path(command.argv[0]).resolve()
         if executable.is_relative_to(self.repo.artifacts.root):
             raise PermissionError("Executable cannot belong to reviewed artifacts")
+        command_str = " ".join(Path(command.argv[0]).name if idx == 0 else arg for idx, arg in enumerate(command.argv))[:512]
         digest = sha256(json.dumps({"definition": command.model_dump(mode="json"), "snapshot": self.repo.manifest.content_hash}, sort_keys=True).encode()).hexdigest()
         operation_id, previous = self.jobs.admit_tool_operation(self.job.job_id, owner=self.job.owner,
             task_id=task.task_id, command_id=command.command_id, input_hash=digest)
         if previous:
             self.repo.scoped_evidence(previous, task)
-            return ToolObservation(evidence_ref=previous, inspected=list(command.files))
+            info = StepRenderInfo(command=command_str, evidence_ref=previous, files=list(command.files)[:25])
+            if step_handle is not None:
+                step_handle.set_completion_info(info)
+            return ToolObservation(evidence_ref=previous, inspected=list(command.files), render_info=info)
+        if step_handle is not None:
+            step_handle.set_completion_info({"command": command_str, "files": list(command.files)[:25]})
         scratch = self.repo.artifacts.create_scratch(self.repo.snapshot_id, owner=self.repo.owner, files=list(command.files))
         # Only explicitly assigned files are materialized for this command.
         # The source copy is disposable; original and immutable files stay intact.
@@ -178,30 +188,77 @@ class TrustedToolRuntime:
         process = None
         process_job = None
         readers = []
+        coalescer = None
         captured = {"stdout": bytearray(), "stderr": bytearray()}
         remaining, truncated, timed_out = self.output_bytes, False, False
         public_remaining = 16000
+        step_buffers: dict[str, list[str]] = {"stdout": [], "stderr": []}
+        step_buffered_bytes = 0
+        step_streamed_bytes = 0
+        step_truncated = False
+        flush_lock = asyncio.Lock()
+
+        async def flush_step_deltas() -> None:
+            nonlocal step_buffered_bytes
+            if step_handle is None:
+                return
+            async with flush_lock:
+                out_chunk = "".join(step_buffers["stdout"])
+                err_chunk = "".join(step_buffers["stderr"])
+                step_buffers["stdout"].clear()
+                step_buffers["stderr"].clear()
+                step_buffered_bytes = 0
+                patch: dict[str, str] = {}
+                if out_chunk:
+                    patch["stdout_append"] = out_chunk
+                if err_chunk:
+                    patch["stderr_append"] = err_chunk
+                if patch:
+                    await step_handle.emit_delta(patch)
+
+        async def periodic_flush() -> None:
+            while True:
+                await asyncio.sleep(COALESCE_INTERVAL_SECONDS)
+                if step_buffers["stdout"] or step_buffers["stderr"]:
+                    await flush_step_deltas()
+
         async def read(name, stream):
-            nonlocal remaining, truncated, public_remaining
+            nonlocal remaining, truncated, public_remaining, step_buffered_bytes, step_streamed_bytes, step_truncated
             decoder = codecs.getincrementaldecoder("utf-8")("replace")
             pending = ""
             redact_until_newline = False
 
             async def publish(line):
-                nonlocal public_remaining
-                if progress is None or public_remaining <= 0:
-                    return
-                safe = _public_line(line)[:public_remaining]
-                public_remaining -= len(safe)
-                if safe:
-                    await progress(name, safe)
+                nonlocal public_remaining, step_buffered_bytes, step_streamed_bytes, step_truncated
+                redacted = _public_line(line)
+                if progress is not None and public_remaining > 0:
+                    safe = redacted[:public_remaining]
+                    public_remaining -= len(safe)
+                    if safe:
+                        await progress(name, safe)
+                if step_handle is not None and redacted:
+                    if step_streamed_bytes >= LIVE_STREAM_CAP_BYTES:
+                        step_truncated = True
+                        return
+                    raw_bytes = redacted.encode("utf-8")
+                    allowed_bytes = LIVE_STREAM_CAP_BYTES - step_streamed_bytes
+                    if len(raw_bytes) > allowed_bytes:
+                        redacted = raw_bytes[:allowed_bytes].decode("utf-8", errors="ignore")
+                        raw_bytes = redacted.encode("utf-8")
+                        step_truncated = True
+                    if redacted:
+                        step_buffers[name].append(redacted)
+                        step_buffered_bytes += len(raw_bytes)
+                        step_streamed_bytes += len(raw_bytes)
+                        if step_buffered_bytes >= COALESCE_BUFFER_BYTES:
+                            await flush_step_deltas()
 
             while chunk := await stream.read(8192):
                 keep = min(remaining, len(chunk))
                 captured[name].extend(chunk[:keep])
                 remaining -= keep
                 truncated |= keep < len(chunk)
-                if progress is not None and keep:
+                if (progress is not None or step_handle is not None) and keep:
                     pending += decoder.decode(chunk[:keep])
                     if redact_until_newline:
                         if "\n" not in pending:
@@ -216,7 +273,7 @@ class TrustedToolRuntime:
                         await publish("[output redacted]\n")
                         pending = ""
                         redact_until_newline = True
-            if progress is not None and pending and not redact_until_newline:
+            if (progress is not None or step_handle is not None) and pending and not redact_until_newline:
                 await publish(pending)
         try:
             process = await asyncio.shield(spawn)
@@ -224,6 +281,8 @@ class TrustedToolRuntime:
                 from devwatch.review.windows_process_job import WindowsProcessJob
                 process_job = WindowsProcessJob(process)
             self.active_processes += 1
+            if step_handle is not None:
+                coalescer = asyncio.create_task(periodic_flush())
             readers = [asyncio.create_task(read(name, stream)) for name, stream in (("stdout", process.stdout), ("stderr", process.stderr))]
             current = self.jobs.get(self.job.job_id, owner=self.job.owner)
             timeout = min(command.timeout_seconds, max(.001, current.limits.review_seconds - current.ledger.elapsed_seconds))
@@ -241,7 +300,15 @@ class TrustedToolRuntime:
                 process_job.close()
             await _kill_tree(process)
             await asyncio.wait_for(asyncio.gather(*readers), 3)
+            if coalescer is not None:
+                coalescer.cancel()
+                await asyncio.gather(coalescer, return_exceptions=True)
+                coalescer = None
+            await flush_step_deltas()
         finally:
+            if coalescer is not None:
+                coalescer.cancel()
+                await _drain(asyncio.ensure_future(asyncio.gather(coalescer, return_exceptions=True)))
             if process is None:
                 process = await _drain(spawn)
             if process_job is not None:
@@ -259,4 +326,20 @@ class TrustedToolRuntime:
         observation = self.repo._record({"tool": command.tool, "source_scope": list(command.files),
             "inspected": list(command.files), "data": data, "limitations": ["Trusted host execution is not a security sandbox"]}, work=task)
         self.jobs.complete_tool_operation(self.job.job_id, owner=self.job.owner, operation_id=operation_id, evidence_ref=observation.evidence_ref)
-        return observation
+        is_truncated = bool(truncated or step_truncated)
+        render_info = StepRenderInfo(
+            command=command_str,
+            exit_code=process.returncode,
+            truncated=is_truncated,
+            output_truncated=is_truncated,
+            files=list(command.files)[:25],
+            evidence_ref=observation.evidence_ref,
+        )
+        if step_handle is not None:
+            step_handle.set_completion_info(render_info)
+            if timed_out or process.returncode not in (None, 0):
+                step_handle.mark_error(
+                    "Command timed out" if timed_out else f"Command exited with code {process.returncode}",
+                    render_info,
+                )
+        return observation.model_copy(update={"render_info": render_info})

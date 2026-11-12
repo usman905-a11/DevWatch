@@ -1,18 +1,27 @@
 import { DurableReviewClient, SubmissionIntent } from './durable-client'
-import { observeJob, Observation } from './durable-events'
-import { CaptureCoverage, JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StreamEvent } from './wire'
+import {
+  applyStepUpdate,
+  observeJob,
+  Observation,
+  pruneTrajectorySteps,
+  reconcileTerminalJobSteps,
+  TrajectoryStep,
+} from './durable-events'
+import { CaptureCoverage, JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StepStatus, StreamEvent } from './wire'
 
 export interface SessionState {
   job: JobView | null; manifest: SnapshotManifest | null; report: ReportDraft | null
   source: SourceExcerpt | null; sourceError: string | null; events: StreamEvent[]
+  steps: TrajectoryStep[]
   intent: SubmissionIntent | null; busy: boolean; error: string | null; connection: string
 }
 const empty = (): SessionState => ({ job: null, manifest: null, report: null, source: null, sourceError: null,
-  events: [], intent: null, busy: false, error: null, connection: 'disconnected' })
+  events: [], steps: [], intent: null, busy: false, error: null, connection: 'disconnected' })
 
 /** Owns viewer resources, never owns job execution. State is React-independent. */
 export class ReviewSession {
   private state = empty()
+  private stepsByIdx = new Map<number, TrajectoryStep>()
   private listeners = new Set<() => void>()
   private observation?: Observation
   private request = new AbortController()
@@ -27,7 +36,7 @@ export class ReviewSession {
   dispose() { this.generation++; this.navigation++; this.request.abort(); this.observation?.stop(); this.observation = undefined }
   reset() {
     if (this.hasPendingSubmission()) return
-    this.dispose(); this.request = new AbortController(); this.update(empty())
+    this.dispose(); this.stepsByIdx = new Map(); this.request = new AbortController(); this.update(empty())
   }
   private async perform(action: (generation: number, signal: AbortSignal) => Promise<void>) {
     const generation = this.generation, signal = this.request.signal
@@ -68,6 +77,11 @@ export class ReviewSession {
       this.update({ job, manifest }); this.observe(generation)
     })
   }
+  private syncSteps(jobStatus = this.state.job?.status): TrajectoryStep[] {
+    this.stepsByIdx = pruneTrajectorySteps(this.stepsByIdx, 200)
+    this.stepsByIdx = reconcileTerminalJobSteps(this.stepsByIdx, jobStatus)
+    return [...this.stepsByIdx.values()].sort((a, b) => a.stepIdx - b.stepIdx)
+  }
   private observe(generation: number) {
     const job = this.state.job
     if (!job) return
@@ -75,8 +89,34 @@ export class ReviewSession {
     this.observation?.stop()
     const current = () => generation === this.generation && viewing === this.viewing
     this.observation = observeJob(this.client, job.job_id, {
-      onEvent: event => { if (current()) this.update({ events: [...this.state.events, event].slice(-200) }) },
-      onJob: value => { if (current()) this.update({ job: value }) },
+      onEvent: event => {
+        if (!current()) return
+        if ('kind' in event && event.kind === 'step_update' && event.payload.step_idx != null && event.payload.step_type) {
+          const p = event.payload
+          const stepStatus = (p.step_status ?? (p.status as StepStatus | null) ?? 'RUNNING') as StepStatus
+          this.stepsByIdx = applyStepUpdate(
+            this.stepsByIdx,
+            {
+              step_idx: p.step_idx!,
+              parent_step_idx: p.parent_step_idx ?? null,
+              agent_name: p.agent_name ?? p.agent_id ?? undefined,
+              step_type: p.step_type!,
+              status: stepStatus,
+              delta_seq: p.delta_seq ?? 0,
+              render_info: p.render_info ?? {},
+              error_details: p.error_details ?? null,
+            },
+            p.agent_id,
+          )
+        }
+        this.update({
+          events: [...this.state.events, event].slice(-200),
+          steps: this.syncSteps(),
+        })
+      },
+      onJob: value => {
+        if (current()) this.update({ job: value, steps: this.syncSteps(value.status) })
+      },
       onReport: report => { if (current()) this.update({ report }) },
       onConnection: connection => { if (current()) this.update({ connection }) },
       onError: error => { if (current()) this.update({ error: `Observation stopped: ${error.message} Reconnect to check the job.` }) },
@@ -87,7 +127,7 @@ export class ReviewSession {
     await this.perform(async (generation, signal) => {
       const job = await this.client.status(this.state.job!.job_id, signal)
       if (generation !== this.generation) return
-      this.update({ job }); this.observe(generation)
+      this.update({ job, steps: this.syncSteps(job.status) }); this.observe(generation)
     })
   }
   async cancel() { await this.control('cancel') }
@@ -97,7 +137,7 @@ export class ReviewSession {
     await this.perform(async (generation, signal) => {
       const job = await this.client[kind](this.state.job!.job_id, signal)
       if (generation !== this.generation) return
-      this.update({ job }); this.observe(generation)
+      this.update({ job, steps: this.syncSteps(job.status) }); this.observe(generation)
     })
   }
   async openSource(path: string, start: number, end: number) {

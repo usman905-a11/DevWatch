@@ -185,6 +185,8 @@ class AgentActivityPublisher:
         self.stream.complete(activity, data)
 
     def record(self, kind: str, **payload) -> None:
+        if kind == "step_update":
+            return
         operation = payload.get("operation_id")
         owner = self._owner(payload)
         if kind == "tool_progress":

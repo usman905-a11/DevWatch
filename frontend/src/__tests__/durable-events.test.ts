@@ -191,4 +191,73 @@ describe('persistent authenticated event observation', () => {
     expect(errors.length).toBe(1)
     expect(errors[0].message).not.toContain('private-source')
   })
+
+  it('folds step_update deltas idempotently by step_idx and delta_seq and caps output at 64KB', async () => {
+    const { applyStepUpdate, parseEvent } = await events()
+    const startEv = {
+      event_id: 'step-0-0',
+      job_id: jobId,
+      sequence: 10,
+      kind: 'step_update',
+      timestamp: 1,
+      payload: {
+        ...payload,
+        status: 'RUNNING',
+        step_status: 'RUNNING',
+        step_idx: 0,
+        parent_step_idx: null,
+        agent_name: 'bug_reliability',
+        step_type: 'run_command',
+        delta_seq: 0,
+        render_info: { title: 'Running pytest', command: 'pytest -q' },
+      },
+    }
+    const parsed = parseEvent({ id: '10', kind: 'step_update', data: JSON.stringify(startEv) }, jobId)
+    expect(parsed).toMatchObject({ kind: 'step_update' })
+
+    let map = new Map()
+    map = applyStepUpdate(map, {
+      step_idx: 0,
+      parent_step_idx: null,
+      agent_name: 'bug_reliability',
+      step_type: 'run_command',
+      status: 'RUNNING',
+      delta_seq: 0,
+      render_info: { title: 'Running pytest', command: 'pytest -q' },
+    })
+    expect(map.get(0)?.status).toBe('RUNNING')
+    expect(map.get(0)?.command).toBe('pytest -q')
+
+    // Apply delta_seq = 1
+    map = applyStepUpdate(map, {
+      step_idx: 0,
+      step_type: 'run_command',
+      status: 'RUNNING',
+      delta_seq: 1,
+      render_info: { stdout_append: 'line 1\n', stderr_append: 'warn 1\n' },
+    })
+    // Re-applying delta_seq = 1 or 0 must be ignored (idempotent)
+    map = applyStepUpdate(map, {
+      step_idx: 0,
+      step_type: 'run_command',
+      status: 'RUNNING',
+      delta_seq: 1,
+      render_info: { stdout_append: 'line 1\n', stderr_append: 'warn 1\n' },
+    })
+    expect(map.get(0)?.stdout).toBe('line 1\n')
+    expect(map.get(0)?.stderr).toBe('warn 1\n')
+
+    // Apply completion delta_seq = 2
+    map = applyStepUpdate(map, {
+      step_idx: 0,
+      step_type: 'run_command',
+      status: 'DONE',
+      delta_seq: 2,
+      render_info: { stdout_append: '2 passed\n', exit_code: 0, duration_ms: 48 },
+    })
+    expect(map.get(0)?.status).toBe('DONE')
+    expect(map.get(0)?.stdout).toBe('line 1\n2 passed\n')
+    expect(map.get(0)?.exitCode).toBe(0)
+    expect(map.get(0)?.durationMs).toBe(48)
+  })
 })

@@ -125,6 +125,20 @@ def trace_metrics(events):
             data = event['data']
             tools.append(dict(agent_id=data.get('agentId'), task_id=data.get('taskId'),
                 tool=data.get('tool'), outcome=data.get('outcome'), error_code=data.get('errorCode')))
+    if not tools:
+        for event in events:
+            if event.get('kind') == 'step_update':
+                payload = event.get('payload') or {}
+                status = payload.get('status') or payload.get('step_status')
+                step_type = payload.get('step_type')
+                if step_type in {'run_command', 'code_search', 'repo_map', 'read_file', 'tool'} and status in {'DONE', 'ERROR', 'CANCELING'}:
+                    tools.append(dict(
+                        agent_id=payload.get('agent_id') or payload.get('agent_name'),
+                        task_id=payload.get('task_id'),
+                        tool=payload.get('tool') or step_type,
+                        outcome='succeeded' if status == 'DONE' else 'cancelled' if status == 'CANCELING' else 'failed',
+                        error_code=payload.get('error_code'),
+                    ))
     recoverable = recovered = 0
     for index, call in enumerate(tools):
         if call.get('error_code') != 'recoverable_tool_error':
@@ -137,6 +151,15 @@ def trace_metrics(events):
         and e.get('activityType') == 'response' and e.get('agentRunId') != 'review']
     if not model_ends:
         model_ends = [e['payload'] for e in events if e.get('kind') == 'model_call_completed']
+    if not model_ends:
+        for event in events:
+            if event.get('kind') == 'step_update':
+                payload = event.get('payload') or {}
+                status = payload.get('status') or payload.get('step_status')
+                if payload.get('step_type') == 'planner' and status in {'DONE', 'ERROR', 'CANCELING'}:
+                    model_ends.append(dict(
+                        outcome='succeeded' if status == 'DONE' else 'cancelled' if status == 'CANCELING' else 'failed'
+                    ))
     return dict(tool_attempts=len(tools), tool_successes=sum(t.get('outcome') == 'succeeded' for t in tools),
         tool_call_success_rate=sum(t.get('outcome') == 'succeeded' for t in tools)/len(tools) if tools else None,
         recoverable_tool_failures=recoverable, recovered_tool_failures=recovered,

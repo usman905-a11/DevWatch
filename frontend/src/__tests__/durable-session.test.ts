@@ -116,4 +116,81 @@ describe('durable UI session', () => {
     expect(paths.filter(path => path.endsWith('/cancel'))).toHaveLength(1)
     session.dispose()
   })
+  it('retains RUNNING steps across >200 deltas and reconciles RUNNING steps on terminal job status', async () => {
+    const jobId = fixture.job.job_id
+    const basePayload = {
+      status: 'RUNNING',
+      agent_id: 'bug_reliability',
+      task_id: 'bug-1',
+      tool: null,
+      evidence_ref: null,
+      error_code: null,
+      duration_seconds: null,
+      total_tokens: null,
+    }
+    const frames: string[] = []
+    // Step 0 stays RUNNING while 210 deltas arrive on step 1
+    const step0 = {
+      event_id: 's0-0',
+      job_id: jobId,
+      sequence: 1,
+      kind: 'step_update',
+      timestamp: 1,
+      payload: {
+        ...basePayload,
+        step_idx: 0,
+        parent_step_idx: null,
+        agent_name: 'bug_reliability',
+        step_type: 'agent_run',
+        step_status: 'RUNNING',
+        delta_seq: 0,
+        render_info: { title: 'Running bug_reliability' },
+      },
+    }
+    frames.push(`id: 1\nevent: step_update\ndata: ${JSON.stringify(step0)}\n\n`)
+    for (let d = 0; d < 205; d++) {
+      const seq = d + 2
+      const delta = {
+        event_id: `s1-${d}`,
+        job_id: jobId,
+        sequence: seq,
+        kind: 'step_update',
+        timestamp: 1,
+        payload: {
+          ...basePayload,
+          step_idx: 1,
+          parent_step_idx: 0,
+          agent_name: 'bug_reliability',
+          step_type: 'run_command',
+          step_status: 'RUNNING',
+          delta_seq: d,
+          render_info: d === 0 ? { title: 'Running pytest', command: 'pytest' } : { stdout_append: `out-${d}\n` },
+        },
+      }
+      frames.push(`id: ${seq}\nevent: step_update\ndata: ${JSON.stringify(delta)}\n\n`)
+    }
+    const sseBody = frames.join('')
+    let streamFetched = false
+    const api = new DurableReviewClient('http://localhost:8000', '', async url => {
+      if (String(url).endsWith('/snapshot')) return json(fixture.snapshot)
+      if (String(url).includes('/stream?')) {
+        streamFetched = true
+        return new Response(sseBody, { headers: { 'Content-Type': 'text/event-stream' } })
+      }
+      if (String(url).includes('/report?')) return json(fixture.report)
+      return json({ ...fixture.job, status: streamFetched ? 'failed' : 'running' })
+    })
+    const session = new ReviewSession(api)
+    await session.attach(jobId)
+    await vi.waitFor(() => expect(session.getSnapshot().job?.status).toBe('failed'))
+    const steps = session.getSnapshot().steps
+    expect(steps.map(s => s.stepIdx)).toEqual([0, 1])
+    // Both steps were RUNNING when the stream ended and job became 'failed', so both reconcile to ERROR
+    expect(steps[0].status).toBe('ERROR')
+    expect(steps[0].errorDetails).toBe('Interrupted by job termination')
+    expect(steps[1].status).toBe('ERROR')
+    expect(steps[1].stdout).toContain('out-1\n')
+    expect(steps[1].stdout).toContain('out-204\n')
+    session.dispose()
+  })
 })

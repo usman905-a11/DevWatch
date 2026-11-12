@@ -148,6 +148,66 @@ def _cursor(value):
     return int(value)
 
 
+SUBSCRIBER_BUFFER_MAXSIZE = 256
+
+
+class SubscriberEventBuffer:
+    """Bounded per-subscriber queue with non-blocking overflow and EventStore cursor resync."""
+
+    def __init__(self, *, after: int = 0, maxsize: int = SUBSCRIBER_BUFFER_MAXSIZE):
+        self.last_sent_sequence = after
+        self.maxsize = maxsize
+        self.queue: asyncio.Queue = asyncio.Queue(maxsize=maxsize)
+        self.overflowed = False
+
+    def put_nowait(self, event) -> None:
+        if self.overflowed:
+            return
+        try:
+            self.queue.put_nowait(event)
+        except asyncio.QueueFull:
+            self.overflowed = True
+
+    def _clear_queue(self) -> None:
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+    async def stream(self, replay_fn, is_active_fn):
+        while True:
+            if self.overflowed:
+                self._clear_queue()
+                self.overflowed = False
+            page = replay_fn(self.last_sent_sequence, self.maxsize)
+            for event in page:
+                if event.sequence > self.last_sent_sequence:
+                    self.last_sent_sequence = event.sequence
+                    yield event
+            while not self.overflowed and not self.queue.empty():
+                queued = self.queue.get_nowait()
+                if queued.sequence == self.last_sent_sequence + 1:
+                    self.last_sent_sequence = queued.sequence
+                    yield queued
+                elif queued.sequence > self.last_sent_sequence + 1:
+                    self.overflowed = True
+                    self._clear_queue()
+                    break
+            if self.overflowed:
+                continue
+            if not page and not is_active_fn():
+                final_page = replay_fn(self.last_sent_sequence, self.maxsize)
+                for event in final_page:
+                    if event.sequence > self.last_sent_sequence:
+                        self.last_sent_sequence = event.sequence
+                        yield event
+                if not final_page:
+                    return
+            if not page:
+                await asyncio.sleep(0.1)
+
+
 def create_app(*, settings: ServiceSettings | None = None, provider=None):
     settings = settings or ServiceSettings.from_env()
     if provider is None:
@@ -305,15 +365,12 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
                            for event in page], "next_cursor": page[-1].sequence if page else after}
 
     async def persisted_events(identity, principal, after):
-        while True:
-            page = replay(identity, principal, after)
-            for event in page:
-                after = event.sequence
-                yield event
-            if not page and app.state.jobs.get(identity, owner=principal).status not in {"queued", "running"}:
-                return
-            if not page:
-                await asyncio.sleep(.1)
+        buffer = SubscriberEventBuffer(after=after, maxsize=SUBSCRIBER_BUFFER_MAXSIZE)
+        async for event in buffer.stream(
+            replay_fn=lambda cursor, limit: replay(identity, principal, cursor, limit=limit),
+            is_active_fn=lambda: app.state.jobs.get(identity, owner=principal).status in {"queued", "running"},
+        ):
+            yield event
 
     @app.get("/api/jobs/{identity}/stream")
     async def stream(identity: str, after: int = Query(0, ge=0, le=MAX_EVENT_CURSOR), principal=Depends(owner),

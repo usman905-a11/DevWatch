@@ -26,7 +26,7 @@ from devwatch.review.contracts import (
 )
 from devwatch.review.finalization import FinalAcceptanceGate, FinalizationWorkflow, assemble_report, render_accepted_report
 from devwatch.review.pdf import render_accepted_pdf_async
-from devwatch.review.jobs import EventPayload, EventStore, JobConflict, JobRecord, JobStore, _SQLiteStore, safe_stop_reason
+from devwatch.review.jobs import EventPayload, EventStore, JobConflict, JobRecord, JobStore, TrajectoryStepTracker, _SQLiteStore, safe_stop_reason
 from devwatch.review.repository import RepositoryContext, SharedBlackboard, StructuralEvidenceGate
 from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
 from devwatch.review.subgraphs import AgentSubgraphs
@@ -241,17 +241,23 @@ class _ReviewSession:
         self._persistence_lock = asyncio.Lock()
         self.activity = AgentActivityPublisher(ActivityStream(job.job_id,
             lambda event: executor.jobs.publish_activity(job.job_id, owner=job.owner, event=event)))
+        self.steps = TrajectoryStepTracker(self.emit)
+        self.step_scope = self.steps.step_scope
+        self.step = self.steps.step
         self.command_runtime = TrustedToolRuntime(repository, executor.jobs, job, commands=executor.trusted_commands)
         self.database_runtime = DatabaseTools(repository, job, policies=executor.databases)
         self.agents = AgentSubgraphs(executor.provider, repository.tools(self.command_runtime, self.database_runtime), budget, self.context,
             models=executor.models, persist=self.persist_agent, model_slots=executor.model_slots, emit=self.emit,
-            require_verification_challenge=True, require_independent_support=True)
+            require_verification_challenge=True, require_independent_support=True, step_tracker=self.steps)
 
     def emit(self, kind, **payload):
         if kind == "model_call_completed":
             self.budget.refresh_time()
             self.executor.jobs.update_ledger(self.job.job_id, owner=self.job.owner,
                 ledger=self.budget.ledger, model_completions=[payload])
+        if kind == "step_update":
+            self.executor.jobs.emit(self.job.job_id, owner=self.job.owner, kind="step_update", payload=payload)
+            return
         self.activity.record(kind, **payload)
         self.executor.jobs.dispatch_events(self.executor.events)
 
