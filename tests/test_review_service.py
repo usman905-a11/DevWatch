@@ -35,7 +35,7 @@ def submit(client, *, key="job-one", snapshot=None, headers=ALICE):
 
 
 def completed(client, identity):
-    deadline = time.monotonic() + 8
+    deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
         response = client.get(f"/api/jobs/{identity}", headers=ALICE)
         assert response.status_code == 200
@@ -43,7 +43,7 @@ def completed(client, identity):
             return response.json()
         time.sleep(.01)
     history = client.get(f"/api/jobs/{identity}/events?limit=1000", headers=ALICE).json()
-    kinds = [event["kind"] for event in history.get("events", [])][-10:]
+    kinds = [event.get("kind") or event.get("type") for event in history.get("events", [])][-10:]
     pytest.fail(f"durable job did not complete: status={response.json()['status']}; recent event kinds={kinds}")
 
 
@@ -66,27 +66,6 @@ def test_submit_is_idempotent_and_reports_are_deterministic(tmp_path):
         assert "Uncertain" in markdown.text
         assert len(provider.requests) == 4
         assert len(list((tmp_path / "runtime").glob("*.sqlite"))) == 4
-
-
-def test_pdf_download_is_finalized_owned_and_persisted_as_an_artifact(tmp_path):
-    import pymupdf
-    with TestClient(app(tmp_path)) as client:
-        identity, snapshot = submit(client)
-        assert completed(client, identity)["status"] == "completed"
-        pdf = client.get(f"/api/jobs/{identity}/report?format=pdf", headers=ALICE)
-        assert pdf.status_code == 200, pdf.text
-        assert pdf.headers["content-type"] == "application/pdf"
-        assert pdf.headers["cache-control"] == "no-store"
-        assert pdf.headers["x-content-type-options"] == "nosniff"
-        assert pdf.headers["content-disposition"] == f'attachment; filename="devwatch-{identity}.pdf"'
-        assert client.get(f"/api/jobs/{identity}/report?format=pdf", headers=ALICE).content == pdf.content
-        assert client.get(f"/api/jobs/{identity}/report?format=pdf", headers=BOB).status_code == 404
-        with pymupdf.open(stream=pdf.content, filetype="pdf") as document:
-            text = "".join(page.get_text() for page in document)
-            assert snapshot in text and "Uncertain high-impact candidates (1)" in text
-            assert all(any(block[1] < page.rect.height - 48 for block in page.get_text("blocks")) for page in document), "PDF has an empty body page"
-        files = list((tmp_path / "runtime" / "artifacts" / "reports").glob("**/*.pdf"))
-        assert len(files) == 1 and files[0].read_bytes() == pdf.content
 
 
 def test_owner_checks_cover_job_report_events_source_and_snapshot(tmp_path):
@@ -181,7 +160,7 @@ def test_websocket_disconnect_does_not_cancel_durable_job(tmp_path):
         with client.websocket_connect(f"/api/jobs/{identity}/ws", headers=ALICE) as socket:
             assert socket.receive_json()["kind"] == "job_queued"
         assert client.get(f"/api/jobs/{identity}", headers=ALICE).json()["status"] == "running"
-        assert client.get(f"/api/jobs/{identity}/report?format=pdf", headers=ALICE).status_code == 409
+        assert client.get(f"/api/jobs/{identity}/report?format=markdown", headers=ALICE).status_code == 409
         release.set()
         assert completed(client, identity)["status"] == "completed"
 

@@ -373,9 +373,9 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         "failure_attribution": "trace-based triage; root cause requires inspection",
         "human_reviewed": judgments is not None and len(judgments) == len(findings),
         "live_model_accuracy": None,
-        "tool_observations": [{"operation_id": e.payload.operation_id, "agent_id": e.payload.agent_id,
-            "task_id": e.payload.task_id, "tool": e.payload.tool, "outcome": e.payload.outcome,
-            "evidence_ref": e.payload.evidence_ref} for e in calls],
+        "tool_observations": [{"operation_id": e.activityId, "agent_id": e.data.agentId,
+            "task_id": e.data.taskId, "tool": e.data.tool, "outcome": e.data.outcome,
+            "evidence_ref": e.data.evidenceRef} for e in calls],
         "findings": findings, "candidates": candidates, "quarantined_candidates": quarantined,
         "gold": case["gold"], "evidence": records,
         "coverage": report.get("coverage", {}), "snapshot_id": snapshot.snapshot_id}

@@ -21,7 +21,7 @@ from devwatch.providers.exceptions import (ProviderAuthenticationError, Provider
     ProviderQuotaExhaustedError, ProviderTemporaryError, ProviderTimeoutError, ProviderBudgetRefusedError)
 from devwatch.review.budgets import BudgetExceeded, BudgetManager
 from devwatch.review.jobs import StepHandle, StepRenderInfo, StepType, TrajectoryStepTracker, UnknownToolCompletion, safe_stop_reason
-from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, CommandArguments, describe_tool
+from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, describe_tool
 from devwatch.review.tool_errors import ToolFailure, diagnose, failure_identity, safe_arguments
 from devwatch.review import investigation, tool_selection, prompts
 from devwatch.review import verification as semantic_verification
@@ -227,7 +227,7 @@ class AgentSubgraphs:
         self.control_graph = self._build()
 
     def _build(self):
-        from devwatch.review.observability import observed_node
+        from devwatch.review.activity_stream import observed_node
         builder = StateGraph(AgentExecutionState)
         builder.add_node("investigate", observed_node("investigate", self._investigate, self._event, scope="agent"))
         builder.add_node("execute_action", observed_node("execute_action", self._execute_action, self._event, scope="agent"))
@@ -1116,7 +1116,7 @@ class AgentSubgraphs:
         name = action.tool or "read_source"
         fingerprint = fingerprint or failure_identity(name, action.arguments, self.tools._arguments.get(name))
         diagnostic = diagnose(name if name in self.tools._arguments else "unrecognized_tool", action.arguments,
-            task.files, error, fingerprint, replay_safe=self.tools._arguments.get(name) is not CommandArguments)
+            task.files, error, fingerprint, replay_safe=True)
         private.tool_diagnostics = (private.tool_diagnostics + [diagnostic])[-8:]
         return diagnostic
 

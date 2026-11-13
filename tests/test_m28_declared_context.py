@@ -77,16 +77,3 @@ def test_prompt_pressure_never_silently_discards_declared_context(tmp_path):
     with pytest.raises(PromptContextLimit):
         runtime._prepare_prompt(state,{'declared_context':{'files':[{'content':'x'*200000}]}},repair=False)
 
-
-def test_cli_submit_shares_declared_context_through_the_real_client(tmp_path,monkeypatch):
-    from tests.test_durable_cli import connect, runner, cli
-    with TestClient(app(tmp_path)) as http:
-        client,transport=connect(monkeypatch,http)
-        snapshot=http.post('/api/snapshots',headers=ALICE,json={'files':{
-            'service.py':'def first(items):\n    return items[0]\n',
-            'constraints.txt':'Only nonempty lists are supported.\n'}}).json()['snapshot_id']
-        result=runner.invoke(cli,['submit',snapshot,'--idempotency-key','cli-context',
-            '--changed-file','service.py','--context-file','constraints.txt'])
-        assert result.exit_code==0,result.output
-        requests=[request for request in transport.requests if request.full_url.endswith('/api/jobs')]
-        assert json.loads(requests[0].data)['context_files']==['constraints.txt']

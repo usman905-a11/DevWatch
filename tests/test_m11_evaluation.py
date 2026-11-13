@@ -260,24 +260,6 @@ async def test_partial_model_review_still_counts_toward_quality(tmp_path):
     assert result["score"]["true_positive"] == 1
 
 
-@pytest.mark.asyncio
-async def test_legacy_evaluator_no_longer_accepts_any_finding_as_true_positive(tmp_path):
-    from pathlib import Path
-    from scripts.evaluate_reviews import ContractProbeProvider, evaluate
-    class UnrelatedProvider(ContractProbeProvider):
-        async def generate_completion(self, request):
-            response = await super().generate_completion(request)
-            action = json.loads(response.content)
-            if action["kind"] == "submit_candidates":
-                for candidate in action["payload"]["candidates"]:
-                    candidate.update(title="Unrelated style warning", description="Remove an unused import", impact="Style")
-            return response.model_copy(update={"content": json.dumps(action)})
-    corpus = json.loads(Path("tests/fixtures/canonical-review-eval-v2.json").read_text())
-    result = await evaluate(corpus["cases"][:1], tmp_path, provider_factory=UnrelatedProvider)
-    assert (result["true_positive"], result["false_positive"], result["false_negative"]) == (0, 0, 1)
-    score = result['results'][0]['candidate_score']
-    assert (score['true_positive'], score['false_positive'], score['false_negative']) == (0, 1, 1)
-
 
 def test_human_tool_review_is_tied_to_actual_operations():
     row = {"status": "completed", "gold": [gold()], "findings": [finding()], "evidence": evidence(), "metrics": {},

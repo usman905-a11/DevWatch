@@ -502,19 +502,19 @@ AGENT_CONTRACTS = MappingProxyType({
         actions=frozenset({"request_context", "call_tool", "submit_plan", "finish"})),
     AgentId.BUG_RELIABILITY: _contract(
         AgentId.BUG_RELIABILITY, "Investigate failure paths, exceptions, resource lifecycle and reliability",
-        {"parse_ast", "lint", "type_check", "run_tests", "run_command", "git_diff"}, ModelTier.MEDIUM),
+        {"parse_ast", "git_diff", "code_search", "symbol_lookup", "call_graph"}, ModelTier.MEDIUM),
     AgentId.LOGIC_CORRECTNESS: _contract(
         AgentId.LOGIC_CORRECTNESS, "Trace behavioral invariants and cross-symbol control/data flow",
-        {"parse_ast", "call_graph", "symbol_lookup", "run_tests", "code_search"}, ModelTier.MEDIUM),
+        {"parse_ast", "call_graph", "symbol_lookup", "code_search"}, ModelTier.MEDIUM),
     AgentId.QUALITY_TESTABILITY: _contract(
         AgentId.QUALITY_TESTABILITY, "Assess complexity, coupling, test gaps and maintainability with evidence",
-        {"complexity", "coverage", "lint", "parse_ast", "code_search"}, ModelTier.MEDIUM),
+        {"complexity", "parse_ast", "code_search", "dependency_graph"}, ModelTier.MEDIUM),
     AgentId.ARCHITECTURE_SECURITY: _contract(
         AgentId.ARCHITECTURE_SECURITY, "Inspect boundaries, dependencies, configuration and exploitable paths",
-        {"repo_map", "dependency_graph", "import_graph", "sast", "config_read", "git_history"}, ModelTier.STRONG),
+        {"repo_map", "dependency_graph", "import_graph", "config_read", "git_history", "code_search"}, ModelTier.STRONG),
     AgentId.PERFORMANCE_SCALABILITY: _contract(
         AgentId.PERFORMANCE_SCALABILITY, "Measure costly call paths, scaling behavior and DB/query bottlenecks",
-        {"profile", "benchmark", "call_graph", "db_analyze", "query_analyze"}, ModelTier.MEDIUM),
+        {"call_graph", "complexity", "parse_ast", "code_search", "dependency_graph"}, ModelTier.MEDIUM),
     AgentId.SYNTHESIZER_VERIFIER: _contract(
         AgentId.SYNTHESIZER_VERIFIER, "Verify evidence, resolve duplicates/conflicts, then synthesize a structured draft",
         {"code_search", "symbol_lookup", "call_graph", "dependency_graph"}, ModelTier.STRONG,

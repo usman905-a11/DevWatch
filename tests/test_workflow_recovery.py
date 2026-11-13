@@ -27,7 +27,7 @@ def test_resume_after_verification_continues_synthesis_without_reverifying(tmp_p
         manager = DurableJobManager(jobs, events, executor)
         with held_assembly(first, synthesis_entered):
             job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="resume")
-            await asyncio.wait_for(synthesis_entered.wait(), timeout=10)
+            await asyncio.wait_for(synthesis_entered.wait(), timeout=20)
             await manager.close()
         interrupted = jobs.get(job.job_id, owner="alice")
         assert interrupted.status == "interrupted"

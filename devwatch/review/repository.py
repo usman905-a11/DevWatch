@@ -258,7 +258,7 @@ class RepositoryContext:
                    and record.get("end_line", 0) >= location.end_line for ref in candidate.evidence_refs):
             raise ValueError("candidate lacks acknowledged source covering its location")
 
-    def tools(self, command_runtime=None, database_runtime=None) -> PermissionedTools:
+    def tools(self) -> PermissionedTools:
         tools = PermissionedTools()
         tools.validate_confirmation = self.validate_confirmation
         tools.validate_candidate = self.validate_candidate
@@ -367,29 +367,6 @@ class RepositoryContext:
         tools.register("git_history", partial(git, "git_history"))
         for name in ("parse_ast", "symbol_lookup", "call_graph", "dependency_graph", "import_graph", "complexity"):
             tools.register(name, partial(facts, name))
-        if command_runtime is not None:
-            from devwatch.review.tool_runtime import COMMAND_TOOLS
-            async def command(name, arguments, work, *, progress=None, step_handle=None):
-                from devwatch.review.contracts import AgentAction
-                return await command_runtime.execute(work, AgentAction(kind="call_tool", tool=name, arguments=arguments),
-                                                     progress=progress, step_handle=step_handle)
-            def command_available(name, work):
-                return any(definition.tool == name and set(definition.files).issubset(work.files)
-                           for definition in command_runtime.commands.values())
-            for name in COMMAND_TOOLS:
-                if database_runtime is None or name not in {"db_analyze", "query_analyze"}:
-                    tools.register(name, partial(command, name), available=partial(command_available, name))
-            tools.register("write_artifact", command_runtime.write_measurement, available=command_runtime.grants_measurement)
-        if database_runtime is not None:
-            from devwatch.review.tool_catalogue import DatabaseArguments, QueryArguments
-            async def database(name, arguments, work):
-                from devwatch.review.contracts import AgentAction
-                return await database_runtime.execute(work, AgentAction(kind="call_tool", tool=name, arguments=arguments))
-            def database_available(work):
-                return any(database_runtime.job.owner in policy.owners for policy in database_runtime.policies.values())
-            for name in ("db_analyze", "query_analyze"):
-                tools.register(name, partial(database, name), available=database_available,
-                               arguments_model=DatabaseArguments if name == "db_analyze" else QueryArguments)
         return tools
 
 

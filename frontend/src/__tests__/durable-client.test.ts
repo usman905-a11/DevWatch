@@ -34,30 +34,6 @@ it('binds bounded evidence retrieval to the requested snapshot', async () => {
 })
 
 describe('canonical durable browser client', () => {
-  it('downloads PDF bytes only after validating a completed snapshot report', async () => {
-    const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10, 255, 10, 37, 37, 69, 79, 70, 10])
-    const paths: string[] = []
-    const api = await client(async url => {
-      paths.push(String(url))
-      return String(url).endsWith('format=pdf') ? new Response(bytes, { headers: { 'Content-Type': 'application/pdf' } })
-        : String(url).endsWith('format=json') ? json(report) : json({ ...job, status: 'completed' })
-    })
-    expect(typeof api.pdf).toBe('function')
-    expect(new Uint8Array(await api.pdf(jobId))).toEqual(bytes)
-    expect(paths).toEqual([`http://localhost:8000/api/jobs/${jobId}`,
-      `http://localhost:8000/api/jobs/${jobId}/report?format=json`, `http://localhost:8000/api/jobs/${jobId}/report?format=pdf`])
-  })
-  it('rejects unfinished jobs, wrong PDF MIME, malformed PDF and oversized bytes', async () => {
-    const pending = await client(async () => json(job))
-    expect(typeof pending.pdf).toBe('function')
-    await expect(pending.pdf(jobId)).rejects.toThrow(/finalized/i)
-    for (const [mime, body] of [['text/html', '%PDF-1.7\n%%EOF'], ['application/pdf', '<html>'],
-      ['application/pdf', '%PDF-' + 'x'.repeat(10000000) + '%%EOF']]) {
-      const api = await client(async url => String(url).endsWith('format=pdf') ? new Response(body, { headers: { 'Content-Type': mime } })
-        : String(url).endsWith('format=json') ? json(report) : json({ ...job, status: 'completed' }))
-      await expect(api.pdf(jobId)).rejects.toThrow(/invalid|limit/i)
-    }
-  })
   it('opens workspace, lists directory entries, and reads files via /fs/* endpoints', async () => {
     const requests: string[] = []
     const api = await client(async (url, options) => {

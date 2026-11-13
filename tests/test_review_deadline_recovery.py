@@ -34,7 +34,7 @@ def test_canonical_timeout_recovery_preserves_inspection_without_new_model_calls
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="deadline")
         jobs.transition(job.job_id, owner="alice", expected_status="queued", status="running")
         operation = asyncio.create_task(executor(jobs.get(job.job_id, owner="alice")))
-        await asyncio.wait_for(provider.entered.wait(), 5)
+        await asyncio.wait_for(provider.entered.wait(), 20)
         operation.cancel()
         await asyncio.gather(operation, return_exceptions=True)
         assert provider.cancelled

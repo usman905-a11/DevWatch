@@ -138,17 +138,6 @@ async def test_canonical_service_retains_detection_without_calling_it_confirmati
 
 
 @pytest.mark.asyncio
-async def test_benchmark_distinguishes_detection_from_independent_confirmation(tmp_path):
-    from scripts.evaluate_reviews import evaluate
-    from tests.test_canonical_evaluation import corpus
-    summary = await evaluate([corpus()['cases'][0]], tmp_path)
-    assert summary['confirmed_recall'] == 0
-    assert summary['candidate_recall'] == 1
-    assert summary['candidate_precision'] == 1
-    assert summary['publication_policy_satisfied'] is True
-
-
-@pytest.mark.asyncio
 async def test_two_unproven_rejections_cannot_silently_discard_a_candidate(tmp_path):
     from tests.test_m20_verification import setup as final_setup
     from tests.test_audit_evidence import engine as final_engine

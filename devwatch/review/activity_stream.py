@@ -327,3 +327,42 @@ class AgentActivityPublisher:
         for offset in range(0, len(final), 1024):
             self.stream.delta(activity, {"text": final[offset:offset + 1024]})
         self.stream.complete(activity, {"text": final, "truncated": truncated})
+
+
+def observed_node(name: str, fn: Callable[..., Any], emit: Callable[..., Any], *, scope: str = "review"):
+    """Wrap a LangGraph node (sync or async) to emit bounded graph_node_started/completed events."""
+    import asyncio
+    import inspect
+    from uuid import uuid4
+
+    async def _emit_async(kind: str, state: Any, **payload: Any) -> None:
+        res = emit(kind, state, **payload)
+        if inspect.isawaitable(res):
+            await res
+
+    async def _async_node(state):
+        operation_id = uuid4().hex
+        await _emit_async("graph_node_started", state, node=name, graph_scope=scope, operation_id=operation_id)
+        try:
+            result = await fn(state)
+        except asyncio.CancelledError:
+            await _emit_async("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="cancelled")
+            raise
+        except Exception:
+            await _emit_async("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="failed")
+            raise
+        await _emit_async("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="succeeded")
+        return result
+
+    def _sync_node(state):
+        operation_id = uuid4().hex
+        emit("graph_node_started", state, node=name, graph_scope=scope, operation_id=operation_id)
+        try:
+            result = fn(state)
+        except Exception:
+            emit("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="failed")
+            raise
+        emit("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="succeeded")
+        return result
+
+    return _async_node if inspect.iscoroutinefunction(fn) else _sync_node

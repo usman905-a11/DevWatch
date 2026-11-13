@@ -190,13 +190,12 @@ export function DurableApp() {
     }
   }
 
-  async function exportReport(format: 'json' | 'markdown' | 'pdf') {
+  async function exportReport(format: 'json' | 'markdown') {
     if (!state.job || !state.report) return
     try {
-      const data = format === 'json' ? JSON.stringify(state.report, null, 2) + '\n'
-        : format === 'markdown' ? await client.markdown(state.job.job_id) : await client.pdf(state.job.job_id)
-      const mime = { json: 'application/json', markdown: 'text/markdown', pdf: 'application/pdf' }[format]
-      const extension = { json: 'json', markdown: 'md', pdf: 'pdf' }[format]
+      const data = format === 'json' ? JSON.stringify(state.report, null, 2) + '\n' : await client.markdown(state.job.job_id)
+      const mime = { json: 'application/json', markdown: 'text/markdown' }[format]
+      const extension = { json: 'json', markdown: 'md' }[format]
       const url = URL.createObjectURL(new Blob([data], { type: mime }))
       const link = document.createElement('a')
       link.href = url
@@ -252,8 +251,7 @@ export function DurableApp() {
         {state.job.status === 'interrupted' && <button className="header-button" disabled={busy} onClick={() => { void session.resume() }}>Resume review</button>}
         {(active || state.job.status === 'interrupted') && <button className="header-button" disabled={busy} onClick={() => { void session.cancel() }}>Cancel review</button>}
         {state.report && <><button className="header-button" onClick={() => { void exportReport('json') }}>Download JSON</button>
-          <button className="header-button" onClick={() => { void exportReport('markdown') }}>Download Markdown</button>
-          <button className="header-button" onClick={() => { void exportReport('pdf') }}>Download PDF</button></>}
+          <button className="header-button" onClick={() => { void exportReport('markdown') }}>Download Markdown</button></>}
       </>}
       {state.intent && !state.job && <div className="submission-intent">
         <p>Submission intent: workspace <code>{state.intent.workspace_path ?? state.intent.snapshot_id}</code>; key <code>{state.intent.idempotency_key}</code>.</p>

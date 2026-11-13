@@ -86,7 +86,7 @@ async def test_interruption_reuses_finished_worker_while_resuming_its_unfinished
     assert {item['task_id'] for item in report['verification_audit']['provenance'].values()} == {'logic-fast', 'logic-slow'}
     assert not report["coverage"]["failed"]
     timeline = events.replay(job.job_id, limit=1000)
-    assert sum(e.kind == "agent_reused" and e.payload.task_id == "logic-fast" for e in timeline) == 1
+    assert sum(getattr(e, "type", None) == "activity.started" and e.data.message == "agent_reused" for e in timeline) == 1
 
 
 @pytest.mark.asyncio
@@ -132,7 +132,7 @@ async def test_two_jobs_share_three_model_slots_and_keep_five_same_role_workers_
         assert len(report['verification_audit']['decisions']) == 5
         assert {item['task_id'] for item in report['verification_audit']['provenance'].values()} == set(provider.identities)
         timeline = events.replay(job.job_id, limit=1000)
-        starts = [e.payload.task_id for e in timeline if e.kind == "agent_started" and e.payload.phase == "investigation"]
+        starts = [e.data.taskId for e in timeline if getattr(e, "type", None) == "activity.started" and e.activityType == "result" and e.data.agentId == "logic_correctness"]
         assert starts == ["logic-a", "logic-b", "logic-c", "logic-d", "logic-e"]
 
 

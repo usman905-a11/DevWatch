@@ -26,9 +26,6 @@ from devwatch.review.jobs import DurableJobManager, EventStore, JobConflict, Job
 from devwatch.review.repository import RepositoryContext
 from devwatch.review.stores import ArtifactStore, CaptureCoverage, GitMetadata, RepoCache, StoreLayout
 from devwatch.review.workflow import CanonicalReviewExecutor
-from devwatch.review.tool_runtime import TrustedCommand
-from devwatch.review.database_tools import DatabasePolicy
-from devwatch.review.leases import runtime_lock
 from devwatch.review.workspace import (
     PathOutsideWorkspaceError,
     WorkspaceError,
@@ -48,10 +45,6 @@ class ServiceSettings:
     allowed_origins: tuple[str, ...] = ("http://localhost:3000", "http://localhost:5173",
                                       "http://127.0.0.1:3000", "http://127.0.0.1:5173")
     max_request_bytes: int = 11_000_000
-    trusted_commands: tuple[TrustedCommand, ...] = ()
-    databases: tuple[DatabasePolicy, ...] = ()
-    langsmith_metadata: bool = False
-    langsmith_project: str = "devwatch-metadata"
 
     def __post_init__(self):
         if set(self.models) != set(ModelTier) or any(not name.strip() for name in self.models.values()):
@@ -62,34 +55,14 @@ class ServiceSettings:
             raise ValueError("bounded credentials and explicit origins are required")
         if self.max_request_bytes < 1:
             raise ValueError("request size must be bounded")
-        if len(self.trusted_commands) > 100 or len({command.command_id for command in self.trusted_commands}) != len(self.trusted_commands):
-            raise ValueError("Trusted command definitions must be bounded and unique")
-        if len(self.databases) > 20 or len({policy.database_id for policy in self.databases}) != len(self.databases):
-            raise ValueError("Database policy definitions must be bounded and unique")
-        if not self.langsmith_project or len(self.langsmith_project) > 128:
-            raise ValueError("bounded telemetry project required")
 
     @classmethod
     def from_env(cls):
         key = os.getenv("DEVWATCH_API_KEY", "")
-        definitions = ()
-        databases = ()
-        if configured := os.getenv("DEVWATCH_TRUSTED_TOOLS_FILE"):
-            data = Path(configured).read_bytes()
-            if len(data) > 200_000:
-                raise ValueError("Trusted tool configuration too large")
-            definitions = tuple(TrustedCommand.model_validate(item) for item in json.loads(data))
-        if configured := os.getenv("DEVWATCH_DATABASE_POLICIES_FILE"):
-            data = Path(configured).read_bytes()
-            if len(data) > 200_000:
-                raise ValueError("Database policy configuration too large")
-            databases = tuple(DatabasePolicy.model_validate(item) for item in json.loads(data))
         return cls(runtime_root=Path(os.getenv("DEVWATCH_RUNTIME_DIR", ".devwatch/runtime")),
             models={tier: os.getenv(f"DEVWATCH_MODEL_{tier.value.upper()}", "") for tier in ModelTier},
             api_keys=frozenset({key}) if key else frozenset(),
-            production=os.getenv("DEVWATCH_ENV", "development").lower() == "production", trusted_commands=definitions, databases=databases,
-            langsmith_metadata=os.getenv("DEVWATCH_LANGSMITH_METADATA", "false").lower() == "true",
-            langsmith_project=os.getenv("DEVWATCH_LANGSMITH_PROJECT", "devwatch-metadata"))
+            production=os.getenv("DEVWATCH_ENV", "development").lower() == "production")
 
     def principal(self, headers, *, client_host):
         key = headers.get("x-api-key")
@@ -230,38 +203,20 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         provider = OpenAIProviderAdapter(provider_name=provider_name, max_concurrency=3)
 
     @asynccontextmanager
-    async def running_lifespan(application):
+    async def lifespan(application):
         layout = StoreLayout(settings.runtime_root)
         jobs, events = JobStore(layout.jobs), EventStore(layout.events)
         artifacts, cache = ArtifactStore(layout.artifacts), RepoCache(layout.repo_cache)
-        executor = CanonicalReviewExecutor(layout, artifacts, cache, jobs, events, provider, models=settings.models,
-                                           trusted_commands=settings.trusted_commands, databases=settings.databases)
+        executor = CanonicalReviewExecutor(layout, artifacts, cache, jobs, events, provider, models=settings.models)
         manager = DurableJobManager(jobs, events, executor, recover_timeout=executor.recover_timeout)
         application.state.jobs, application.state.events = jobs, events
         application.state.artifacts, application.state.cache = artifacts, cache
         application.state.manager = manager
-        telemetry = None
-        if settings.langsmith_metadata:
-            from devwatch.review.observability import MetadataExporter, configured_metadata_client
-            exporter = MetadataExporter(events, client=configured_metadata_client(), project=settings.langsmith_project)
-            telemetry = asyncio.create_task(exporter.run(), name="metadata-export")
         await manager.start()
         try:
             yield
         finally:
             await manager.close()
-            if telemetry is not None:
-                telemetry.cancel()
-                await asyncio.gather(telemetry, return_exceptions=True)
-
-    @asynccontextmanager
-    async def lifespan(application):
-        # Cover snapshot capture and read/evidence requests as well as worker drain.
-        with runtime_lock(settings.runtime_root) as acquired:
-            if not acquired:
-                raise RuntimeError("runtime maintenance is in progress")
-            async with running_lifespan(application):
-                yield
 
     app = FastAPI(title="DevWatch Local Review Service", lifespan=lifespan)
     app.state.workspace = WorkspaceManager()
@@ -398,18 +353,10 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         return _public_job(await app.state.manager.resume(identity, owner=principal))
 
     @app.get("/api/jobs/{identity}/report")
-    async def report(identity: str, format: Literal["json", "markdown", "pdf"] = "json", principal=Depends(owner)):
+    async def report(identity: str, format: Literal["json", "markdown"] = "json", principal=Depends(owner)):
         record = app.state.jobs.get(identity, owner=principal)
         if record.status != "completed" or record.result is None:
             raise HTTPException(409, "Report is not finalized")
-        if format == "pdf":
-            if not record.result.get("pdf_artifact"):
-                raise HTTPException(409, "PDF artifact unavailable")
-            repo = repository(identity, principal)
-            data = app.state.artifacts.read_report_pdf(identity, repo.snapshot_id, owner=principal,
-                                                       reference=record.result["pdf_artifact"])
-            return Response(data, media_type="application/pdf", headers={"X-Content-Type-Options": "nosniff",
-                "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="devwatch-{identity}.pdf"'})
         return Response(record.result[format], media_type="application/json" if format == "json" else "text/markdown",
                         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"})
 

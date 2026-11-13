@@ -24,7 +24,6 @@ from pydantic import Field
 from devwatch.review.budgets import BudgetLedger
 from devwatch.review.activity_stream import ActivityData, ActivityEvent, InvalidActivity, TERMINAL
 from devwatch.review.contracts import AgentId, BalancedLimits, ContractModel, FollowupRequest, StopReason
-from devwatch.review.leases import execution_lock, runtime_lock
 
 _LOG = logging.getLogger(__name__)
 
@@ -856,7 +855,6 @@ class EventStore(_SQLiteStore):
                 event_id TEXT PRIMARY KEY, job_id TEXT NOT NULL,
                 sequence INTEGER NOT NULL, event TEXT NOT NULL, UNIQUE(job_id,sequence)
             );
-            CREATE TABLE IF NOT EXISTS telemetry_attempts (event_id TEXT PRIMARY KEY, outcome TEXT NOT NULL);
         """)
 
     def append(self, event: StoredEvent) -> None:
@@ -882,77 +880,6 @@ class EventStore(_SQLiteStore):
                 "SELECT event FROM events WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT ?",
                 (job_id, after, limit))]
 
-    def admit_telemetry(self, *, limit: int = 20) -> list[PersistedEvent]:
-        """At-most-once optional export; unknown sends never replay review effects."""
-        if not 1 <= limit <= 100:
-            raise ValueError("invalid telemetry batch")
-        with self._transaction() as db:
-            rows = list(db.execute("SELECT event FROM events WHERE json_extract(event,'$.kind') IS NOT NULL AND event_id NOT IN "
-                "(SELECT event_id FROM telemetry_attempts) ORDER BY rowid LIMIT ?", (limit,)))
-            events = [PersistedEvent.model_validate_json(row[0]) for row in rows]
-            db.executemany("INSERT INTO telemetry_attempts VALUES(?, 'unknown')", [(event.event_id,) for event in events])
-            return events
-
-    def trace_ancestors(self, event: PersistedEvent) -> list[PersistedEvent]:
-        """Random event IDs supply export ancestry; job/task/source IDs stay local.
-
-        Reconstruct from the durable journal, including across export batches and
-        worker restarts. Historical journals without a root retain flat export.
-        """
-        with self._transaction() as db:
-            root = db.execute("SELECT event FROM events WHERE job_id=? AND sequence<=? "
-                "AND json_extract(event,'$.kind')='job_queued' ORDER BY sequence LIMIT 1",
-                (event.job_id, event.sequence)).fetchone()
-            if root is None:
-                return []
-            ancestors = [PersistedEvent.model_validate_json(root[0])]
-            if event.kind == "step_update":
-                step_lineage: list[PersistedEvent] = []
-                if event.payload.delta_seq and event.payload.delta_seq > 0 and event.payload.step_idx is not None:
-                    start_row = db.execute(
-                        "SELECT event FROM events WHERE job_id=? AND sequence<? "
-                        "AND json_extract(event,'$.kind')='step_update' "
-                        "AND json_extract(event,'$.payload.step_idx')=? "
-                        "AND COALESCE(json_extract(event,'$.payload.delta_seq'),0)=0 "
-                        "ORDER BY sequence LIMIT 1",
-                        (event.job_id, event.sequence, event.payload.step_idx),
-                    ).fetchone()
-                    if start_row is not None:
-                        step_lineage.append(PersistedEvent.model_validate_json(start_row[0]))
-                parent_idx = event.payload.parent_step_idx
-                visited: set[int] = set()
-                while parent_idx is not None and parent_idx not in visited:
-                    visited.add(parent_idx)
-                    parent_row = db.execute(
-                        "SELECT event FROM events WHERE job_id=? AND sequence<? "
-                        "AND json_extract(event,'$.kind')='step_update' "
-                        "AND json_extract(event,'$.payload.step_idx')=? "
-                        "AND COALESCE(json_extract(event,'$.payload.delta_seq'),0)=0 "
-                        "ORDER BY sequence LIMIT 1",
-                        (event.job_id, event.sequence, parent_idx),
-                    ).fetchone()
-                    if parent_row is None:
-                        break
-                    parent_event = PersistedEvent.model_validate_json(parent_row[0])
-                    step_lineage.append(parent_event)
-                    parent_idx = parent_event.payload.parent_step_idx
-                ancestors.extend(reversed(step_lineage))
-                return ancestors
-            if event.payload.run_id and event.kind != "agent_started":
-                agent = db.execute("SELECT event FROM events WHERE job_id=? AND sequence<? "
-                    "AND json_extract(event,'$.kind')='agent_started' "
-                    "AND json_extract(event,'$.payload.run_id')=? ORDER BY sequence DESC LIMIT 1",
-                    (event.job_id, event.sequence, event.payload.run_id)).fetchone()
-                if agent:
-                    ancestors.append(PersistedEvent.model_validate_json(agent[0]))
-            return ancestors
-
-    def complete_telemetry(self, event_id: str, outcome: str) -> None:
-        if outcome not in {"sent", "failed"}:
-            raise ValueError("invalid telemetry outcome")
-        with self._transaction() as db:
-            db.execute("UPDATE telemetry_attempts SET outcome=? WHERE event_id=?", (outcome, event_id))
-
 
 class DurableJobManager:
     def __init__(self, store: JobStore, events: EventStore,
@@ -971,17 +898,10 @@ class DurableJobManager:
         self._maintenance_id = uuid4().hex
         self._recovery_cursor = ""
         self._closed = False
-        self._runtime_lease = None
 
     def _use_runtime(self):
         if self._closed:
             raise RuntimeError("job manager is closed")
-        if self._runtime_lease is None:
-            lease = runtime_lock(self.store.path.parent)
-            if not lease.__enter__():
-                lease.__exit__(None, None, None)
-                raise RuntimeError("runtime maintenance is in progress")
-            self._runtime_lease = lease
 
     def _schedule(self, job: JobRecord) -> None:
         self._ensure_maintenance()
@@ -998,12 +918,11 @@ class DurableJobManager:
     def _scan(self) -> None:
         running = self.store.running(after=self._recovery_cursor)
         self._recovery_cursor = running[-1].job_id if len(running) == 100 else ""
-        for job in running:
-            with execution_lock(self.store.path, job.job_id) as acquired:
-                if acquired:
-                    self.store.recover_abandoned(job.job_id, owner=job.owner)
-        self.store.dispatch_events(self.events)
         self._tasks = {identity: task for identity, task in self._tasks.items() if not task.done()}
+        for job in running:
+            if job.job_id not in self._tasks:
+                self.store.recover_abandoned(job.job_id, owner=job.owner)
+        self.store.dispatch_events(self.events)
         available = self._capacity - len(self._tasks)
         if available:
             for job in self.store.queued(limit=min(available, 100)):
@@ -1058,14 +977,10 @@ class DurableJobManager:
         claimed = False
         deadline_expired = False
         initial_elapsed = original.ledger.elapsed_seconds
-        lease_lock = None
         heartbeat = None
         execution_id = uuid4().hex
         try:
             async with self._slots:
-                lease_lock = execution_lock(self.store.path, original.job_id)
-                if not lease_lock.__enter__():
-                    return
                 try:
                     job = self.store.claim(original.job_id, owner=original.owner, execution_id=execution_id)
                     claimed = True
@@ -1129,8 +1044,7 @@ class DurableJobManager:
                     self.store.release_execution(original.job_id, execution_id)
                 self.store.dispatch_events(self.events)
             finally:
-                if lease_lock is not None:
-                    lease_lock.__exit__(None, None, None)
+                pass
 
     async def wait(self, job_id: str, *, owner: str) -> JobRecord:
         while True:
@@ -1170,6 +1084,3 @@ class DurableJobManager:
             task.cancel()
         await asyncio.gather(*self._tasks.values(), return_exceptions=True)
         self._tasks.clear()
-        if self._runtime_lease is not None:
-            self._runtime_lease.__exit__(None, None, None)
-            self._runtime_lease = None

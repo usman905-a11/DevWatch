@@ -69,11 +69,12 @@ async def test_sdk_investigation_repair_and_stops_reach_honest_accepted_reports(
     assert len(specialist) == (2 if mode == 'no_progress' else 3)
     assert done.ledger.task_tools['logic-1'] == 1
     jobs.dispatch_events(events)
-    stream = events.replay(job.job_id)
-    assert sum(event.kind == 'candidate_rejected' for event in stream) == int(mode == 'partial_siblings')
-    stopped = [event.payload.stop_reason for event in stream if event.kind == 'agent_completed'
-               and event.payload.task_id == 'logic-1']
-    assert stopped == [{'repair': 'evidence_complete', 'partial_siblings': 'evidence_incomplete', 'no_progress': 'no_progress'}[mode]]
-    assert any(event.kind == 'evidence_inspected' for event in stream)
+    stream = events.replay(job.job_id, limit=1000)
+    assert sum(getattr(event, "type", None) == "activity.started" and event.data.message == "candidate_rejected" for event in stream) == int(mode == 'partial_siblings')
+    completed_results = [event for event in stream if getattr(event, "type", None) in {"activity.completed", "activity.failed"}
+                         and event.activityType == "result" and event.agentRunId != "review" and event.data.message is None]
+    assert len(completed_results) == 3
+    assert any(event.type == ("activity.completed" if mode == "repair" else "activity.failed") for event in completed_results)
+    assert any(getattr(event, "data", None) is not None and event.data.message == "evidence_inspected" for event in stream)
     assert all('Unsupported sibling' not in event.model_dump_json() for event in stream)
     assert all(client.is_closed for client in clients)

@@ -25,13 +25,10 @@ from devwatch.review.contracts import (
     VerificationPhaseResult, VerificationSynthesisResult, VerificationDecision, ReportDraft,
 )
 from devwatch.review.finalization import FinalAcceptanceGate, FinalizationWorkflow, assemble_report, render_accepted_report
-from devwatch.review.pdf import render_accepted_pdf_async
 from devwatch.review.jobs import EventPayload, EventStore, JobConflict, JobRecord, JobStore, TrajectoryStepTracker, _SQLiteStore, safe_stop_reason
 from devwatch.review.repository import RepositoryContext, SharedBlackboard, StructuralEvidenceGate
 from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
 from devwatch.review.subgraphs import AgentSubgraphs
-from devwatch.review.tool_runtime import TrustedToolRuntime
-from devwatch.review.database_tools import DatabaseTools
 from devwatch.review.verification import (validate_decision, validate_relations,
     checkpoint_verification, CHALLENGE_POLICY, require_independent_verification)
 
@@ -91,24 +88,14 @@ class ReviewGraphState(TypedDict, total=False):
 
 class CanonicalReviewExecutor:
     def __init__(self, layout: StoreLayout, artifacts: ArtifactStore, cache: RepoCache,
-                 jobs: JobStore, events: EventStore, provider, *, models, trusted_commands=(), databases=()):
+                 jobs: JobStore, events: EventStore, provider, *, models):
         self.layout, self.artifacts, self.cache = layout, artifacts, cache
         self.jobs, self.events, self.provider, self.models = jobs, events, provider, dict(models)
         self.checkpoints = AgentCheckpoints(layout.checkpoints)
         self.model_slots = asyncio.Semaphore(3)
-        self.trusted_commands = tuple(trusted_commands)
-        self.databases = tuple(databases)
 
     async def render_report(self, job, accepted):
-        rendered = render_accepted_report(accepted)
-        data = await render_accepted_pdf_async(accepted)
-        # Publication happens only after successful, drained rendering. There is
-        # no await between the cancellation check and the bounded atomic write.
-        if asyncio.current_task().cancelling():
-            raise asyncio.CancelledError
-        with self.jobs.publication(job.job_id, owner=job.owner):
-            reference = self.artifacts.put_report_pdf(job.job_id, job.request["snapshot_id"], owner=job.owner, data=data)
-        return {**rendered, "pdf_artifact": reference}
+        return render_accepted_report(accepted)
 
     def reconcile_models(self, job, budget):
         pending, started, cursor = dict(budget.ledger.inflight), set(), 0
@@ -257,9 +244,7 @@ class _ReviewSession:
         self.steps = TrajectoryStepTracker(self.emit)
         self.step_scope = self.steps.step_scope
         self.step = self.steps.step
-        self.command_runtime = TrustedToolRuntime(repository, executor.jobs, job, commands=executor.trusted_commands)
-        self.database_runtime = DatabaseTools(repository, job, policies=executor.databases)
-        self.agents = AgentSubgraphs(executor.provider, repository.tools(self.command_runtime, self.database_runtime), budget, self.context,
+        self.agents = AgentSubgraphs(executor.provider, repository.tools(), budget, self.context,
             models=executor.models, persist=self.persist_agent, model_slots=executor.model_slots, emit=self.emit,
             require_verification_challenge=True, require_independent_support=True, step_tracker=self.steps)
 
@@ -301,13 +286,6 @@ class _ReviewSession:
             return selected
         if self.declared_context is not None:
             selected['declared_context'] = self.declared_context
-        from devwatch.review.contracts import AGENT_CONTRACTS
-        selected["approved_commands"] = [{"command_id": command.command_id, "tool": command.tool,
-                                          "files": command.files, "timeout_seconds": command.timeout_seconds}
-            for command in self.executor.trusted_commands if command.tool in AGENT_CONTRACTS[state["task"].agent_id].allowed_tools
-            and set(command.files).issubset(state["task"].files)][:10]
-        selected["approved_databases"] = [{"database_id": policy.database_id} for policy in self.executor.databases
-            if self.job.owner in policy.owners and state["task"].agent_id.value == "performance_scalability"]
         if state["task"].agent_id == AgentId.PLANNER:
             selected["repository_metadata"] = {
                 "snapshot_id": self.repository.snapshot_id,
@@ -345,7 +323,7 @@ class _ReviewSession:
         return AgentPrivateState.model_validate(checkpoint["state"]["private_state"]) if checkpoint else None
 
     def compile(self, saver):
-        from devwatch.review.observability import observed_node
+        from devwatch.review.activity_stream import observed_node
         builder = StateGraph(ReviewGraphState)
         nodes = {"repository_intelligence": self.intelligence, "deterministic_analysis": self.deterministic,
                  "change_analyzer": self.change_analysis, "planner_agent": self.planner,
@@ -411,8 +389,6 @@ class _ReviewSession:
         return {"tasks": sorted(state["tasks"], key=lambda task: (task["agent_id"], task["task_id"]))}
 
     async def run_task(self, task, *, followup=None):
-        if self.command_runtime.grants_measurement(task):
-            self.agents.tools.grant_measurement_artifact(task)
         checkpoint = self.executor.checkpoints.load(self.thread_id, task.task_id)
         if followup is None and checkpoint:
             if checkpoint["generation"] != 1 or checkpoint["state"].get("task") != task.model_dump(mode="json"):

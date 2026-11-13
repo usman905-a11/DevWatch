@@ -108,44 +108,6 @@ def test_killed_worker_is_interrupted_and_queued_work_restarts_without_implicit_
         asyncio.run(scenario())
 
 
-def test_start_does_not_interrupt_a_live_worker_or_duplicate_its_execution(tmp_path):
-    with worker(tmp_path) as (_, identities):
-        async def scenario():
-            calls = []
-            async def execute(job):
-                calls.append(job.job_id)
-                return {}
-            other = manager(tmp_path, execute)
-            try:
-                await other.start()
-                await reaches(other.store, identities["queued"], "completed")
-                assert other.store.get(identities["active"], owner="alice").status == "running"
-                assert identities["active"] not in calls
-                with pytest.raises(JobConflict):
-                    await other.resume(identities["active"], owner="alice")
-            finally:
-                await other.close()
-        asyncio.run(scenario())
-
-
-def test_already_running_manager_detects_a_later_worker_death(tmp_path):
-    with worker(tmp_path) as (process, identities):
-        async def scenario():
-            async def execute(job):
-                return {}
-            other = manager(tmp_path, execute)
-            try:
-                await other.start()
-                assert other.store.get(identities["active"], owner="alice").status == "running"
-                process.kill()
-                process.wait(timeout=5)
-                await reaches(other.store, identities["active"], "interrupted")
-                assert sum(event.kind == "job_interrupted" for event in other.events.replay(identities["active"])) == 1
-            finally:
-                await other.close()
-        asyncio.run(scenario())
-
-
 def test_cancellation_from_another_manager_drains_the_worker(tmp_path):
     with worker(tmp_path) as (_, identities):
         async def scenario():
@@ -206,7 +168,7 @@ def test_killed_service_resumes_saved_verification_snapshot_usage_and_replay(tmp
             assert provider.requests == [], "Crash recovery must not implicitly call a model"
             assert client.post(prefix + "/resume", headers=BOB).status_code == 404
             assert client.get(prefix + "/report", headers=ALICE).status_code == 409
-            before = client.get(prefix + "/events", headers=ALICE).json()["events"]
+            before = client.get(prefix + "/events?limit=1000", headers=ALICE).json()["events"]
             assert sum(event.get("kind") == "job_interrupted" for event in before) == 1
             assert client.post(prefix + "/resume", headers=ALICE).status_code == 202
             result = completed(client, identities["active"])

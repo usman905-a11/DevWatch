@@ -191,13 +191,6 @@ export class DurableReviewClient {
     await this.report(jobId, signal)
     return this.request(`/api/jobs/${jobId}/report?format=markdown`, {}, 'text/markdown', 10000000, signal)
   }
-  async pdf(jobId: string, signal?: AbortSignal): Promise<ArrayBuffer> {
-    await this.report(jobId, signal)
-    const buffer = await this.requestBytes(`/api/jobs/${jobId}/report?format=pdf`, {}, 'application/pdf', 10000000, signal)
-    const bytes = new Uint8Array(buffer), decoder = new TextDecoder()
-    if (decoder.decode(bytes.subarray(0, 5)) !== '%PDF-' || !decoder.decode(bytes.subarray(-64)).trimEnd().endsWith('%%EOF')) throw new ProtocolError('Invalid PDF report')
-    return buffer
-  }
   async source(jobId: string, snapshotId: string, path: string, start: number, end: number, signal?: AbortSignal): Promise<SourceExcerpt> {
     identity(jobId); identity(snapshotId); sourcePath(path)
     if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start || end - start >= 200) throw new ProtocolError('Invalid source range')
