@@ -1,10 +1,41 @@
 /** Job submission and observation are separate: abandoning HTTP never cancels a job. */
-import { CaptureCoverage, identity, JobView, parseJob, parseReport, parseSource, ProtocolError,
-  ReportDraft, sourcePath, SourceExcerpt, SnapshotManifest, validateWire } from './wire'
-import { canonicalJson, hashUtf8 } from './wire-hashes'
+import { identity, JobView, parseJob, parseReport, parseSource, ProtocolError,
+  ReportDraft, sourcePath, SourceExcerpt } from './wire'
+
+export interface FsEntry {
+  name: string
+  path: string
+  type: 'file' | 'dir'
+  size: number
+  isSymlink: boolean
+  ignored: boolean
+}
+
+export interface FsListResponse {
+  root: string
+  path: string
+  entries: FsEntry[]
+}
+
+export interface FsReadResponse {
+  path: string
+  size: number
+  binary: boolean
+  tooLarge: boolean
+  maxBytes: number
+  lineCount: number | null
+  content: string | null
+}
+
+export interface WorkspaceResponse {
+  path: string | null
+  cancelled?: boolean
+  error?: string
+}
 
 export interface SubmissionIntent {
-  snapshot_id: string
+  workspace_path?: string
+  snapshot_id?: string
   changed_files?: readonly string[]
   idempotency_key: string
 }
@@ -90,63 +121,45 @@ export class DurableReviewClient {
     try { return JSON.parse(text) } catch { throw new ProtocolError() }
   }
 
-  async capture(files: Readonly<Record<string, string>>, coverage: CaptureCoverage = { skipped: {}, failed: {}, limitations: [] },
-    signal?: AbortSignal): Promise<SnapshotManifest> {
-    validateWire('CaptureCoverage', coverage)
-    for (const [path, reason] of [...Object.entries(coverage.skipped), ...Object.entries(coverage.failed)]) {
-      sourcePath(path)
-      if (!/^[a-z][a-z_]{0,127}$/.test(reason)) throw new ProtocolError('Invalid capture omission')
-    }
-    if (coverage.limitations.some(text => !text || new TextEncoder().encode(text).byteLength > 512)) throw new ProtocolError('Invalid capture limitation')
-    if (Object.keys(files).length > 100) throw new ProtocolError('Snapshot file count limit exceeded')
-    const expected: SnapshotManifest['entries'] = Object.create(null)
-    let total = 0
-    for (const [path, content] of Object.entries(files)) {
-      sourcePath(path)
-      if (typeof content !== 'string') throw new ProtocolError('Invalid source content')
-      const bytes = new TextEncoder().encode(content).byteLength
-      if (bytes > 500000 || (total += bytes) > 10000000) throw new ProtocolError('Snapshot source byte limit exceeded')
-      const lines = content.split(/\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]/u)
-      if (lines[lines.length - 1] === '') lines.pop()
-      expected[path] = { content_hash: await hashUtf8(content), byte_count: bytes, line_count: lines.length }
-    }
-    const body = JSON.stringify({ files, capture_coverage: coverage })
-    if (new TextEncoder().encode(body).byteLength > 11000000) throw new ProtocolError('Snapshot request byte limit exceeded')
-    const manifest = validateWire<SnapshotManifest>('SnapshotManifest', await this.json('/api/snapshots', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, signal))
-    identity(manifest.snapshot_id)
-    if (canonicalJson(manifest.entries) !== canonicalJson(expected) || canonicalJson(manifest.capture_coverage) !== canonicalJson(coverage)
-      || manifest.content_hash !== await hashUtf8(canonicalJson(expected)) || manifest.capture_hash !== await hashUtf8(canonicalJson(coverage))) throw new ProtocolError()
-    await this.verifyGitMetadata(manifest)
-    if (canonicalJson(manifest.git_metadata) !== canonicalJson({ diffs: {}, history: {}, limitations: [] })) throw new ProtocolError()
-    return manifest
+  async getWorkspace(signal?: AbortSignal): Promise<WorkspaceResponse> {
+    return (await this.json('/workspace', {}, signal)) as WorkspaceResponse
   }
 
-  private async verifyGitMetadata(manifest: SnapshotManifest): Promise<void> {
-    const metadata = manifest.git_metadata
-    if (manifest.git_hash !== await hashUtf8(canonicalJson(metadata))
-      || new TextEncoder().encode(JSON.stringify(metadata)).byteLength > 200000) throw new ProtocolError()
-    for (const path of [...Object.keys(metadata.diffs), ...Object.keys(metadata.history)]) {
-      sourcePath(path)
-      if (!Object.prototype.hasOwnProperty.call(manifest.entries, path)) throw new ProtocolError()
-    }
-    for (const value of Object.values(metadata.diffs)) {
-      if (Object.keys(value).sort().join(',') !== 'staged,unstaged'
-        || Object.values(value).some(text => new TextEncoder().encode(text).byteLength > 8192)) throw new ProtocolError()
-    }
-    if (Object.values(metadata.history).some(values => values.length > 5 || values.some(text => new TextEncoder().encode(text).byteLength > 1024))
-      || metadata.limitations.some(text => new TextEncoder().encode(text).byteLength > 512)) throw new ProtocolError()
+  async setWorkspace(path: string, signal?: AbortSignal): Promise<WorkspaceResponse> {
+    if (!path.trim()) throw new ProtocolError('Workspace path must not be empty')
+    return (await this.json('/workspace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    }, signal)) as WorkspaceResponse
+  }
+
+  async pickWorkspace(signal?: AbortSignal): Promise<WorkspaceResponse> {
+    return (await this.json('/workspace/pick', { method: 'POST' }, signal)) as WorkspaceResponse
+  }
+
+  async listDir(path = '', signal?: AbortSignal): Promise<FsListResponse> {
+    const query = new URLSearchParams({ path })
+    return (await this.json(`/fs/list?${query}`, {}, signal, 5000000)) as FsListResponse
+  }
+
+  async readFile(path: string, signal?: AbortSignal): Promise<FsReadResponse> {
+    if (!path.trim()) throw new ProtocolError('File path must not be empty')
+    const query = new URLSearchParams({ path })
+    return (await this.json(`/fs/read?${query}`, {}, signal, 5000000)) as FsReadResponse
   }
 
   async submit(intent: SubmissionIntent, signal?: AbortSignal): Promise<JobView> {
-    identity(intent.snapshot_id)
+    if (intent.snapshot_id) identity(intent.snapshot_id)
     if (!/^[\x21-\x7e]{1,256}$/.test(intent.idempotency_key)) throw new ProtocolError('Invalid idempotency key')
     intent.changed_files?.forEach(sourcePath)
-    const body = { snapshot_id: intent.snapshot_id, ...(intent.changed_files === undefined ? {} : { changed_files: intent.changed_files }) }
-    const job = parseJob(await this.json('/api/jobs', { method: 'POST', headers: {
+    const body = {
+      ...(intent.workspace_path ? { workspace_path: intent.workspace_path } : {}),
+      ...(intent.snapshot_id ? { snapshot_id: intent.snapshot_id } : {}),
+      ...(intent.changed_files === undefined ? {} : { changed_files: intent.changed_files }),
+    }
+    return parseJob(await this.json('/api/jobs', { method: 'POST', headers: {
       'Content-Type': 'application/json', 'Idempotency-Key': intent.idempotency_key }, body: JSON.stringify(body) }, signal))
-    if (job.snapshot_id !== intent.snapshot_id) throw new ProtocolError()
-    return job
   }
 
   async status(jobId: string, signal?: AbortSignal): Promise<JobView> {
@@ -162,16 +175,6 @@ export class DurableReviewClient {
       || typeof record.tool !== 'string' || !/^[a-z][a-z_]{0,63}$/.test(record.tool)) throw new ProtocolError()
     record.source_scope.forEach(path => { if (typeof path !== 'string') throw new ProtocolError(); sourcePath(path) })
     return record
-  }
-  async snapshot(jobId: string, snapshotId: string, signal?: AbortSignal): Promise<SnapshotManifest> {
-    identity(snapshotId)
-    const manifest = validateWire<SnapshotManifest>('SnapshotManifest', await this.json(`/api/jobs/${identity(jobId)}/snapshot`, {}, signal))
-    if (manifest.snapshot_id !== snapshotId) throw new ProtocolError()
-    for (const path of Object.keys(manifest.entries)) sourcePath(path)
-    if (manifest.content_hash !== await hashUtf8(canonicalJson(manifest.entries))
-      || manifest.capture_hash !== await hashUtf8(canonicalJson(manifest.capture_coverage))) throw new ProtocolError()
-    await this.verifyGitMetadata(manifest)
-    return manifest
   }
   async cancel(jobId: string, signal?: AbortSignal): Promise<JobView> {
     return parseJob(await this.json(`/api/jobs/${identity(jobId)}/cancel`, { method: 'POST' }, signal), jobId)

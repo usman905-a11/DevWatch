@@ -1,30 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import FileExplorer, { FileNode } from '../components/FileExplorer'
+import { FileExplorer } from '../components/FileExplorer'
 
-const authA: FileNode = { id: 'src/a/auth.py', name: 'auth.py', type: 'file', ext: 'py' }
-const authB: FileNode = { id: 'src/b/auth.py', name: 'auth.py', type: 'file', ext: 'py' }
-
-describe('F3 source controls', () => {
-  it('exposes folder expansion and selected files through native buttons', () => {
+describe('FileExplorer lazy workspace UI', () => {
+  it('renders empty prompt when no workspace is open', () => {
     const markup = renderToStaticMarkup(
       <FileExplorer
-        tree={[{ id: 'src', name: 'src', type: 'folder', children: [authA] }]}
-        projectName="fixture"
-        selectedFileId={authA.id}
+        workspacePath={null}
+        selectedFile={null}
         onSelectFile={() => {}}
-        onOpenFolder={() => {}}
+        loadDir={async () => []}
       />,
     )
-    expect(markup).toContain('aria-expanded="true"')
-    expect(markup).toContain('aria-controls="folder-src"')
-    expect(markup).toContain('aria-current="true"')
-    expect(markup).toContain('aria-label="Open src/a/auth.py"')
+    expect(markup).toContain('Open a local folder to browse files.')
   })
 
-  it('keeps full paths visible for duplicate basenames', () => {
-    const markup = renderToStaticMarkup(<FileExplorer tree={[authA, authB]} selectedFileId={authB.id} onSelectFile={() => {}} />)
-    expect(markup).toContain('aria-label="Open src/a/auth.py"')
-    expect(markup).toContain('aria-label="Open src/b/auth.py"')
+  it('renders empty folder state when workspace is set', () => {
+    const markup = renderToStaticMarkup(
+      <FileExplorer
+        workspacePath="E:/repo"
+        selectedFile="src/app.py"
+        onSelectFile={() => {}}
+        loadDir={async () => []}
+      />,
+    )
+    expect(markup).toContain('Folder is empty.')
   })
 })

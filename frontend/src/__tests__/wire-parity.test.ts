@@ -64,11 +64,4 @@ describe('backend/browser canonical wire parity', () => {
     const parsed = parseLegacy({ id: String(event.sequence), kind: event.kind, data: JSON.stringify(event) }, fixture.job.job_id)
     expect(parsed.payload.task_id).toBe('任务.' + '𠀀'.repeat(120))
   })
-  it('checks real manifest hashes with Python Unicode key ordering', async () => {
-    const api = new DurableReviewClient('http://localhost:8000', '', async () =>
-      new Response(JSON.stringify(fixture.snapshot), { headers: { 'Content-Type': 'application/json' } }))
-    const snapshot = await api.capture(fixture.files, fixture.snapshot.capture_coverage)
-    expect(snapshot.entries['😀.py'].byte_count).toBe(5)
-    expect(snapshot.content_hash).toBe(fixture.snapshot.content_hash)
-  })
 })

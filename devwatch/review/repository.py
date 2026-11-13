@@ -22,6 +22,7 @@ from devwatch.review.stores import ArtifactStore, CacheKey, RepoCache, validate_
 from devwatch.review.subgraphs import PermissionedTools, ToolObservation
 from devwatch.review.tool_errors import ToolFailure
 from devwatch.review.intelligence import PARSER_VERSION, analyze_source, import_edges
+from devwatch.review.workspace import WorkspaceError, WorkspaceManager, WorkspaceNotFoundError, build_workspace_manifest
 
 
 def _json(value: Any) -> str:
@@ -31,14 +32,50 @@ def _json(value: Any) -> str:
 class RepositoryContext:
     CONTEXT_BYTES = 6000
 
-    def __init__(self, artifacts: ArtifactStore, cache: RepoCache, snapshot_id: str, *, owner: str):
-        self.artifacts, self.cache, self.snapshot_id, self.owner = artifacts, cache, snapshot_id, owner
-        self.manifest = artifacts.manifest(snapshot_id, owner=owner)
-        self.evidence_root = artifacts.root / "evidence" / snapshot_id
+    def __init__(
+        self,
+        artifacts: ArtifactStore,
+        cache: RepoCache,
+        snapshot_id: str | None = None,
+        *,
+        owner: str,
+        workspace_root: str | Path | None = None,
+    ):
+        self.artifacts, self.cache, self.owner = artifacts, cache, owner
+        self._workspace: WorkspaceManager | None = None
+        if workspace_root is not None:
+            self._workspace = WorkspaceManager()
+            resolved_root = self._workspace.set_root(workspace_root)
+            self.manifest = build_workspace_manifest(resolved_root)
+            self.snapshot_id = self.manifest.snapshot_id
+        else:
+            if not snapshot_id:
+                raise ValueError("either workspace_root or snapshot_id is required")
+            self.snapshot_id = snapshot_id
+            self.manifest = artifacts.manifest(snapshot_id, owner=owner)
+        self.evidence_root = artifacts.root / "evidence" / self.snapshot_id
         self.evidence_root.mkdir(parents=True, exist_ok=True)
         self._analysis = None
 
     def _source(self, path):
+        if self._workspace is not None:
+            try:
+                result = self._workspace.read_file(path)
+                if result.binary or result.tooLarge or result.content is None:
+                    raise ToolFailure(
+                        "snapshot_integrity_failure",
+                        f"Stop: source file is unreadable or exceeds limit ({path}).",
+                        recoverable=False,
+                        arguments={"file_path": path},
+                    )
+                return result.content
+            except (WorkspaceError, WorkspaceNotFoundError) as exc:
+                raise ToolFailure(
+                    "snapshot_integrity_failure",
+                    "Stop: workspace source could not be read safely.",
+                    recoverable=False,
+                    arguments={"file_path": path},
+                ) from exc
         try:
             return self.artifacts.read_source(self.snapshot_id, path, owner=self.owner)
         except (ValueError, FileNotFoundError) as exc:

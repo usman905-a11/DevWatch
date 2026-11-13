@@ -58,45 +58,33 @@ describe('canonical durable browser client', () => {
       await expect(api.pdf(jobId)).rejects.toThrow(/invalid|limit/i)
     }
   })
-  it('accepts a valid __proto__ source file without losing its manifest entry', async () => {
-    const entries = JSON.parse('{"__proto__":{"content_hash":"9f56e761d79bfdb34304a012586cb04d16b435ef6130091a97702e559260a2f2","byte_count":5,"line_count":1}}')
-    const capture_coverage = { skipped: {}, failed: {}, limitations: [] }
-    const manifest = { snapshot_id: snapshotId, owner: 'owner', entries, capture_coverage, git_metadata,
-      git_hash: await hashUtf8(canonicalJson(git_metadata)),
-      content_hash: await hashUtf8(canonicalJson(entries)), capture_hash: await hashUtf8(canonicalJson(capture_coverage)) }
-    const api = await client(async () => json(manifest))
-    expect((await api.capture(JSON.parse('{"__proto__":"pass\\n"}'))).entries.__proto__.byte_count).toBe(5)
-  })
-  it('retrieves the original owned snapshot catalog for an existing job', async () => {
-    const fixture = (await import('./fixtures/canonical-wire.json')).default
-    const api = await client(async () => json(fixture.snapshot))
-    expect((await api.snapshot(fixture.job.job_id, fixture.job.snapshot_id)).entries['service.py'].line_count).toBe(2)
-    await expect(api.snapshot(fixture.job.job_id, snapshotId)).rejects.toThrow(/invalid/i)
-  })
-  it('rejects tampered or foreign immutable Git metadata on reopened snapshots', async () => {
-    const fixture = (await import('./fixtures/canonical-wire.json')).default
-    let snapshot = { ...fixture.snapshot, git_hash: 'f'.repeat(64) }
-    const api = await client(async () => json(snapshot))
-    await expect(api.snapshot(fixture.job.job_id, fixture.job.snapshot_id)).rejects.toThrow(/invalid/i)
-    snapshot = { ...fixture.snapshot, git_metadata: { diffs: {}, history: { 'outside.py': ['commit'] }, limitations: [] },
-      git_hash: await hashUtf8(canonicalJson({ diffs: {}, history: { 'outside.py': ['commit'] }, limitations: [] })) }
-    await expect(api.snapshot(fixture.job.job_id, fixture.job.snapshot_id)).rejects.toThrow(/invalid/i)
-  })
-  it('captures exact source hashes and preserves client omission metadata', async () => {
-    const omissions = { skipped: { 'dist/output.js': 'excluded_source' }, failed: {}, limitations: ['Whole uploaded scope'] }
-    const snapshot = { snapshot_id: snapshotId, owner: 'owner', content_hash: '93b4344b7573e1335b275fdcbb1e4cfd66a9dd989d1adced501110959b81b052',
-      capture_hash: '66b56141907fecdffa1158c338456d3b289c85be633926968b023bd1ac986d00',
-      git_metadata, git_hash: await hashUtf8(canonicalJson(git_metadata)),
-      entries: { 'service.py': { content_hash: '9f56e761d79bfdb34304a012586cb04d16b435ef6130091a97702e559260a2f2', byte_count: 5, line_count: 1 } }, capture_coverage: omissions }
-    let next: SnapshotManifest = snapshot
-    const api = await client(async () => json(next, 201))
-    const result = await api.capture({ 'service.py': 'pass\n' }, omissions)
-    expect(result.snapshot_id).toBe(snapshotId)
-    expect(result.capture_coverage.skipped['dist/output.js']).toBe('excluded_source')
-    next = { ...snapshot, capture_coverage: { ...omissions, skipped: {} } }
-    await expect(api.capture({ 'service.py': 'pass\n' }, omissions)).rejects.toThrow(/invalid/i)
-    next = { ...snapshot, entries: { 'service.py': { ...snapshot.entries['service.py'], content_hash: 'd'.repeat(64) } } }
-    await expect(api.capture({ 'service.py': 'pass\n' }, omissions)).rejects.toThrow(/invalid/i)
+  it('opens workspace, lists directory entries, and reads files via /fs/* endpoints', async () => {
+    const requests: string[] = []
+    const api = await client(async (url, options) => {
+      requests.push(`${options?.method ?? 'GET'} ${url}`)
+      if (String(url).endsWith('/workspace')) return json({ path: 'E:/repo' })
+      if (String(url).includes('/fs/list')) {
+        return json({
+          root: 'E:/repo',
+          path: '',
+          entries: [
+            { name: 'node_modules', path: 'node_modules', type: 'dir', size: 0, isSymlink: false, ignored: true },
+            { name: 'service.py', path: 'service.py', type: 'file', size: 120, isSymlink: false, ignored: false },
+          ],
+        })
+      }
+      if (String(url).includes('/fs/read')) {
+        return json({ path: 'service.py', size: 120, binary: false, tooLarge: false, maxBytes: 2_000_000, lineCount: 2, content: 'pass\n' })
+      }
+      return json({})
+    })
+    expect((await api.setWorkspace('E:/repo')).path).toBe('E:/repo')
+    const listing = await api.listDir('')
+    expect(listing.entries).toHaveLength(2)
+    expect(listing.entries[0].ignored).toBe(true)
+    const file = await api.readFile('service.py')
+    expect(file.content).toBe('pass\n')
+    expect(requests[0]).toBe('POST http://localhost:8000/workspace')
   })
   it('reuses exact submission intent and credentials stay in headers', async () => {
     const requests: Array<[string, RequestInit]> = []

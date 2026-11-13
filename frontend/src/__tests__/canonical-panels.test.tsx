@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import fixture from './fixtures/canonical-wire.json'
 import { ReportPanel } from '../review/ReportPanel'
 import { JobActivity } from '../review/JobActivity'
-import { SnapshotSource } from '../review/SnapshotSource'
+import { CodeEditor, detectMonacoLanguage } from '../components/CodeEditor'
 import { ActivityEvent, PersistedEvent } from '../review/wire'
 
 describe('canonical review presentation', () => {
@@ -50,13 +50,37 @@ describe('canonical review presentation', () => {
     expect(html).toContain('Total tokens')
     expect(html).not.toContain('Supervisor')
   })
-  it('uses actual snapshot line numbers and escapes source content', () => {
-    const html = renderToStaticMarkup(<SnapshotSource source={{ ...fixture.source, start_line: 42, end_line: 42, data: '<script>alert(1)</script>' } as any}
-      error={null} path="service.py" onRead={() => {}} />)
-    expect(html).toContain('Line 42')
-    expect(html).toContain('&lt;script&gt;')
-    expect(html).not.toContain('<script>')
-    expect(html).toContain('Read-only snapshot')
+  it('renders CodeEditor tabs and clear tooLarge / binary states with language detection', () => {
+    expect(detectMonacoLanguage('src/app.tsx')).toBe('typescript')
+    expect(detectMonacoLanguage('review/service.py')).toBe('python')
+    const tooLargeHtml = renderToStaticMarkup(
+      <CodeEditor
+        tabs={[{
+          path: 'big.log',
+          loading: false,
+          file: { path: 'big.log', size: 3_000_000, binary: false, tooLarge: true, maxBytes: 2_000_000, lineCount: null, content: null },
+        }]}
+        activePath="big.log"
+        highlightRange={null}
+        onSelectTab={() => {}}
+        onCloseTab={() => {}}
+      />,
+    )
+    expect(tooLargeHtml).toContain('File is too large to display in the editor')
+    const binaryHtml = renderToStaticMarkup(
+      <CodeEditor
+        tabs={[{
+          path: 'image.png',
+          loading: false,
+          file: { path: 'image.png', size: 1200, binary: true, tooLarge: false, maxBytes: 2_000_000, lineCount: null, content: null },
+        }]}
+        activePath="image.png"
+        highlightRange={null}
+        onSelectTab={() => {}}
+        onCloseTab={() => {}}
+      />,
+    )
+    expect(binaryHtml).toContain('Binary file cannot be displayed')
   })
   it('renders nested trajectory steps with terminal drawer, search match pill, planner row, and error callout', () => {
     const base = fixture.events[0]

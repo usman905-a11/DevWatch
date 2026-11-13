@@ -7,7 +7,7 @@ import {
   reconcileTerminalJobSteps,
   TrajectoryStep,
 } from './durable-events'
-import { CaptureCoverage, JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StepStatus, StreamEvent } from './wire'
+import { JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StepStatus, StreamEvent } from './wire'
 
 export interface SessionState {
   job: JobView | null; manifest: SnapshotManifest | null; report: ReportDraft | null
@@ -46,14 +46,16 @@ export class ReviewSession {
       if (generation === this.generation) this.update({ error: error instanceof Error ? error.message : 'Service operation failed' })
     } finally { if (generation === this.generation) this.update({ busy: false }) }
   }
-  async start(files: Record<string, string>, coverage: CaptureCoverage) {
+  async start(workspacePath: string, changedFiles?: readonly string[]) {
     if (this.state.busy || this.hasPendingSubmission()) return
     this.reset()
     await this.perform(async (generation, signal) => {
-      const manifest = await this.client.capture(files, coverage, signal)
-      if (generation !== this.generation) return
-      const intent = { snapshot_id: manifest.snapshot_id, idempotency_key: crypto.randomUUID() }
-      this.update({ manifest, intent }) // Preserve exact intent before POST, including unknown outcome.
+      const intent: SubmissionIntent = {
+        workspace_path: workspacePath,
+        ...(changedFiles ? { changed_files: changedFiles } : {}),
+        idempotency_key: crypto.randomUUID(),
+      }
+      this.update({ intent }) // Preserve exact intent before POST, including unknown outcome.
       await this.submitIntent(generation, signal)
     })
   }
@@ -72,9 +74,8 @@ export class ReviewSession {
     this.reset()
     await this.perform(async (generation, signal) => {
       const job = await this.client.status(jobId, signal)
-      const manifest = await this.client.snapshot(jobId, job.snapshot_id, signal)
       if (generation !== this.generation) return
-      this.update({ job, manifest }); this.observe(generation)
+      this.update({ job }); this.observe(generation)
     })
   }
   private syncSteps(jobStatus = this.state.job?.status): TrajectoryStep[] {

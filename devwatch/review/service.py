@@ -29,6 +29,14 @@ from devwatch.review.workflow import CanonicalReviewExecutor
 from devwatch.review.tool_runtime import TrustedCommand
 from devwatch.review.database_tools import DatabasePolicy
 from devwatch.review.leases import runtime_lock
+from devwatch.review.workspace import (
+    PathOutsideWorkspaceError,
+    WorkspaceError,
+    WorkspaceManager,
+    WorkspaceNotFoundError,
+    WorkspaceNotSetError,
+    build_workspace_manifest,
+)
 
 
 @dataclass(frozen=True)
@@ -124,6 +132,10 @@ class BoundedRequestBody:
         await self.app(scope, bounded_receive, send)
 
 
+class WorkspaceRequest(ContractModel):
+    path: str = Field(min_length=1, max_length=4096)
+
+
 class SnapshotRequest(ContractModel):
     files: dict[str, str] = Field(max_length=100)
     capture_coverage: CaptureCoverage = Field(default_factory=CaptureCoverage)
@@ -131,8 +143,9 @@ class SnapshotRequest(ContractModel):
 
 
 class JobRequest(ContractModel):
-    snapshot_id: str = Field(pattern=r"^[0-9a-f]{32}$")
-    changed_files: list[str] | None = Field(default=None, max_length=100)
+    snapshot_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    workspace_path: str | None = Field(default=None, min_length=1, max_length=4096)
+    changed_files: list[str] | None = Field(default=None, max_length=1000)
     context_files: list[str] | None = Field(default=None, max_length=4)
 
 
@@ -251,12 +264,29 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
                 yield
 
     app = FastAPI(title="DevWatch Local Review Service", lifespan=lifespan)
+    app.state.workspace = WorkspaceManager()
     app.add_middleware(BoundedRequestBody, limit=settings.max_request_bytes)
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins),
                        allow_methods=["GET", "POST"], allow_headers=["Authorization", "X-API-Key", "Idempotency-Key", "Last-Event-ID"])
 
     def owner(request: Request):
         return settings.principal(request.headers, client_host=request.client.host if request.client else "")
+
+    @app.exception_handler(PathOutsideWorkspaceError)
+    async def workspace_forbidden(request, exc):
+        return JSONResponse({"detail": str(exc)}, status_code=403)
+
+    @app.exception_handler(WorkspaceNotSetError)
+    async def workspace_not_set(request, exc):
+        return JSONResponse({"detail": str(exc)}, status_code=409)
+
+    @app.exception_handler(WorkspaceNotFoundError)
+    async def workspace_not_found(request, exc):
+        return JSONResponse({"detail": str(exc)}, status_code=404)
+
+    @app.exception_handler(WorkspaceError)
+    async def workspace_bad_request(request, exc):
+        return JSONResponse({"detail": str(exc)}, status_code=400)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
@@ -280,6 +310,55 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
     async def health():
         return {"status": "ok", "workflow_version": "seven-agent-v1"}
 
+    @app.get("/workspace")
+    async def get_workspace(principal=Depends(owner)):
+        return {"path": str(app.state.workspace.root) if app.state.workspace.root is not None else None}
+
+    @app.post("/workspace")
+    async def set_workspace(body: WorkspaceRequest, principal=Depends(owner)):
+        resolved = app.state.workspace.set_root(body.path)
+        return {"path": str(resolved)}
+
+    @app.post("/workspace/pick")
+    async def pick_workspace(principal=Depends(owner)):
+        def _pick() -> str | None:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            try:
+                root.attributes("-topmost", True)
+            except Exception:
+                pass
+            try:
+                selected = filedialog.askdirectory(title="Open Workspace Folder")
+            finally:
+                root.destroy()
+            return selected or None
+
+        try:
+            selected = await asyncio.to_thread(_pick)
+        except Exception as exc:
+            return JSONResponse({"path": None, "error": str(exc)}, status_code=200)
+        if not selected:
+            return {"path": None, "cancelled": True}
+        resolved = app.state.workspace.set_root(selected)
+        return {"path": str(resolved)}
+
+    @app.get("/fs/list")
+    async def fs_list(path: str = Query(""), principal=Depends(owner)):
+        entries = app.state.workspace.list_dir(path)
+        return {
+            "root": str(app.state.workspace.get_root()),
+            "path": path,
+            "entries": [entry.to_dict() for entry in entries],
+        }
+
+    @app.get("/fs/read")
+    async def fs_read(path: str = Query(..., min_length=1), principal=Depends(owner)):
+        return app.state.workspace.read_file(path).to_dict()
+
     @app.post("/api/snapshots", status_code=201)
     async def snapshot(body: SnapshotRequest, principal=Depends(owner)):
         return app.state.artifacts.capture(owner=principal, files=body.files, capture_coverage=body.capture_coverage,
@@ -288,11 +367,21 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
     @app.post("/api/jobs", status_code=202)
     async def submit(body: JobRequest, principal=Depends(owner),
                      idempotency_key: str = Header(min_length=1, max_length=256)):
-        manifest = app.state.artifacts.manifest(body.snapshot_id, owner=principal)
+        payload = body.model_dump(exclude_none=True)
+        if body.workspace_path is not None:
+            resolved = app.state.workspace.set_root(body.workspace_path)
+            payload["workspace_path"] = str(resolved)
+            manifest = build_workspace_manifest(resolved)
+        elif body.snapshot_id is not None:
+            manifest = app.state.artifacts.manifest(body.snapshot_id, owner=principal)
+        else:
+            resolved = app.state.workspace.get_root()
+            payload["workspace_path"] = str(resolved)
+            manifest = build_workspace_manifest(resolved)
         validate_context_files(manifest, body.context_files)
         if body.changed_files is not None and any(path not in manifest.entries for path in body.changed_files):
-            raise ValueError("changed files must belong to the snapshot")
-        job = await app.state.manager.submit(owner=principal, request=body.model_dump(exclude_none=True),
+            raise ValueError("changed files must belong to the workspace")
+        job = await app.state.manager.submit(owner=principal, request=payload,
                                             idempotency_key=idempotency_key)
         return _public_job(job)
 
@@ -316,7 +405,8 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         if format == "pdf":
             if not record.result.get("pdf_artifact"):
                 raise HTTPException(409, "PDF artifact unavailable")
-            data = app.state.artifacts.read_report_pdf(identity, record.request["snapshot_id"], owner=principal,
+            repo = repository(identity, principal)
+            data = app.state.artifacts.read_report_pdf(identity, repo.snapshot_id, owner=principal,
                                                        reference=record.result["pdf_artifact"])
             return Response(data, media_type="application/pdf", headers={"X-Content-Type-Options": "nosniff",
                 "Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="devwatch-{identity}.pdf"'})
@@ -325,12 +415,18 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
 
     def repository(identity, principal):
         record = app.state.jobs.get(identity, owner=principal)
+        if "workspace_path" in record.request:
+            return RepositoryContext(
+                app.state.artifacts,
+                app.state.cache,
+                owner=principal,
+                workspace_root=record.request["workspace_path"],
+            )
         return RepositoryContext(app.state.artifacts, app.state.cache, record.request["snapshot_id"], owner=principal)
 
     @app.get("/api/jobs/{identity}/snapshot")
     async def job_snapshot(identity: str, principal=Depends(owner)):
-        record = app.state.jobs.get(identity, owner=principal)
-        return app.state.artifacts.manifest(record.request["snapshot_id"], owner=principal)
+        return repository(identity, principal).manifest
 
     @app.get("/api/jobs/{identity}/source")
     async def source(identity: str, file_path: str, start_line: int = Query(1, ge=1),

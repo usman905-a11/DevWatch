@@ -200,9 +200,22 @@ class CanonicalReviewExecutor:
         return rendered
 
     async def __call__(self, job: JobRecord):
-        if job.workflow_version != "seven-agent-v1" or set(job.request) - {"snapshot_id", "changed_files", "context_files"}:
+        if job.workflow_version != "seven-agent-v1" or set(job.request) - {
+            "snapshot_id",
+            "workspace_path",
+            "changed_files",
+            "context_files",
+        }:
             raise ReviewExecutionError("unsupported workflow version or request")
-        repository = RepositoryContext(self.artifacts, self.cache, job.request["snapshot_id"], owner=job.owner)
+        if "workspace_path" in job.request:
+            repository = RepositoryContext(
+                self.artifacts,
+                self.cache,
+                owner=job.owner,
+                workspace_root=job.request["workspace_path"],
+            )
+        else:
+            repository = RepositoryContext(self.artifacts, self.cache, job.request["snapshot_id"], owner=job.owner)
         changed = job.request.get("changed_files", sorted(repository.manifest.entries))
         if not isinstance(changed, list) or any(path not in repository.manifest.entries for path in changed):
             raise ValueError("changed files must belong to the immutable snapshot")
