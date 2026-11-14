@@ -9,19 +9,21 @@ import asyncio
 from contextlib import closing
 from hashlib import sha256
 import json
+import operator
 import sqlite3
 from pathlib import PurePosixPath
-from typing import Any, TypedDict
+from typing import Annotated, Any, TypedDict
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Send
 from langsmith import tracing_context
 
 from devwatch.review.budgets import BudgetManager
 from devwatch.review.declared_context import load_declared_context
 from devwatch.review.contracts import (
     AgentId, AgentPrivateState, AgentWorkItem, ReviewPlan, ReviewTask, SpecialistResult,
-    VerificationPhaseResult, VerificationSynthesisResult, VerificationDecision, ReportDraft,
+    VerificationPhaseResult, VerificationSynthesisResult, VerificationDecision, ReportDraft, SPECIALISTS,
 )
 from devwatch.review.finalization import FinalAcceptanceGate, FinalizationWorkflow, assemble_report, render_accepted_report
 from devwatch.review.jobs import JobConflict, JobRecord, JobStore, TrajectoryStepTracker, _SQLiteStore, observed_node, safe_stop_reason
@@ -76,12 +78,9 @@ class AgentCheckpoints(_SQLiteStore):
 
 class ReviewGraphState(TypedDict, total=False):
     snapshot_id: str
-    intelligence: dict[str, Any]
-    deterministic_signals: dict[str, Any]
-    change_analysis: dict[str, Any]
     plan: dict[str, Any]
     tasks: list[dict[str, Any]]
-    results: list[dict[str, Any]]
+    results: Annotated[list[dict[str, Any]], operator.add]
     rendered: dict[str, str]
 
 
@@ -230,6 +229,7 @@ class _ReviewSession:
             if job.crash_recoveries else ()))
         self.review_tasks = {}
         self._persistence_lock = asyncio.Lock()
+        self._specialist_semaphore = asyncio.Semaphore(self.budget.limits.concurrent_model_calls)
         self.steps = TrajectoryStepTracker(self.emit)
         self.step_scope = self.steps.step_scope
         self.step = self.steps.step
@@ -310,68 +310,69 @@ class _ReviewSession:
 
     def compile(self, saver):
         builder = StateGraph(ReviewGraphState)
-        nodes = {"repository_intelligence": self.intelligence, "deterministic_analysis": self.deterministic,
-                 "change_analyzer": self.change_analysis, "planner_agent": self.planner,
-                 "context_manager": self.selected_context, "budget_manager": self.admission,
-                 "deterministic_router": self.route, "specialist_subgraphs": self.specialists,
-                 "shared_blackboard": self.blackboard, "structural_evidence_gate": self.structural_gate,
-                 "completion_workflow": self.finalize}
-        previous = START
         def emit_node(kind, state, **payload):
             self.emit(kind, **payload)
-        for name, node in nodes.items():
-            builder.add_node(name, observed_node(name, node, emit_node, scope="review"))
-            builder.add_edge(previous, name)
-            previous = name
-        builder.add_edge(previous, END)
+        specialist_names = [agent.value for agent in SPECIALISTS]
+        builder.add_node("planner", observed_node("planner", self.planner, emit_node, scope="review"))
+        for name in specialist_names:
+            builder.add_node(name, observed_node(name, self.run_specialist_node, emit_node, scope="review"))
+        builder.add_node("join", observed_node("join", self.join, emit_node, scope="review"))
+        builder.add_node(
+            "synthesizer_verifier",
+            observed_node("synthesizer_verifier", self.synthesizer_verifier, emit_node, scope="review"),
+        )
+        builder.add_edge(START, "planner")
+        builder.add_conditional_edges("planner", self._route_specialists, specialist_names + ["join"])
+        for name in specialist_names:
+            builder.add_edge(name, "join")
+        builder.add_edge("join", "synthesizer_verifier")
+        builder.add_edge("synthesizer_verifier", END)
         return builder.compile(checkpointer=saver)
-
-    def intelligence(self, state):
-        return {"intelligence": self.repository.analyze()}
-
-    def deterministic(self, state):
-        return {"deterministic_signals": {path: {"parse_status": facts["status"], "branches": facts["branch_count"]}
-                                         for path, facts in state["intelligence"].items()}}
-
-    def change_analysis(self, state):
-        return {"change_analysis": {"changed_files": self.changed, "scope": "snapshot-files"}}
 
     async def planner(self, state):
         if not self.changed:
             plan = ReviewPlan(selected_agents=[], priority_files=[], priority_symbols=[], risk_areas=[],
                 review_tasks=[], review_strategy="No changed files selected; source is not inspected.",
                 coverage_expectations=[], limitations=["Empty change selection; no AI investigation requested."])
-            return {"plan": plan.model_dump(mode="json")}
-        checkpoint = self.executor.checkpoints.load(self.thread_id, "__planner")
-        if checkpoint and checkpoint["state"].get("output"):
-            plan = ReviewPlan.model_validate(checkpoint["state"]["output"])
-            self.emit("agent_reused", agent_id=AgentId.PLANNER, task_id="__planner", phase="planning")
         else:
-            output = await self.agents.run_planner(snapshot_id=self.repository.snapshot_id,
-                files=sorted(self.repository.manifest.entries), private_state=self.private("__planner"),
-                complexity=min(1, len(self.changed) / 20), restored_state=checkpoint["state"] if checkpoint else None)
-            if output["output"] is None:
-                plan = ReviewPlan(selected_agents=[], priority_files=[], priority_symbols=[], risk_areas=[],
-                    review_tasks=[], review_strategy="Partial review: planner unavailable; no specialist work dispatched.",
-                    coverage_expectations=[], limitations=["Planner failed: " + output["private_state"].stop_reason])
+            checkpoint = self.executor.checkpoints.load(self.thread_id, "__planner")
+            if checkpoint and checkpoint["state"].get("output"):
+                plan = ReviewPlan.model_validate(checkpoint["state"]["output"])
+                self.emit("agent_reused", agent_id=AgentId.PLANNER, task_id="__planner", phase="planning")
             else:
-                plan = output["output"]
-        return {"plan": plan.model_dump(mode="json")}
-
-    def selected_context(self, state):
-        plan = ReviewPlan.model_validate(state["plan"])
+                output = await self.agents.run_planner(snapshot_id=self.repository.snapshot_id,
+                    files=sorted(self.repository.manifest.entries), private_state=self.private("__planner"),
+                    complexity=min(1, len(self.changed) / 20), restored_state=checkpoint["state"] if checkpoint else None)
+                if output["output"] is None:
+                    plan = ReviewPlan(selected_agents=[], priority_files=[], priority_symbols=[], risk_areas=[],
+                        review_tasks=[], review_strategy="Partial review: planner unavailable; no specialist work dispatched.",
+                        coverage_expectations=[], limitations=["Planner failed: " + output["private_state"].stop_reason])
+                else:
+                    plan = output["output"]
         for task in plan.review_tasks:
             if any(path not in self.repository.manifest.entries for path in task.files):
                 raise ReviewExecutionError("planner requested source outside the snapshot")
-        return {"tasks": [task.model_dump(mode="json") for task in plan.review_tasks]}
-
-    def admission(self, state):
+        ordered_tasks = sorted(
+            (task.model_dump(mode="json") for task in plan.review_tasks),
+            key=lambda task: (task["agent_id"], task["task_id"]),
+        )
         self.budget.refresh_time()
         self.executor.jobs.update_ledger(self.job.job_id, owner=self.job.owner, ledger=self.budget.ledger)
-        return {}
+        return {"plan": plan.model_dump(mode="json"), "tasks": ordered_tasks}
 
-    def route(self, state):
-        return {"tasks": sorted(state["tasks"], key=lambda task: (task["agent_id"], task["task_id"]))}
+    def _route_specialists(self, state):
+        tasks = [ReviewTask.model_validate(task) for task in state.get("tasks", [])]
+        if len({task.task_id for task in tasks}) != len(tasks):
+            raise ReviewExecutionError("duplicate specialist task IDs in dispatch")
+        if not tasks:
+            return "join"
+        return [Send(task.agent_id.value, {"task": task.model_dump(mode="json")}) for task in tasks]
+
+    async def run_specialist_node(self, state):
+        task = ReviewTask.model_validate(state["task"])
+        async with self._specialist_semaphore:
+            result = await self.run_task_safely(task)
+        return {"results": [result.model_dump(mode="json")]}
 
     async def run_task(self, task, *, followup=None):
         checkpoint = self.executor.checkpoints.load(self.thread_id, task.task_id)
@@ -403,14 +404,15 @@ class _ReviewSession:
             if result.task_id != task.task_id or result.agent_id != task.agent_id:
                 raise ValueError("worker result belongs to another assignment")
             return result
-        except (OSError, sqlite3.Error, JobConflict, ReviewExecutionError):
-            # Persistence/ownership/integrity failures are infrastructure failures,
-            # not a specialist's unavailable result. Drain siblings and fail closed.
-            raise
-        except Exception:
-            # A task-local crash must not cancel valid sibling work or erase
-            # initial findings during follow-up. Cancellation propagates. If
-            # durable state cannot be loaded/saved, fail the job normally.
+        except Exception as exc:
+            if isinstance(exc, (sqlite3.Error, JobConflict, ReviewExecutionError)) or (
+                isinstance(exc, OSError) and not isinstance(exc, TimeoutError)
+            ):
+                # Persistence/ownership/integrity failures are infrastructure failures,
+                # not a specialist's unavailable result. Drain siblings and fail closed.
+                raise
+            # A task-local failure or timeout must not cancel sibling specialists
+            # or erase initial findings during follow-up. Cancellation propagates.
             private = self.private(task.task_id) or AgentPrivateState(current_task=task.task_id)
             private.stop_reason = "specialist_failed"
             private.coverage.failed[task.task_id] = "specialist_failed"
@@ -423,23 +425,10 @@ class _ReviewSession:
                       phase="investigation", error_code="specialist_failed", stop_reason="specialist_failed")
             return result
 
-    async def specialists(self, state):
-        tasks = [ReviewTask.model_validate(task) for task in state["tasks"]]
-        if len({task.task_id for task in tasks}) != len(tasks):
-            raise ReviewExecutionError("duplicate specialist task IDs in dispatch")
-        semaphore = asyncio.Semaphore(self.budget.limits.concurrent_model_calls)
-        async def bounded(task):
-            async with semaphore:
-                return await self.run_task_safely(task)
-        async with asyncio.TaskGroup() as group:
-            executions = [group.create_task(bounded(task)) for task in tasks]
-        results = [execution.result() for execution in executions]
-        return {"results": [result.model_dump(mode="json") for result in results]}
-
-    def blackboard(self, state, *, replay=False):
+    def join(self, state, *, replay=False):
         try:
-            assigned = [ReviewTask.model_validate(task) for task in state["tasks"]]
-            results = [SpecialistResult.model_validate(raw) for raw in state["results"]]
+            assigned = [ReviewTask.model_validate(task) for task in state.get("tasks", [])]
+            results = [SpecialistResult.model_validate(raw) for raw in state.get("results", [])]
         except ValueError as exc:
             raise ReviewExecutionError("invalid task or result in aggregation") from exc
         tasks = {task.task_id: task for task in assigned}
@@ -451,6 +440,10 @@ class _ReviewSession:
         # Check the entire join before changing shared candidates or coverage.
         for result in results:
             self.publish(tasks[result.task_id], result, record_events=not replay)
+        if not replay:
+            rejected = sum(len(items) for items in self.board.quarantined.values())
+            self.emit("validation_failed" if rejected else "validation_passed", phase="structural_gate",
+                      outcome="failed" if rejected else "succeeded", count=rejected or len(self.board.candidates))
         return {}
 
     def publish(self, task, result, *, record_events=True):
@@ -469,15 +462,9 @@ class _ReviewSession:
             self.emit("candidate_rejected", agent_id=result.agent_id, task_id=result.task_id,
                       phase="structural_gate", outcome="failed", count=count)
 
-    def structural_gate(self, state):
-        rejected = sum(len(items) for items in self.board.quarantined.values())
-        self.emit("validation_failed" if rejected else "validation_passed", phase="structural_gate",
-                  outcome="failed" if rejected else "succeeded", count=rejected or len(self.board.candidates))
-        return {}
-
-    async def finalize(self, state):
+    async def synthesizer_verifier(self, state):
         if not self.board.results:
-            self.blackboard(state, replay=True)
+            self.join(state, replay=True)
         tasks = {task["task_id"]: ReviewTask.model_validate(task) for task in state["tasks"]}
         self.review_tasks = tasks
         admitted = self.executor.jobs.get(self.job.job_id, owner=self.job.owner)

@@ -213,7 +213,7 @@ def test_inconsistent_persisted_synthesis_recovers_from_recorded_verification(tm
         state['output']=VerificationSynthesisResult.model_validate(good)
         state['private_state'].stop_reason='evidence_complete'
         executor.checkpoints.save(session.thread_id,state,1)
-        final=await session.finalize({'tasks':[task.model_dump(mode='json')],'results':[result.model_dump(mode='json')]})
+        final=await session.synthesizer_verifier({'tasks':[task.model_dump(mode='json')],'results':[result.model_dump(mode='json')]})
         report=json.loads(final['rendered']['json'])
         assert not report['confirmed_defects']
         assert len(report['uncertain_high_impact_candidates'])==1
