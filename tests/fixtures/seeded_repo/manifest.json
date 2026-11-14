@@ -1,0 +1,114 @@
+{
+  "version": "seeded-repo-v1",
+  "issues": [
+    {
+      "id": "SEED-01",
+      "file": "orders.py",
+      "line": 8,
+      "end_line": 8,
+      "category": "bug_reliability",
+      "title": "Unhandled empty list indexing or missing email key",
+      "description": "users[0]['email'] raises IndexError on empty input or KeyError when 'email' is absent."
+    },
+    {
+      "id": "SEED-02",
+      "file": "orders.py",
+      "line": 13,
+      "end_line": 16,
+      "category": "bug_reliability",
+      "title": "File handle resource leak on JSON decode error",
+      "description": "open() is called without a context manager, leaking the file descriptor if json.load raises."
+    },
+    {
+      "id": "SEED-03",
+      "file": "orders.py",
+      "line": 21,
+      "end_line": 22,
+      "category": "logic_correctness",
+      "title": "Missing bounds check on discount percent",
+      "description": "apply_discount accepts negative percentages or percentages over 100, inflating or turning prices negative."
+    },
+    {
+      "id": "SEED-04",
+      "file": "orders.py",
+      "line": 27,
+      "end_line": 27,
+      "category": "logic_correctness",
+      "title": "Off-by-one boundary in is_within_limit",
+      "description": "count <= limit + 1 permits count == limit + 1 despite the contract enforcing count <= limit."
+    },
+    {
+      "id": "SEED-05",
+      "file": "auth_routes.py",
+      "line": 14,
+      "end_line": 15,
+      "category": "architecture_security",
+      "title": "SQL injection in find_user",
+      "description": "Interpolates untrusted username directly into SQL text instead of using parameterized queries."
+    },
+    {
+      "id": "SEED-06",
+      "file": "auth_routes.py",
+      "line": 21,
+      "end_line": 24,
+      "category": "architecture_security",
+      "title": "Missing authorization check in delete_account",
+      "description": "Checks authentication only; any authenticated user can delete arbitrary target_user_id accounts."
+    },
+    {
+      "id": "SEED-07",
+      "file": "auth_routes.py",
+      "line": 29,
+      "end_line": 31,
+      "category": "architecture_security",
+      "title": "Path traversal in read_attachment",
+      "description": "Joins filename to base_dir without canonical path containment, allowing ../ or absolute path escapes."
+    },
+    {
+      "id": "SEED-08",
+      "file": "reports.py",
+      "line": 11,
+      "end_line": 13,
+      "category": "performance_scalability",
+      "title": "N+1 SQL query per user in load_user_orders",
+      "description": "Executes one database query per user_id in a loop instead of batching."
+    },
+    {
+      "id": "SEED-09",
+      "file": "reports.py",
+      "line": 19,
+      "end_line": 21,
+      "category": "performance_scalability",
+      "title": "Unbounded polling loop in retry_until_ready",
+      "description": "while not poll_fn() spins forever if readiness is never reached."
+    },
+    {
+      "id": "SEED-10",
+      "file": "reports.py",
+      "line": 27,
+      "end_line": 29,
+      "category": "performance_scalability",
+      "title": "Quadratic list membership scan in deduplicate_events",
+      "description": "Checks event not in seen against a growing list inside a loop instead of tracking seen keys in a set."
+    },
+    {
+      "id": "SEED-11",
+      "file": "billing.py",
+      "line": 6,
+      "end_line": 9,
+      "category": "logic_correctness",
+      "title": "Negative transfer invariant violation and non-atomic debit",
+      "description": "Does not reject amount <= 0 and mutates accounts[src] before validating/updating accounts[dst]."
+    },
+    {
+      "id": "SEED-12",
+      "file": "billing.py",
+      "line": 12,
+      "end_line": 37,
+      "category": "quality_testability",
+      "title": "Deeply nested branching and high complexity in evaluate_tier",
+      "description": "Nested conditionals and magic spend thresholds obscure control flow and impede branch testing."
+    }
+  ]
+}
+
