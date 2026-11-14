@@ -97,9 +97,9 @@ async def test_retained_candidate_cannot_end_before_required_contract_read_and_a
     _, artifacts, _, original, task = setup_repository(tmp_path)
     snapshot = artifacts.capture(owner='alice', files={'service.py':'def first(items):\n    return items[0]\n',
         'REVIEW_CONTRACT.md':'Empty input is allowed.\n'})
-    repo = RepositoryContext(artifacts, original.cache, snapshot.snapshot_id, owner='alice')
+    repo = RepositoryContext(artifacts, snapshot.snapshot_id, owner='alice')
     task = task.model_copy(update={'files':['service.py','REVIEW_CONTRACT.md']})
-    ref = repo._read_source({'file_path':'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path':'service.py'}, task).evidence_ref
     record = candidate(repo, ref)
     class Provider(ScriptedProvider):
         async def generate_completion(self, request):
@@ -109,7 +109,7 @@ async def test_retained_candidate_cannot_end_before_required_contract_read_and_a
             if len(self.requests) == 0:
                 action = complete(task, [record], [ref])
             elif 'REVIEW_CONTRACT.md' in (body.get('repair') or ''):
-                action = dict(kind='call_tool', tool='read_source', arguments={'file_path':'REVIEW_CONTRACT.md'},
+                action = dict(kind='call_tool', tool='read_file', arguments={'file_path':'REVIEW_CONTRACT.md'},
                     inspected_evidence=refs)
             else:
                 action = complete(task, [record], refs)

@@ -54,7 +54,7 @@ async def test_paging_guidance_loads_only_for_partial_evidence_and_keeps_complet
     _,artifacts,_,original,task=setup_repository(tmp_path)
     from devwatch.review.repository import RepositoryContext
     snapshot=artifacts.capture(owner='alice',files={'service.py':'# '+ 'x'*4000+'\n'})
-    repo=RepositoryContext(artifacts,original.cache,snapshot.snapshot_id,owner='alice')
+    repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
     class Provider(ScriptedProvider):
         async def generate_completion(self,request):
             body=json.loads(request.prompt)

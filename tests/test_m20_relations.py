@@ -10,7 +10,7 @@ from tests.verification_fixtures import decision
 
 def scenario(tmp_path, *, verdicts=('confirmed', 'confirmed'), other_file=False, relation=None, groups=None):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path': 'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path': 'service.py'}, task).evidence_ref
     claims = {'f1': candidate(repo, ref), 'f2': {**candidate(repo, ref), 'title': 'Another view of the same empty index'}}
     if other_file:
         claims['f2']['location'] = {**claims['f2']['location'], 'file_path': 'other.py', 'start_line': 1, 'end_line': 1}
@@ -48,11 +48,11 @@ def with_relation(tmp_path, kind, *, verdicts=('confirmed', 'confirmed'), other_
     from tests.test_audit_evidence import engine as make_engine
     _, _, _, repo, task = setup_repository(tmp_path)
     task = task.model_copy(update={'files': list(repo.manifest.entries)})
-    ref = repo._read_source({'file_path': 'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path': 'service.py'}, task).evidence_ref
     claims = {'f1': candidate(repo, ref), 'f2': {**candidate(repo, ref), 'title': 'Same index from another specialist'}}
     refs = [ref]
     if other_file:
-        second = repo._read_source({'file_path':'other.py'}, task).evidence_ref
+        second = repo._read_file({'file_path':'other.py'}, task).evidence_ref
         refs.append(second)
         claims['f2']['evidence_refs'] = [second]
         claims['f2']['location'] = {**claims['f2']['location'], 'file_path': 'other.py', 'start_line': 1, 'end_line': 1}

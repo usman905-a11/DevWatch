@@ -10,7 +10,7 @@ from tests.verification_fixtures import decision
 
 def setup(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path': 'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path': 'service.py'}, task).evidence_ref
     return repo, task, ref, candidate(repo, ref)
 
 

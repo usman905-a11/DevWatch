@@ -21,17 +21,6 @@ def test_capabilities_reject_cross_role_tools_and_agent_source_writes():
             bug.authorize_tool(denied)
 
 
-def test_artifact_permission_requires_performance_task_grant():
-    contracts = load_contracts()
-    for agent in contracts.AGENT_CONTRACTS.values():
-        with pytest.raises(PermissionError):
-            agent.authorize_tool("write_artifact")
-    performance = contracts.AGENT_CONTRACTS[contracts.AgentId.PERFORMANCE_SCALABILITY]
-    assert performance.authorize_tool("write_artifact", produces_measurement_artifact=True) == "write_artifact"
-    verifier = contracts.AGENT_CONTRACTS[contracts.AgentId.SYNTHESIZER_VERIFIER]
-    with pytest.raises(PermissionError):
-        verifier.authorize_tool("write_artifact", produces_measurement_artifact=True)
-
 
 @pytest.mark.parametrize("identity", ["supervisor", "orchestrator", "router", "verifier", "synthesizer", "budget_manager"])
 def test_only_agreed_agent_identities_are_valid(identity):

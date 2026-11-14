@@ -128,7 +128,7 @@ class PermissionedTools:
         AGENT_CONTRACTS[task.agent_id].validate_action(
             action, produces_measurement_artifact=task.task_id in self._measurement_tasks)
         if action.kind in {"call_tool", "request_context"}:
-            parsed = self._arguments[action.tool or "read_source"].model_validate(action.arguments)
+            parsed = self._arguments[action.tool or "read_file"].model_validate(action.arguments)
             path = getattr(parsed, "file_path", None)
             paths = ([path] if path is not None else []) + getattr(parsed, 'additional_files', [])
             if any(path not in task.files for path in paths):
@@ -227,7 +227,7 @@ class AgentSubgraphs:
         self.control_graph = self._build()
 
     def _build(self):
-        from devwatch.review.activity_stream import observed_node
+        from devwatch.review.jobs import observed_node
         builder = StateGraph(AgentExecutionState)
         builder.add_node("investigate", observed_node("investigate", self._investigate, self._event, scope="agent"))
         builder.add_node("execute_action", observed_node("execute_action", self._execute_action, self._event, scope="agent"))
@@ -291,11 +291,11 @@ class AgentSubgraphs:
             return "Planned next action"
         kind = parsed.get("kind")
         tool = parsed.get("tool")
-        allowed_tools = set(TOOL_ARGUMENTS) | {"read_source", "read_evidence"}
+        allowed_tools = set(TOOL_ARGUMENTS) | {"read_file", "read_evidence"}
         if kind in {"call_tool", "request_context"} and isinstance(tool, str) and tool in allowed_tools:
             return f"Selected tool: {tool}"
         if kind == "request_context":
-            return "Selected tool: read_source"
+            return "Selected tool: read_file"
         if isinstance(kind, str) and kind in {
             "submit_candidates",
             "submit_plan",
@@ -321,7 +321,7 @@ class AgentSubgraphs:
             return "code_search", f"Searching for '{query}'", {"query": query}
         if name == "repo_map":
             return "repo_map", "Inspecting repository map", {}
-        if name in {"read_source", "read_evidence", "request_context"}:
+        if name in {"read_file", "read_evidence", "request_context"}:
             path = arguments.get("file_path") or arguments.get("path")
             files = [str(path)] if path and str(path) in task.files else list(task.files)[:25]
             title = f"Reading {files[0]}" if len(files) == 1 else "Reading source files"
@@ -384,7 +384,7 @@ class AgentSubgraphs:
         action = AgentAction.model_validate_json(raw)
         private = state["private_state"]
         if action.kind in {'call_tool','request_context'} and state.get('tool_selections'):
-            name=action.tool or 'read_source'
+            name=action.tool or 'read_file'
             selection=state['tool_selections'][-1]
             selection.update(proposed_tool=name if name in TOOL_ARGUMENTS else 'unrecognized_tool',
                              advertised=name in selection['selected_names'])
@@ -930,7 +930,7 @@ class AgentSubgraphs:
     async def _execute_action(self, state: AgentExecutionState) -> AgentExecutionState:
         task, private, action = state["task"], state["private_state"], state["action"]
         operation_id, observation, tool_error, started = None, None, None, None
-        name = action.tool or "read_source"
+        name = action.tool or "read_file"
         fingerprint = failure_identity(name, action.arguments, self.tools._arguments.get(name))
         repeated = any(item.fingerprint == fingerprint for item in private.tool_diagnostics)
         try:
@@ -945,7 +945,7 @@ class AgentSubgraphs:
                 private.tool_call_count += 1
                 await self._save(state)
                 operation_id, started = uuid4().hex, time.monotonic()
-                tool_name = action.tool or "read_source"
+                tool_name = action.tool or "read_file"
                 await self._event("tool_called", state, tool=tool_name, operation_id=operation_id)
                 step_type, step_title, init_info = self._tool_step_metadata(tool_name, arguments, task)
                 async with self._step(
@@ -1080,7 +1080,7 @@ class AgentSubgraphs:
                 tool_error = diagnostic.code
                 return self._stop(state, "tools_unavailable")
             # These are known read failures, so another bounded action is safe.
-            name = action.tool or "read_source"
+            name = action.tool or "read_file"
             private.coverage.failed[f"{task.task_id}:{name}"] = "recoverable_tool_error"
             private.coverage.limitations.append(f"Tool {name} failed; no evidence was produced for that call.")
             # One bounded runtime receipt, not an exception string or reasoning
@@ -1100,9 +1100,9 @@ class AgentSubgraphs:
         finally:
             if operation_id is not None:
                 if observation is not None:
-                    await self._event("evidence_retrieved", state, tool=action.tool or "read_source",
+                    await self._event("evidence_retrieved", state, tool=action.tool or "read_file",
                                       evidence_ref=observation.evidence_ref, operation_id=operation_id, offset=observation.offset)
-                await self._event("tool_result", state, tool=action.tool or "read_source", operation_id=operation_id,
+                await self._event("tool_result", state, tool=action.tool or "read_file", operation_id=operation_id,
                     outcome="succeeded" if observation is not None else "cancelled" if private.stop_reason == "cancelled" else "failed",
                     error_code=tool_error, evidence_ref=observation.evidence_ref if observation is not None else None,
                     stop_reason=safe_stop_reason(private.stop_reason) if private.stop_reason else None,
@@ -1112,8 +1112,8 @@ class AgentSubgraphs:
     def _tool_diagnostic(self, state, error, fingerprint=None):
         task, private = state["task"], state["private_state"]
         action = state.get("action") or AgentAction(kind="call_tool",
-            tool="read_evidence" if error.code.startswith("evidence") else "read_source", arguments=error.arguments)
-        name = action.tool or "read_source"
+            tool="read_evidence" if error.code.startswith("evidence") else "read_file", arguments=error.arguments)
+        name = action.tool or "read_file"
         fingerprint = fingerprint or failure_identity(name, action.arguments, self.tools._arguments.get(name))
         diagnostic = diagnose(name if name in self.tools._arguments else "unrecognized_tool", action.arguments,
             task.files, error, fingerprint, replay_safe=True)

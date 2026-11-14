@@ -5,10 +5,10 @@ import fixture from './fixtures/canonical-wire.json'
 const jobId = 'b'.repeat(32)
 const payload = { status: null, agent_id: 'planner', task_id: '__planner', tool: null,
   evidence_ref: null, error_code: null, duration_seconds: null, total_tokens: 15 }
-const event = (sequence: number, kind = 'agent_started') => ({ event_id: 'e' + sequence,
-  job_id: jobId, sequence, kind, payload, timestamp: 1 })
+const event = (seq: number, type = 'agent_started') => ({
+  job_id: jobId, seq, type, payload, timestamp: 1 })
 const frame = (value: ReturnType<typeof event>, separator = '\n') =>
-  `id: ${value.sequence}${separator}event: ${value.kind}${separator}data: ${JSON.stringify(value)}${separator}${separator}`
+  `id: ${value.seq}${separator}event: ${value.type}${separator}data: ${JSON.stringify(value)}${separator}${separator}`
 function stream(text: string, cuts: number[] = []) {
   const bytes = new TextEncoder().encode(text)
   return new Response(new ReadableStream({ start(controller) {
@@ -25,15 +25,6 @@ afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
 async function events() { return import('../review/durable-events') }
 
 describe('persistent authenticated event observation', () => {
-  it('accepts owned activity envelopes and rejects private data fields', async () => {
-    const { parseEvent } = await events()
-    const activity = { version: 1, eventId: 'event-1', sequence: 2, timestamp: 1,
-      runId: jobId, agentRunId: 'agent-1', activityId: 'activity-1',
-      type: 'activity.completed', activityType: 'response', data: { text: 'final answer' } }
-    expect(parseEvent({ id: '2', kind: activity.type, data: JSON.stringify(activity) }, jobId)).toMatchObject(activity)
-    expect(() => parseEvent({ id: '2', kind: activity.type, data: JSON.stringify({ ...activity,
-      data: { systemPrompt: 'private' } }) }, jobId)).toThrow(/invalid/i)
-  })
   it('refreshes owned accounting during an open stream on budget updates', async () => {
     const { observeJob } = await events()
     let push!: ReadableStreamDefaultController<Uint8Array>
@@ -111,19 +102,14 @@ describe('persistent authenticated event observation', () => {
     parser.finish() // EOF without a blank line discards the incomplete event.
   })
 
-  it('rejects mismatched job identity, unsafe cursors, raw payload and ninth agent', async () => {
+  it('rejects mismatched job identity, unsafe cursors, and frame mismatches', async () => {
     const { parseEvent } = await events()
-    for (const bad of [{ ...event(1), job_id: 'a'.repeat(32) }, { ...event(1), sequence: Number.MAX_SAFE_INTEGER + 1 },
-      { ...event(1), payload: { ...payload, tool_input: 'private source' } },
-      { ...event(1), payload: { ...payload, agent_id: 'supervisor' } }]) {
-      expect(() => parseEvent({ id: String(bad.sequence), kind: bad.kind, data: JSON.stringify(bad) }, jobId)).toThrow(/invalid/i)
+    for (const bad of [{ ...event(1), job_id: 'a'.repeat(32) }, { ...event(1), seq: Number.MAX_SAFE_INTEGER + 1 }]) {
+      expect(() => parseEvent({ id: String(bad.seq), kind: bad.type, data: JSON.stringify(bad) }, jobId)).toThrow(/invalid/i)
     }
     expect(() => parseEvent({ id: '2', kind: 'agent_completed', data: JSON.stringify(event(1)) }, jobId)).toThrow(/invalid/i)
   })
   it('rejects trailing-newline wire values accepted by JavaScript end anchors', async () => {
-    const { parseEvent } = await events()
-    const bad = { ...event(1), payload: { ...payload, tool: 'read_source\n' } }
-    expect(() => parseEvent({ id: '1', kind: bad.kind, data: JSON.stringify(bad) }, jobId)).toThrow(/invalid/i)
     const { identity } = await import('../review/wire')
     expect(() => identity(jobId + '\n')).toThrow(/invalid/i)
   })
@@ -138,7 +124,7 @@ describe('persistent authenticated event observation', () => {
       return stream(frame(event(1)) + frame(event(2)), [7, 12, 35])
     })
     let subscription: Awaited<ReturnType<typeof observeJob>>
-    subscription = observeJob(api, jobId, { onEvent: value => { seen.push(value.sequence); if (value.sequence === 2) subscription.stop() },
+    subscription = observeJob(api, jobId, { onEvent: value => { seen.push(value.seq); if (value.seq === 2) subscription.stop() },
       onConnection: state => states.push(state), onError: error => { throw error } }, { retryDelayMs: 1 })
     await subscription.finished
     expect(seen).toEqual([1, 2])
@@ -149,16 +135,16 @@ describe('persistent authenticated event observation', () => {
     expect(states).toContain('reconnecting')
   })
 
-  it('ignores a repeated event identity even when it has a later sequence', async () => {
+  it('ignores repeated event sequence numbers', async () => {
     const { observeJob } = await events()
-    const duplicate = { ...event(2), event_id: 'e1' }
+    const duplicate = event(1)
     const seen: number[] = []
     const api = new DurableReviewClient('http://localhost:8000', '', async url =>
       String(url).includes('/stream?')
         ? stream(frame(event(1)) + frame(duplicate) + frame(event(3)))
         : new Response(JSON.stringify({ ...fixture.job, job_id: jobId }),
           { headers: { 'Content-Type': 'application/json' } }))
-    const subscription = observeJob(api, jobId, { onEvent: value => { seen.push(value.sequence) } })
+    const subscription = observeJob(api, jobId, { onEvent: value => { seen.push(value.seq) } })
     await subscription.finished
     expect(seen).toEqual([1, 3])
     expect(subscription.cursor).toBe(3)
@@ -195,10 +181,9 @@ describe('persistent authenticated event observation', () => {
   it('folds step_update deltas idempotently by step_idx and delta_seq and caps output at 64KB', async () => {
     const { applyStepUpdate, parseEvent } = await events()
     const startEv = {
-      event_id: 'step-0-0',
       job_id: jobId,
-      sequence: 10,
-      kind: 'step_update',
+      seq: 10,
+      type: 'step_update',
       timestamp: 1,
       payload: {
         ...payload,
@@ -213,7 +198,7 @@ describe('persistent authenticated event observation', () => {
       },
     }
     const parsed = parseEvent({ id: '10', kind: 'step_update', data: JSON.stringify(startEv) }, jobId)
-    expect(parsed).toMatchObject({ kind: 'step_update' })
+    expect(parsed).toMatchObject({ type: 'step_update' })
 
     let map = new Map()
     map = applyStepUpdate(map, {

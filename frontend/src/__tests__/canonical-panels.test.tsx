@@ -4,25 +4,11 @@ import fixture from './fixtures/canonical-wire.json'
 import { ReportPanel } from '../review/ReportPanel'
 import { JobActivity } from '../review/JobActivity'
 import { CodeEditor, detectMonacoLanguage } from '../components/CodeEditor'
-import { ActivityEvent, PersistedEvent } from '../review/wire'
+import { JobEvent } from '../review/wire'
 
 describe('canonical review presentation', () => {
-  it('uses the completed response as the authoritative text after deltas', () => {
-    const started: ActivityEvent = { version: 1, eventId: 'start', sequence: 1, timestamp: 1,
-      runId: 'run', agentRunId: 'agent', activityId: 'response', type: 'activity.started',
-      activityType: 'response', data: { agentId: 'planner' } }
-    const delta: ActivityEvent = { ...started, eventId: 'delta', sequence: 2, type: 'activity.delta',
-      data: { text: 'draft' } }
-    const completed: ActivityEvent = { ...started, eventId: 'complete', sequence: 3,
-      type: 'activity.completed', data: { text: 'accepted final text' } }
-    const html = renderToStaticMarkup(<JobActivity events={[started, delta, completed]}
-      job={null} connection="connected" />)
-    expect(html).toContain('Planner')
-    expect(html).toContain('accepted final text')
-    expect(html).not.toContain('<pre class="activity-output">draft</pre>')
-  })
   it('shows graph progress and completion outcomes in the existing activity panel', () => {
-    const event: PersistedEvent = { ...fixture.events[0], kind: 'graph_node_completed',
+    const event: JobEvent = { ...fixture.events[0], type: 'graph_node_completed',
       payload: { ...fixture.events[0].payload, status: null, agent_id: 'logic_correctness',
         task_id: 'logic-1', graph_scope: 'agent', node: 'execute_action', outcome: 'succeeded' } }
     const html = renderToStaticMarkup(<JobActivity events={[event]} job={null} connection="connected" />)
@@ -84,12 +70,11 @@ describe('canonical review presentation', () => {
   })
   it('renders nested trajectory steps with terminal drawer, search match pill, planner row, and error callout', () => {
     const base = fixture.events[0]
-    const stepEvents: PersistedEvent[] = [
+    const stepEvents: JobEvent[] = [
       {
         ...base,
-        event_id: 'st-0',
-        sequence: 1,
-        kind: 'step_update',
+        seq: 1,
+        type: 'step_update',
         payload: {
           ...base.payload,
           status: 'RUNNING',
@@ -105,9 +90,8 @@ describe('canonical review presentation', () => {
       },
       {
         ...base,
-        event_id: 'st-1-0',
-        sequence: 2,
-        kind: 'step_update',
+        seq: 2,
+        type: 'step_update',
         payload: {
           ...base.payload,
           status: 'DONE',
@@ -123,9 +107,8 @@ describe('canonical review presentation', () => {
       },
       {
         ...base,
-        event_id: 'st-2-0',
-        sequence: 3,
-        kind: 'step_update',
+        seq: 3,
+        type: 'step_update',
         payload: {
           ...base.payload,
           status: 'DONE',
@@ -148,9 +131,8 @@ describe('canonical review presentation', () => {
       },
       {
         ...base,
-        event_id: 'st-3-0',
-        sequence: 4,
-        kind: 'step_update',
+        seq: 4,
+        type: 'step_update',
         payload: {
           ...base.payload,
           status: 'ERROR',

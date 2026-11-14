@@ -12,19 +12,6 @@ def budgets():
     return importlib.import_module("devwatch.review.budgets")
 
 
-def test_specialists_cannot_spend_final_agent_reserve():
-    api = budgets()
-    limits = BalancedLimits(job_tokens=100, final_agent_tokens=30, specialist_tokens=100)
-    manager = api.BudgetManager(limits)
-    reservation = manager.reserve_model(AgentId.BUG_RELIABILITY, 70)
-    manager.record_model(reservation, prompt_tokens=50, completion_tokens=20)
-    with pytest.raises(api.BudgetExceeded, match="reserved"):
-        manager.reserve_model(AgentId.LOGIC_CORRECTNESS, 1)
-    final = manager.reserve_model(AgentId.SYNTHESIZER_VERIFIER, 30)
-    manager.record_model(final, prompt_tokens=20, completion_tokens=10)
-    assert manager.ledger.total_tokens == 100
-
-
 def test_three_inflight_model_reservations_and_no_fourth():
     api = budgets()
     manager = api.BudgetManager()
@@ -58,21 +45,10 @@ def test_restored_task_does_not_reset_tool_iteration_repair_or_retry_limits():
         resumed.consume_retry("unknown-command", replay_safe=False)
 
 
-def test_specialist_ceiling_is_cumulative_across_tasks():
-    api = budgets()
-    manager = api.BudgetManager()
-    first = manager.reserve_model(AgentId.PERFORMANCE_SCALABILITY, 30_000)
-    manager.record_model(first, prompt_tokens=25_000, completion_tokens=5_000)
-    second = manager.reserve_model(AgentId.PERFORMANCE_SCALABILITY, 20_000)
-    manager.record_model(second, prompt_tokens=15_000, completion_tokens=5_000)
-    with pytest.raises(api.BudgetExceeded, match="agent"):
-        manager.reserve_model(AgentId.PERFORMANCE_SCALABILITY, 1)
-
-
 def test_inflight_tokens_and_consumed_time_survive_restore():
     api = budgets()
-    manager = api.BudgetManager(BalancedLimits(job_tokens=100, final_agent_tokens=20))
-    manager.reserve_model(AgentId.BUG_RELIABILITY, 80)
+    manager = api.BudgetManager(BalancedLimits(job_tokens=100))
+    manager.reserve_model(AgentId.BUG_RELIABILITY, 100)
     manager.consume_time(590)
     restored = api.BudgetManager(manager.limits, api.BudgetLedger.model_validate(manager.ledger.model_dump()))
     with pytest.raises(api.BudgetExceeded):
@@ -85,7 +61,7 @@ def test_inflight_tokens_and_consumed_time_survive_restore():
 
 def test_provider_overrun_is_accounted_and_stops_further_calls():
     api = budgets()
-    manager = api.BudgetManager(BalancedLimits(job_tokens=100, final_agent_tokens=20))
+    manager = api.BudgetManager(BalancedLimits(job_tokens=100))
     ticket = manager.reserve_model(AgentId.BUG_RELIABILITY, 60)
     with pytest.raises(api.BudgetExceeded, match="reservation"):
         manager.record_model(ticket, prompt_tokens=100, completion_tokens=10)

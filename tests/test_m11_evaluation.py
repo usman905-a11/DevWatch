@@ -25,7 +25,7 @@ def finding(**changes):
 
 
 def evidence():
-    return {"source": {"snapshot_id": "snapshot", "tool": "read_source", "file_path": "subject.py",
+    return {"source": {"snapshot_id": "snapshot", "tool": "read_file", "file_path": "subject.py",
             "source_scope": ["subject.py"], "start_line": 1, "end_line": 2,
             "data": "def first(items):\n    return items[0]"}}
 

@@ -73,33 +73,16 @@ class BudgetManager:
         if self.ledger.elapsed_seconds >= self.limits.review_seconds:
             raise BudgetExceeded("review time exhausted")
 
-    def _agent_ceiling(self, agent: AgentId) -> int:
-        if agent == AgentId.PLANNER:
-            return self.limits.planner_tokens
-        if agent == AgentId.SYNTHESIZER_VERIFIER:
-            return self.limits.final_agent_tokens
-        return self.limits.specialist_tokens
-
     def reserve_model(self, agent: AgentId, tokens: int) -> str:
+        """Gate a model call on time, concurrency, and the single per-scan token cap."""
         reservation = ModelReservation(agent_id=agent, tokens=tokens)
         with self._lock:
             self._ensure_time()
             if len(self.ledger.inflight) >= self.limits.concurrent_model_calls:
                 raise BudgetExceeded("concurrent model call limit reached")
-            agent_spent = self.ledger.agent_usage.get(agent, TokenUsage()).total_tokens
-            agent_reserved = sum(r.tokens for r in self.ledger.inflight.values() if r.agent_id == agent)
-            if agent_spent + agent_reserved + tokens > self._agent_ceiling(agent):
-                raise BudgetExceeded("agent token ceiling reached")
-            pending = sum(r.tokens for r in self.ledger.inflight.values())
-            if self.ledger.total_tokens + pending + tokens > self.limits.job_tokens:
-                raise BudgetExceeded("job token ceiling reached")
-            if agent != AgentId.SYNTHESIZER_VERIFIER:
-                final_spent = self.ledger.agent_usage.get(AgentId.SYNTHESIZER_VERIFIER, TokenUsage()).total_tokens
-                final_pending = sum(r.tokens for r in self.ledger.inflight.values()
-                                    if r.agent_id == AgentId.SYNTHESIZER_VERIFIER)
-                reserve_remaining = max(0, self.limits.final_agent_tokens - final_spent - final_pending)
-                if self.ledger.total_tokens + pending + tokens + reserve_remaining > self.limits.job_tokens:
-                    raise BudgetExceeded("final agent tokens are reserved")
+            reserved = sum(item.tokens for item in self.ledger.inflight.values())
+            if self.ledger.total_tokens + reserved + tokens > self.limits.job_tokens:
+                raise BudgetExceeded("job token cap exceeded")
             ticket = uuid4().hex
             self.ledger.inflight[ticket] = reservation
             return ticket
@@ -113,24 +96,15 @@ class BudgetManager:
                 prompt_tokens=previous.prompt_tokens + usage.prompt_tokens,
                 completion_tokens=previous.completion_tokens + usage.completion_tokens,
             )
-            # Actual provider consumption remains accounted even if it violates admission.
             if usage.total_tokens > reservation.tokens:
-                raise BudgetExceeded("provider exceeded token reservation")
+                raise BudgetExceeded("provider usage exceeded reservation")
 
     def model_allowance(self, agent: AgentId) -> int:
-        """Read-only admission headroom; reserve_model still claims it atomically."""
+        """Remaining tokens under the single per-scan token cap."""
         with self._lock:
             self._ensure_time()
-            pending = sum(item.tokens for item in self.ledger.inflight.values())
-            agent_pending = sum(item.tokens for item in self.ledger.inflight.values() if item.agent_id == agent)
-            agent_left = self._agent_ceiling(agent) - self.ledger.agent_usage.get(agent, TokenUsage()).total_tokens - agent_pending
-            job_left = self.limits.job_tokens - self.ledger.total_tokens - pending
-            if agent != AgentId.SYNTHESIZER_VERIFIER:
-                final_used = self.ledger.agent_usage.get(AgentId.SYNTHESIZER_VERIFIER, TokenUsage()).total_tokens
-                final_pending = sum(item.tokens for item in self.ledger.inflight.values()
-                                    if item.agent_id == AgentId.SYNTHESIZER_VERIFIER)
-                job_left -= max(0, self.limits.final_agent_tokens - final_used - final_pending)
-            return max(0, min(agent_left, job_left))
+            reserved = sum(item.tokens for item in self.ledger.inflight.values())
+            return max(0, self.limits.job_tokens - self.ledger.total_tokens - reserved)
 
     def _consume(self, counters: dict[str, int], identity: str, ceiling: int, label: str) -> None:
         with self._lock:

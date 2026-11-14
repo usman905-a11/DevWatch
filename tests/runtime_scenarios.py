@@ -109,7 +109,7 @@ class ScenarioProvider:
             path = FILES[role]
             if role == "bug_reliability" and step == 1 and self.mode in {"tool_failure", "invalid_arguments"}:
                 arguments = {"file_path": path, "start_line": 999, "end_line": 1000} if self.mode == "tool_failure" else {"unexpected": "private-m10-error"}
-                action = {"kind": "call_tool", "tool": "read_source", "arguments": arguments}
+                action = {"kind": "call_tool", "tool": "read_file", "arguments": arguments}
             elif role == "performance_scalability" and step == 1 and self.mode in {"unavailable", "unapproved"}:
                 action = {"kind": "call_tool", "tool": "benchmark", "arguments": {"command_id": "not-configured"}}
             elif role == "quality_testability" and self.mode == "oversized" and step <= 3:
@@ -119,14 +119,14 @@ class ScenarioProvider:
                     action = {"kind": "call_tool", "tool": "read_evidence", "arguments": {
                         "evidence_ref": private["evidence_refs"][0], "offset": 12000, "max_chars": 1000}}
                 else:
-                    action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": path, "start_line": 1, "end_line": 2}}
+                    action = {"kind": "call_tool", "tool": "read_file", "arguments": {"file_path": path, "start_line": 1, "end_line": 2}}
             elif role == 'bug_reliability' and self.mode == 'budget' and private['evidence_refs']:
                 # Distinct page requests exercise the global iteration ceiling;
                 # an identical acknowledged source read stops as no_progress.
                 action = {'kind': 'call_tool', 'tool': 'read_evidence', 'arguments': {
                     'evidence_ref': private['evidence_refs'][0], 'offset': step - 1, 'max_chars': 1}}
             elif not private["evidence_refs"]:
-                action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": path}}
+                action = {"kind": "call_tool", "tool": "read_file", "arguments": {"file_path": path}}
             else:
                 candidates = []
                 if role == "logic_correctness":
@@ -137,7 +137,7 @@ class ScenarioProvider:
                     "candidates": candidates, "coverage": {}, "stop_reason": "evidence_complete"}}
         elif phase == "verification":
             if not private["evidence_refs"]:
-                action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": "logic.py", "start_line": 2, "end_line": 2}}
+                action = {"kind": "call_tool", "tool": "read_file", "arguments": {"file_path": "logic.py", "start_line": 2, "end_line": 2}}
             else:
                 action = {"kind": "submit_verification", "payload": {"decisions": [{
                     "finding_id": identity, "verdict": "confirmed", "confidence": .9,

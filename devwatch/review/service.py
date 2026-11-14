@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from devwatch.review.activity_stream import ActivityEvent
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -22,9 +21,9 @@ from pydantic import Field
 
 from devwatch.review.contracts import AgentId, AgentWorkItem, ContractModel, ModelTier
 from devwatch.review.declared_context import validate_context_files
-from devwatch.review.jobs import DurableJobManager, EventStore, JobConflict, JobNotFound, JobStore, MAX_EVENT_CURSOR
+from devwatch.review.jobs import DurableJobManager, JobConflict, JobEvent, JobNotFound, JobStore, JobView, MAX_EVENT_CURSOR
 from devwatch.review.repository import RepositoryContext
-from devwatch.review.stores import ArtifactStore, CaptureCoverage, GitMetadata, RepoCache, StoreLayout
+from devwatch.review.stores import ArtifactStore, CaptureCoverage, GitMetadata, SnapshotManifest, StoreLayout
 from devwatch.review.workflow import CanonicalReviewExecutor
 from devwatch.review.workspace import (
     PathOutsideWorkspaceError,
@@ -59,10 +58,20 @@ class ServiceSettings:
     @classmethod
     def from_env(cls):
         key = os.getenv("DEVWATCH_API_KEY", "")
-        return cls(runtime_root=Path(os.getenv("DEVWATCH_RUNTIME_DIR", ".devwatch/runtime")),
-            models={tier: os.getenv(f"DEVWATCH_MODEL_{tier.value.upper()}", "") for tier in ModelTier},
+        model = os.getenv("DEVWATCH_MODEL", "")
+        small = model or os.getenv("DEVWATCH_MODEL_SMALL") or os.getenv("DEVWATCH_FAST_MODEL") or os.getenv("LLM_MODEL") or ""
+        medium = model or os.getenv("DEVWATCH_MODEL_MEDIUM") or os.getenv("LLM_MODEL") or small
+        strong = os.getenv("DEVWATCH_MODEL_STRONG") or os.getenv("DEVWATCH_HEAVY_MODEL") or medium
+        return cls(
+            runtime_root=Path(os.getenv("DEVWATCH_RUNTIME_DIR", ".devwatch/runtime")),
+            models={
+                ModelTier.SMALL: small,
+                ModelTier.MEDIUM: medium,
+                ModelTier.STRONG: strong,
+            },
             api_keys=frozenset({key}) if key else frozenset(),
-            production=os.getenv("DEVWATCH_ENV", "development").lower() == "production")
+            production=os.getenv("DEVWATCH_ENV", "development").lower() == "production",
+        )
 
     def principal(self, headers, *, client_host):
         key = headers.get("x-api-key")
@@ -122,76 +131,66 @@ class JobRequest(ContractModel):
     context_files: list[str] | None = Field(default=None, max_length=4)
 
 
+class HealthResponse(ContractModel):
+    status: str
+    workflow_version: Literal["seven-agent-v1"]
+
+
+class WorkspaceResponse(ContractModel):
+    path: str | None = None
+
+
+class WorkspacePickResponse(ContractModel):
+    path: str | None = None
+    cancelled: bool | None = None
+    error: str | None = None
+
+
+class FsEntryModel(ContractModel):
+    name: str
+    path: str
+    type: Literal["file", "dir"]
+    size: int = Field(ge=0)
+    isSymlink: bool
+    ignored: bool
+
+
+class FsListResponse(ContractModel):
+    root: str
+    path: str
+    entries: list[FsEntryModel]
+
+
+class FsReadResponse(ContractModel):
+    path: str
+    size: int = Field(ge=0)
+    binary: bool
+    tooLarge: bool
+    maxBytes: int = Field(ge=0)
+    lineCount: int | None = None
+    content: str | None = None
+
+
+class EventsResponse(ContractModel):
+    events: list[JobEvent]
+    next_cursor: int = Field(ge=0)
+
+
 def _public_job(job):
-    return {field: getattr(job, field) for field in
-            ("job_id", "status", "workflow_version", "ledger", "limits", "created_at", "updated_at")} | {
-                "snapshot_id": job.request["snapshot_id"]}
+    data = {
+        field: getattr(job, field)
+        for field in ("job_id", "status", "workflow_version", "ledger", "limits", "created_at", "updated_at")
+    }
+    data["snapshot_id"] = job.request.get("snapshot_id")
+    if "workspace_path" in job.request:
+        data["workspace_path"] = job.request["workspace_path"]
+    return data
 
 
 def _cursor(value):
     if not value.isascii() or not value.isdigit() or len(value) > 19 or int(value) > MAX_EVENT_CURSOR:
         raise ValueError("invalid reconnect cursor")
     return int(value)
-
-
-SUBSCRIBER_BUFFER_MAXSIZE = 256
-
-
-class SubscriberEventBuffer:
-    """Bounded per-subscriber queue with non-blocking overflow and EventStore cursor resync."""
-
-    def __init__(self, *, after: int = 0, maxsize: int = SUBSCRIBER_BUFFER_MAXSIZE):
-        self.last_sent_sequence = after
-        self.maxsize = maxsize
-        self.queue: asyncio.Queue = asyncio.Queue(maxsize=maxsize)
-        self.overflowed = False
-
-    def put_nowait(self, event) -> None:
-        if self.overflowed:
-            return
-        try:
-            self.queue.put_nowait(event)
-        except asyncio.QueueFull:
-            self.overflowed = True
-
-    def _clear_queue(self) -> None:
-        while not self.queue.empty():
-            try:
-                self.queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-
-    async def stream(self, replay_fn, is_active_fn):
-        while True:
-            if self.overflowed:
-                self._clear_queue()
-                self.overflowed = False
-            page = replay_fn(self.last_sent_sequence, self.maxsize)
-            for event in page:
-                if event.sequence > self.last_sent_sequence:
-                    self.last_sent_sequence = event.sequence
-                    yield event
-            while not self.overflowed and not self.queue.empty():
-                queued = self.queue.get_nowait()
-                if queued.sequence == self.last_sent_sequence + 1:
-                    self.last_sent_sequence = queued.sequence
-                    yield queued
-                elif queued.sequence > self.last_sent_sequence + 1:
-                    self.overflowed = True
-                    self._clear_queue()
-                    break
-            if self.overflowed:
-                continue
-            if not page and not is_active_fn():
-                final_page = replay_fn(self.last_sent_sequence, self.maxsize)
-                for event in final_page:
-                    if event.sequence > self.last_sent_sequence:
-                        self.last_sent_sequence = event.sequence
-                        yield event
-                if not final_page:
-                    return
-            if not page:
-                await asyncio.sleep(0.1)
 
 
 def create_app(*, settings: ServiceSettings | None = None, provider=None):
@@ -205,12 +204,12 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
     @asynccontextmanager
     async def lifespan(application):
         layout = StoreLayout(settings.runtime_root)
-        jobs, events = JobStore(layout.jobs), EventStore(layout.events)
-        artifacts, cache = ArtifactStore(layout.artifacts), RepoCache(layout.repo_cache)
-        executor = CanonicalReviewExecutor(layout, artifacts, cache, jobs, events, provider, models=settings.models)
-        manager = DurableJobManager(jobs, events, executor, recover_timeout=executor.recover_timeout)
-        application.state.jobs, application.state.events = jobs, events
-        application.state.artifacts, application.state.cache = artifacts, cache
+        jobs = JobStore(layout.app_db)
+        artifacts = ArtifactStore(layout.app_db)
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs, provider, models=settings.models)
+        manager = DurableJobManager(jobs, executor, recover_timeout=executor.recover_timeout)
+        application.state.jobs = jobs
+        application.state.artifacts = artifacts
         application.state.manager = manager
         await manager.start()
         try:
@@ -261,20 +260,20 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
     for exception in (JobNotFound, FileNotFoundError, PermissionError):
         app.add_exception_handler(exception, unavailable)
 
-    @app.get("/health")
+    @app.get("/health", response_model=HealthResponse)
     async def health():
         return {"status": "ok", "workflow_version": "seven-agent-v1"}
 
-    @app.get("/workspace")
+    @app.get("/workspace", response_model=WorkspaceResponse)
     async def get_workspace(principal=Depends(owner)):
         return {"path": str(app.state.workspace.root) if app.state.workspace.root is not None else None}
 
-    @app.post("/workspace")
+    @app.post("/workspace", response_model=WorkspaceResponse)
     async def set_workspace(body: WorkspaceRequest, principal=Depends(owner)):
         resolved = app.state.workspace.set_root(body.path)
         return {"path": str(resolved)}
 
-    @app.post("/workspace/pick")
+    @app.post("/workspace/pick", response_model=WorkspacePickResponse)
     async def pick_workspace(principal=Depends(owner)):
         def _pick() -> str | None:
             import tkinter as tk
@@ -295,13 +294,13 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         try:
             selected = await asyncio.to_thread(_pick)
         except Exception as exc:
-            return JSONResponse({"path": None, "error": str(exc)}, status_code=200)
+            return WorkspacePickResponse(path=None, error=str(exc))
         if not selected:
             return {"path": None, "cancelled": True}
         resolved = app.state.workspace.set_root(selected)
         return {"path": str(resolved)}
 
-    @app.get("/fs/list")
+    @app.get("/fs/list", response_model=FsListResponse)
     async def fs_list(path: str = Query(""), principal=Depends(owner)):
         entries = app.state.workspace.list_dir(path)
         return {
@@ -310,16 +309,16 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
             "entries": [entry.to_dict() for entry in entries],
         }
 
-    @app.get("/fs/read")
+    @app.get("/fs/read", response_model=FsReadResponse)
     async def fs_read(path: str = Query(..., min_length=1), principal=Depends(owner)):
         return app.state.workspace.read_file(path).to_dict()
 
-    @app.post("/api/snapshots", status_code=201)
+    @app.post("/api/snapshots", status_code=201, response_model=SnapshotManifest)
     async def snapshot(body: SnapshotRequest, principal=Depends(owner)):
         return app.state.artifacts.capture(owner=principal, files=body.files, capture_coverage=body.capture_coverage,
                                            git_metadata=body.git_metadata)
 
-    @app.post("/api/jobs", status_code=202)
+    @app.post("/api/jobs", status_code=202, response_model=JobView)
     async def submit(body: JobRequest, principal=Depends(owner),
                      idempotency_key: str = Header(min_length=1, max_length=256)):
         payload = body.model_dump(exclude_none=True)
@@ -340,15 +339,15 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
                                             idempotency_key=idempotency_key)
         return _public_job(job)
 
-    @app.get("/api/jobs/{identity}")
+    @app.get("/api/jobs/{identity}", response_model=JobView)
     async def job(identity: str, principal=Depends(owner)):
         return _public_job(app.state.jobs.get(identity, owner=principal))
 
-    @app.post("/api/jobs/{identity}/cancel")
+    @app.post("/api/jobs/{identity}/cancel", response_model=JobView)
     async def cancel(identity: str, principal=Depends(owner)):
         return _public_job(await app.state.manager.cancel(identity, owner=principal))
 
-    @app.post("/api/jobs/{identity}/resume", status_code=202)
+    @app.post("/api/jobs/{identity}/resume", status_code=202, response_model=JobView)
     async def resume(identity: str, principal=Depends(owner)):
         return _public_job(await app.state.manager.resume(identity, owner=principal))
 
@@ -365,13 +364,12 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         if "workspace_path" in record.request:
             return RepositoryContext(
                 app.state.artifacts,
-                app.state.cache,
                 owner=principal,
                 workspace_root=record.request["workspace_path"],
             )
-        return RepositoryContext(app.state.artifacts, app.state.cache, record.request["snapshot_id"], owner=principal)
+        return RepositoryContext(app.state.artifacts, record.request["snapshot_id"], owner=principal)
 
-    @app.get("/api/jobs/{identity}/snapshot")
+    @app.get("/api/jobs/{identity}/snapshot", response_model=SnapshotManifest)
     async def job_snapshot(identity: str, principal=Depends(owner)):
         return repository(identity, principal).manifest
 
@@ -384,7 +382,7 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         arguments = {"file_path": file_path, "start_line": start_line}
         if end_line is not None:
             arguments["end_line"] = end_line
-        observation = repo._read_source(arguments, work)
+        observation = repo._read_file(arguments, work)
         excerpt = repo.scoped_evidence(observation.evidence_ref, work)
         # The source-view transport retains its bounded public wire contract;
         # agent provenance and paged evidence are separate artifact metadata.
@@ -397,23 +395,57 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         return repository(identity, principal).evidence(reference)
 
     def replay(identity, principal, after, limit=1000):
-        app.state.jobs.get(identity, owner=principal)
-        app.state.jobs.dispatch_events(app.state.events)
-        return app.state.events.replay(identity, after=after, limit=limit)
+        return app.state.jobs.events(identity, owner=principal, after=after, limit=limit)
 
-    @app.get("/api/jobs/{identity}/events")
+    @app.get("/api/jobs/{identity}/events", response_model=EventsResponse)
     async def events(identity: str, after: int = Query(0, ge=0, le=MAX_EVENT_CURSOR), limit: int = Query(100, ge=1, le=1000), principal=Depends(owner)):
         page = replay(identity, principal, after, limit)
-        return {"events": [event.model_dump(mode="json", exclude_none=isinstance(event, ActivityEvent))
-                           for event in page], "next_cursor": page[-1].sequence if page else after}
+        return {"events": page, "next_cursor": page[-1].seq if page else after}
 
     async def persisted_events(identity, principal, after):
-        buffer = SubscriberEventBuffer(after=after, maxsize=SUBSCRIBER_BUFFER_MAXSIZE)
-        async for event in buffer.stream(
-            replay_fn=lambda cursor, limit: replay(identity, principal, cursor, limit=limit),
-            is_active_fn=lambda: app.state.jobs.get(identity, owner=principal).status in {"queued", "running"},
-        ):
-            yield event
+        queue = app.state.jobs.subscribe(identity, owner=principal)
+        last_seq = after
+        try:
+            while True:
+                page = replay(identity, principal, last_seq, limit=1000)
+                for event in page:
+                    if event.seq > last_seq:
+                        last_seq = event.seq
+                        yield event
+                if len(page) < 1000:
+                    break
+            if app.state.jobs.get(identity, owner=principal).status not in {"queued", "running"}:
+                return
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=1.0)
+                except TimeoutError:
+                    while True:
+                        page = replay(identity, principal, last_seq, limit=1000)
+                        for item in page:
+                            if item.seq > last_seq:
+                                last_seq = item.seq
+                                yield item
+                        if len(page) < 1000:
+                            break
+                    if app.state.jobs.get(identity, owner=principal).status not in {"queued", "running"}:
+                        return
+                    continue
+                if event.seq <= last_seq:
+                    continue
+                if event.seq > last_seq + 1:
+                    page = replay(identity, principal, last_seq, limit=1000)
+                    for item in page:
+                        if item.seq > last_seq:
+                            last_seq = item.seq
+                            yield item
+                if event.seq > last_seq:
+                    last_seq = event.seq
+                    yield event
+                if event.type in {"job_completed", "job_failed", "job_cancelled", "job_interrupted"}:
+                    return
+        finally:
+            app.state.jobs.unsubscribe(identity, queue)
 
     @app.get("/api/jobs/{identity}/stream")
     async def stream(identity: str, after: int = Query(0, ge=0, le=MAX_EVENT_CURSOR), principal=Depends(owner),
@@ -423,9 +455,7 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         replay(identity, principal, after)
         async def frames():
             async for event in persisted_events(identity, principal, after):
-                kind = event.type if isinstance(event, ActivityEvent) else event.kind
-                data = event.model_dump_json(exclude_none=True) if isinstance(event, ActivityEvent) else event.model_dump_json()
-                yield f"id: {event.sequence}\nevent: {kind}\ndata: {data}\n\n"
+                yield f"id: {event.seq}\nevent: {event.type}\ndata: {event.model_dump_json()}\n\n"
         return StreamingResponse(frames(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
@@ -458,8 +488,7 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
                 await socket.accept()
             async def send_events():
                 async for event in persisted_events(identity, principal, cursor):
-                    await asyncio.wait_for(socket.send_json(
-                        event.model_dump(mode="json", exclude_none=isinstance(event, ActivityEvent))), timeout=5)
+                    await asyncio.wait_for(socket.send_json(event.model_dump(mode="json")), timeout=5)
                 await socket.close(code=1000)
             async def disconnect():
                 message = await socket.receive()

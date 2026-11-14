@@ -13,7 +13,7 @@ from tests.verification_fixtures import decision
 
 def test_followup_cannot_overwrite_an_earlier_remediation(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path': 'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path': 'service.py'}, task).evidence_ref
     first = candidate(repo, ref) | {'remediation': 'Return None when the list is empty.'}
     second = first | {'remediation': 'Raise ValueError when the list is empty.'}
     board = SharedBlackboard(StructuralEvidenceGate(repo))

@@ -20,8 +20,8 @@ async def test_specialists_first_see_source_tools_bound_into_action_schema(tmp_p
     provider=ScriptedProvider([complete(task)])
     result=await engine(repo,provider).run_specialist(task)
     prompt=json.loads(provider.requests[0].prompt)
-    assert [tool['name'] for tool in prompt['tool_catalogue']]==['read_source']
-    assert prompt['action_schema']['properties']['tool']['enum']==[None,'read_source']
+    assert [tool['name'] for tool in prompt['tool_catalogue']]==['read_file']
+    assert prompt['action_schema']['properties']['tool']['enum']==[None,'read_file']
     assert result['output'].stop_reason=='evidence_incomplete'
     selection=result['tool_selections'][0]
     assert selection['stage']=='source'
@@ -47,8 +47,8 @@ async def test_delivered_source_unlocks_analysis_without_hiding_page_retrieval(t
     assert len(prompts)==3 and result['private_state'].tool_call_count==2
     assert result['output'].stop_reason=='evidence_complete'
     assert result['output'].coverage.inspected_files==['service.py']
-    assert [tool['name'] for tool in prompts[0]['tool_catalogue']]==['read_source']
-    assert {'parse_ast','read_source','read_evidence'}.issubset({tool['name'] for tool in prompts[1]['tool_catalogue']})
+    assert [tool['name'] for tool in prompts[0]['tool_catalogue']]==['read_file']
+    assert {'parse_ast','read_file','read_evidence'}.issubset({tool['name'] for tool in prompts[1]['tool_catalogue']})
     for body in prompts:
         assert set(body['action_schema']['properties']['tool']['enum'])=={None,*[tool['name'] for tool in body['tool_catalogue']]}
     assert [item['stage'] for item in result['tool_selections']]==['source','analysis','analysis']
@@ -66,7 +66,7 @@ async def test_synthesis_exposes_no_tools_but_verification_keeps_source_access(t
     # assembles the verified report without dispatching this request.
     raw,_=runtime._prepare_prompt(result,repo.context(result),repair=False)
     synthesis=json.loads(raw)
-    assert 'read_source' in {tool['name'] for tool in verify['tool_catalogue']}
+    assert 'read_file' in {tool['name'] for tool in verify['tool_catalogue']}
     assert synthesis['tool_catalogue']==[]
     assert synthesis['action_schema']['properties']['tool']['enum']==[None]
     assert not {'call_tool','request_context'}.intersection(synthesis['action_schema']['properties']['kind']['enum'])

@@ -7,20 +7,19 @@ import pytest
 from devwatch.review.budgets import BudgetManager
 from devwatch.review.contracts import AgentId, AgentPrivateState, ModelTier, ReviewTask, SpecialistResult
 from devwatch.review.repository import RepositoryContext
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor, ReviewExecutionError, _ReviewSession
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import plan_payload
 
 
 def session_for(tmp_path):
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
     provider = ReviewProvider()
-    executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+    executor = CanonicalReviewExecutor(layout, artifacts, jobs,
         provider, models={tier: tier.value for tier in ModelTier})
     job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="m14")
     job = jobs.claim(job.job_id, owner="alice", execution_id="m14-test")
-    repository = RepositoryContext(artifacts, executor.cache, snapshot.snapshot_id, owner="alice")
+    repository = RepositoryContext(artifacts, snapshot.snapshot_id, owner="alice")
     session = _ReviewSession(executor, job, repository, BudgetManager(job.limits), ["service.py"])
     return session, provider
 

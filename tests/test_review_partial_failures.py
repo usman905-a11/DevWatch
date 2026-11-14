@@ -6,7 +6,6 @@ import pytest
 
 from devwatch.providers.exceptions import ProviderAuthenticationError
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import MODELS
@@ -22,11 +21,11 @@ def test_mandatory_agent_failure_preserves_coverage_and_unverified_candidates(tm
                 raise ProviderAuthenticationError("raw secret must not reach report")
             return await super().generate_completion(request)
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = Provider()
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs,
                                           provider, models=MODELS)
-        manager = DurableJobManager(jobs, events, executor)
+        manager = DurableJobManager(jobs, executor)
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="partial")
         complete = await manager.wait(job.job_id, owner="alice")
         await manager.close()

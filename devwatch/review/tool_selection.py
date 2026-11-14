@@ -17,5 +17,5 @@ def select(catalogue, state, context):
             or any(isinstance(page,dict) and page.get('source_file') in task.files for page in pages))
         stage='analysis' if source_available else 'source'
         if not source_available:
-            names.intersection_update({'read_source','read_evidence'})
+            names.intersection_update({'read_file','read_evidence'})
     return stage,[tool for tool in catalogue if tool['name'] in names]

@@ -25,15 +25,18 @@ def test_capture_metadata_is_persisted_without_fabricating_inspection(tmp_path):
 
 
 def test_capture_metadata_cannot_claim_inspection_and_is_integrity_checked(tmp_path):
+    import sqlite3
     with TestClient(app(tmp_path)) as client:
         forged = client.post("/api/snapshots", headers=ALICE, json={"files": {}, "capture_coverage": {"inspected_files": ["fake.py"]}})
         assert forged.status_code == 422
         valid = client.post("/api/snapshots", headers=ALICE, json={"files": {}, "capture_coverage": {"skipped": {"a.py": "omitted"}}})
         assert valid.status_code == 201
         identity = valid.json()["snapshot_id"]
-        path = tmp_path / "runtime" / "artifacts" / "snapshots" / identity / "manifest.json"
-        record = json.loads(path.read_text())
-        record["capture_coverage"]["skipped"]["a.py"] = "tampered"
-        path.write_text(json.dumps(record))
+        with sqlite3.connect(tmp_path / "runtime" / "devwatch.sqlite") as db:
+            row = db.execute("SELECT manifest FROM snapshots WHERE snapshot_id=?", (identity,)).fetchone()
+            record = json.loads(row[0])
+            record["capture_coverage"]["skipped"]["a.py"] = "tampered"
+            db.execute("UPDATE snapshots SET manifest=? WHERE snapshot_id=?", (json.dumps(record), identity))
+            db.commit()
         response = client.post("/api/jobs", headers={**ALICE, "Idempotency-Key": "tampered"}, json={"snapshot_id": identity})
         assert response.status_code == 422

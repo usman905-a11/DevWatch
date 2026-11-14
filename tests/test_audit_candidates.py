@@ -8,7 +8,7 @@ from tests.test_audit_evidence import candidate
 
 def test_invalid_candidate_does_not_remove_valid_siblings_and_is_quarantined(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path':'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path':'service.py'}, task).evidence_ref
     good = candidate(repo,ref)
     second = {**good, 'title':'Another valid claim'}
     invalid = {**good, 'evidence_refs':['forged']}
@@ -25,7 +25,7 @@ def test_invalid_candidate_does_not_remove_valid_siblings_and_is_quarantined(tmp
 
 def test_schema_invalid_candidate_is_isolated_before_blackboard(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref = repo._read_file({'file_path':'service.py'},task).evidence_ref
     good = candidate(repo,ref)
     result = SpecialistResult.model_validate(dict(task_id=task.task_id,agent_id=task.agent_id,
         candidates=[good, {'title':'Missing fields'}, {**good,'confidence':2}],coverage={},stop_reason='evidence_complete'))
@@ -39,7 +39,7 @@ def test_candidate_capacity_preserves_admitted_findings_and_records_excess(tmp_p
     from devwatch.config import Config
     monkeypatch.setattr(Config,'MAX_CANDIDATE_FINDINGS',2)
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref = repo._read_file({'file_path':'service.py'},task).evidence_ref
     board = SharedBlackboard(StructuralEvidenceGate(repo))
     result = SpecialistResult(task_id=task.task_id,agent_id=task.agent_id,candidates=[
         {**candidate(repo,ref),'title':f'Candidate {i}'} for i in range(4)],coverage={},stop_reason='evidence_complete')
@@ -51,7 +51,7 @@ def test_candidate_capacity_preserves_admitted_findings_and_records_excess(tmp_p
 
 def test_followup_evidence_merge_is_bounded_and_preserves_previous_failures(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     record=repo.evidence(ref)
     refs=[repo._record({**record,'serial':i}).evidence_ref for i in range(16)]
     board=SharedBlackboard(StructuralEvidenceGate(repo))

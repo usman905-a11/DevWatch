@@ -301,17 +301,11 @@ class CompletionAssessment:
         if (max(round_number, ledger.review_round) >= limits.review_rounds
                 or ledger.elapsed_seconds >= limits.review_seconds):
             return None
-        reserved = sum(ticket.tokens for ticket in ledger.inflight.values())
-        final_used = ledger.agent_usage.get(AgentId.SYNTHESIZER_VERIFIER)
-        final_reserve = max(0, limits.final_agent_tokens - (final_used.total_tokens if final_used else 0))
-        if ledger.total_tokens + reserved + final_reserve >= limits.job_tokens:
+        if ledger.total_tokens >= limits.job_tokens:
             return None
         for request in sorted(result.followup_requests, key=lambda request: (request.task_id, request.question)):
             task = self.tasks.get(request.task_id)
             if task is None:
-                continue
-            usage = ledger.agent_usage.get(task.agent_id)
-            if usage is not None and usage.total_tokens >= limits.specialist_tokens:
                 continue
             if (ledger.task_iterations.get(task.task_id, 0) < limits.iterations_per_task
                     and ledger.task_tools.get(task.task_id, 0) < limits.tool_calls_per_task):

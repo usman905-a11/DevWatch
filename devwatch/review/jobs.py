@@ -1,11 +1,13 @@
-"""Durable job ownership and transactional outbox, separate from graph checkpoints.
+"""Durable job store and live trajectory event streaming, separate from graph checkpoints.
 
 No client connection owns an execution task. Transport handlers may submit, replay,
-poll or explicitly cancel; cancelling a polling coroutine has no job side effect.
+stream or explicitly cancel; disconnecting a stream has no job side effect.
 """
 
 import asyncio
 from contextlib import asynccontextmanager, closing, contextmanager
+from contextvars import ContextVar
+from enum import Enum
 from hashlib import sha256
 import inspect
 import json
@@ -22,7 +24,6 @@ from uuid import uuid4
 from pydantic import Field
 
 from devwatch.review.budgets import BudgetLedger
-from devwatch.review.activity_stream import ActivityData, ActivityEvent, InvalidActivity, TERMINAL
 from devwatch.review.contracts import AgentId, BalancedLimits, ContractModel, FollowupRequest, StopReason
 
 _LOG = logging.getLogger(__name__)
@@ -58,22 +59,46 @@ StepType = Literal[
 ]
 StepStatus = Literal["RUNNING", "DONE", "ERROR", "CANCELING"]
 
-EventKind = Literal[
-    "job_queued", "job_running", "job_interrupted", "job_completed", "job_failed", "job_cancelled",
-    "agent_started", "agent_status_changed", "reasoning_step", "tool_called", "tool_result",
-    "file_opened", "search_performed", "finding_created", "validation_passed", "validation_failed",
-    "retry_started", "error_occurred", "agent_completed", "budget_updated",
-    "iteration_started", "model_call_started", "model_call_completed", "agent_reused",
-    "evidence_retrieved", "evidence_delivered", "evidence_inspected", "candidate_submitted",
-    "candidate_rejected", "verification_completed", "finalization_started", "finalization_completed",
-    "report_render_started", "report_render_completed",
-    "graph_node_started", "graph_node_completed",
-    "step_update",
-]
 
 def safe_stop_reason(value):
     # Specialist stop text is model output; never copy arbitrary prose to telemetry.
     return value if value in get_args(StopReason) else "other"
+
+
+def observed_node(name: str, fn: Callable[..., Any], emit: Callable[..., Any], *, scope: str = "review"):
+    """Wrap a LangGraph node (sync or async) to emit bounded graph_node_started/completed events."""
+
+    async def _emit_async(kind: str, state: Any, **payload: Any) -> None:
+        res = emit(kind, state, **payload)
+        if inspect.isawaitable(res):
+            await res
+
+    async def _async_node(state):
+        operation_id = uuid4().hex
+        await _emit_async("graph_node_started", state, node=name, graph_scope=scope, operation_id=operation_id)
+        try:
+            result = await fn(state)
+        except asyncio.CancelledError:
+            await _emit_async("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="cancelled")
+            raise
+        except Exception:
+            await _emit_async("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="failed")
+            raise
+        await _emit_async("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="succeeded")
+        return result
+
+    def _sync_node(state):
+        operation_id = uuid4().hex
+        emit("graph_node_started", state, node=name, graph_scope=scope, operation_id=operation_id)
+        try:
+            result = fn(state)
+        except Exception:
+            emit("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="failed")
+            raise
+        emit("graph_node_completed", state, node=name, graph_scope=scope, operation_id=operation_id, outcome="succeeded")
+        return result
+
+    return _async_node if inspect.iscoroutinefunction(fn) else _sync_node
 
 
 class _DictAccessModel(ContractModel):
@@ -130,22 +155,39 @@ class StepUpdatePayload(_DictAccessModel):
     error_details: str | None = Field(default=None, max_length=1024)
 
 
-_SECRET_ERROR_RE = re.compile(
-    r"(?i)(private[^\r\n]*|api[._-]?key[^\s,;]*|token[^\s,;]*|secret[^\s,;]*|password[^\s,;]*|"
-    r"credential[^\s,;]*|authorization[^\s,;]*|bearer\s+\S+|[A-Za-z0-9_=-]{24,})"
+_SECRET_VALUE_RE = re.compile(
+    r"(?i)(private[^\r\n]*|api[._-]?key[^\s,;]*|secret[^\s,;]*|password[^\s,;]*|"
+    r"credential[^\s,;]*|authorization[^\s,;]*|bearer\s+\S+|sk-[A-Za-z0-9_-]{12,}|AIza[0-9A-Za-z_-]{16,}|"
+    r"gh[pousr]_[A-Za-z0-9]{16,}|[A-Za-z0-9_=-]{24,})"
 )
+_SECRET_KEY_RE = re.compile(r"(secret|password|token|api.?key|credential|private.?key|authorization)", re.I)
 
 
-def scrub_step_error(exc: BaseException | str) -> str:
-    if isinstance(exc, BaseException):
-        type_name = type(exc).__name__
-        raw_msg = str(exc).strip()
+def redact_secrets(value: Any) -> Any:
+    """Scrub credentials and API keys from client-facing event payloads and errors."""
+    if isinstance(value, BaseException):
+        type_name = type(value).__name__
+        raw_msg = str(value).strip()
         if not raw_msg:
             return type_name
-        scrubbed = _SECRET_ERROR_RE.sub("[redacted]", raw_msg)
-        return f"{type_name}: {scrubbed}"[:512]
-    scrubbed = _SECRET_ERROR_RE.sub("[redacted]", str(exc).strip())
-    return (scrubbed or "Execution failed")[:512]
+        return f"{type_name}: {_SECRET_VALUE_RE.sub('[redacted]', raw_msg)}"[:512]
+    if isinstance(value, str):
+        return _SECRET_VALUE_RE.sub("[redacted]", value)
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if isinstance(item, str) and _SECRET_KEY_RE.search(str(key)):
+                redacted[key] = "[redacted]"
+            else:
+                redacted[key] = redact_secrets(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact_secrets(item) for item in value]
+    if hasattr(value, "model_dump"):
+        return redact_secrets(value.model_dump(mode="json", exclude_none=True))
+    if isinstance(value, Enum):
+        return value.value
+    return value
 
 
 class StepHandle:
@@ -204,7 +246,7 @@ class StepHandle:
 
     def mark_error(self, error_details: str, render_info: dict[str, Any] | StepRenderInfo | None = None, **kwargs: Any) -> None:
         self._terminal_status = "ERROR"
-        self._error_details = scrub_step_error(error_details)
+        self._error_details = str(redact_secrets(error_details.strip() or "Execution failed"))[:512]
         if render_info or kwargs:
             self.set_completion_info(render_info, **kwargs)
 
@@ -341,7 +383,7 @@ class TrajectoryStepTracker:
                     status="ERROR",
                     delta_seq=handle.delta_seq,
                     render_info=final_info,
-                    error_details=scrub_step_error(exc),
+                    error_details=redact_secrets(exc),
                     extra_metadata=extra_meta,
                 )
             except Exception:
@@ -373,70 +415,12 @@ class TrajectoryStepTracker:
     step = step_scope
 
 
-class EventPayload(ContractModel):
-    # Raw arguments/output/source/errors are not accepted by this metadata stream.
-    # Owner-authorized evidence access supplies separately redacted tool artifacts.
-    status: JobStatus | StepStatus | None = None
-    agent_id: AgentId | None = None
-    task_id: str | None = Field(default=None, max_length=128, pattern=r"^[\w.-]+$")
-    tool: str | None = Field(default=None, max_length=64, pattern=r"^[a-z][a-z_]*$")
-    evidence_ref: str | None = Field(default=None, max_length=128, pattern=r"^[\w.-]+$")
-    error_code: Literal["execution_failed", "review_time_exhausted", "provider_authentication", "provider_quota",
-        "provider_rate_limit", "provider_temporary", "provider_timeout", "provider_failure", "invalid_schema",
-        "recoverable_tool_error", "permission_denied", "unknown_tool_completion", "specialist_failed",
-        "tool_timeout", "tool_execution_failed", "repeated_tool_failure", "evidence_integrity_failure",
-        "snapshot_integrity_failure", "invalid_source_range", "invalid_evidence_offset", "evidence_not_found",
-        "invalid_arguments", "tool_unavailable", "parser_unavailable", "invalid_configuration", "invalid_query",
-        "database_unavailable", "tool_read_failure"] | None = None
-    duration_seconds: float | None = Field(default=None, ge=0, allow_inf_nan=False)
-    total_tokens: int | None = Field(default=None, ge=0)
-    phase: Literal["planning", "investigation", "verification", "synthesis", "structural_gate",
-                   "acceptance", "rendering", "finalization"] | None = None
-    iteration: int | None = Field(default=None, ge=0)
-    attempt: int | None = Field(default=None, ge=1)
-    run_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
-    operation_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
-    outcome: Literal["succeeded", "failed", "cancelled", "unknown"] | None = None
-    stop_reason: StopReason | None = None
-    finish_reason: Literal["stop", "length", "content_filter", "other"] | None = None
-    count: int | None = Field(default=None, ge=0)
-    finding_id: str | None = Field(default=None, max_length=128, pattern=r"^[\w.-]+$")
-    verdict: Literal["confirmed", "uncertain", "rejected", "advisory"] | None = None
-    offset: int | None = Field(default=None, ge=0)
-    end_offset: int | None = Field(default=None, ge=0)
-    graph_scope: Literal["review", "agent"] | None = None
-    node: Literal["repository_intelligence", "deterministic_analysis", "change_analyzer", "planner_agent",
-        "context_manager", "budget_manager", "deterministic_router", "specialist_subgraphs", "shared_blackboard",
-        "structural_evidence_gate", "completion_workflow", "investigate", "execute_action"] | None = None
-    step_idx: int | None = Field(default=None, ge=0)
-    parent_step_idx: int | None = Field(default=None, ge=0)
-    agent_name: str | None = Field(default=None, max_length=128)
-    step_type: StepType | None = None
-    step_status: StepStatus | None = None
-    delta_seq: int | None = Field(default=None, ge=0)
-    render_info: StepRenderInfo | None = None
-    error_details: str | None = Field(default=None, max_length=1024)
-
-
-class PersistedEvent(ContractModel):
-    event_id: str
+class JobEvent(ContractModel):
     job_id: str
-    sequence: int = Field(ge=1)
-    kind: EventKind
-    payload: EventPayload
+    seq: int = Field(ge=1)
+    type: str = Field(min_length=1, max_length=128)
+    payload: dict[str, Any] = Field(default_factory=dict)
     timestamp: float
-
-
-StoredEvent = PersistedEvent | ActivityEvent
-
-
-def _stored_event(raw: str) -> StoredEvent:
-    value = json.loads(raw)
-    return ActivityEvent.model_validate(value) if "type" in value else PersistedEvent.model_validate(value)
-
-
-def _event_job_id(event: StoredEvent) -> str:
-    return event.runId if isinstance(event, ActivityEvent) else event.job_id
 
 
 class JobRecord(ContractModel):
@@ -458,7 +442,8 @@ class JobRecord(ContractModel):
 class JobView(ContractModel):
     """Owned transport view: no principal, raw source, private state or API keys."""
     job_id: str = Field(pattern=r"^[0-9a-f]{32}$")
-    snapshot_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    snapshot_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    workspace_path: str | None = None
     status: JobStatus
     workflow_version: Literal["seven-agent-v1"]
     ledger: BudgetLedger
@@ -479,6 +464,9 @@ def _json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
+_TX_EVENTS: ContextVar[list[JobEvent] | None] = ContextVar("_TX_EVENTS", default=None)
+
+
 class _SQLiteStore:
     def __init__(self, path: Path | str, schema: str):
         self.path = Path(path).resolve()
@@ -487,43 +475,100 @@ class _SQLiteStore:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(schema)
 
+    def _on_commit(self, batch: list[JobEvent]) -> None:
+        pass
+
     @contextmanager
     def _transaction(self):
         # One connection per operation allows safe use from worker threads.
-        with closing(sqlite3.connect(self.path, timeout=10)) as db:
-            db.row_factory = sqlite3.Row
-            db.execute("BEGIN IMMEDIATE")
-            with db:
-                yield db
+        batch: list[JobEvent] = []
+        token = _TX_EVENTS.set(batch)
+        try:
+            with closing(sqlite3.connect(self.path, timeout=10)) as db:
+                db.row_factory = sqlite3.Row
+                db.execute("BEGIN IMMEDIATE")
+                with db:
+                    yield db
+        finally:
+            _TX_EVENTS.reset(token)
+        if batch:
+            self._on_commit(batch)
 
 
 class JobStore(_SQLiteStore):
     def __init__(self, path: Path | str):
         super().__init__(path, """
             CREATE TABLE IF NOT EXISTS jobs (
-                job_id TEXT PRIMARY KEY, owner TEXT NOT NULL, intent_key TEXT NOT NULL,
-                request_hash TEXT NOT NULL, record TEXT NOT NULL,
+                job_id TEXT PRIMARY KEY,
+                folder_path TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                report TEXT,
+                error TEXT,
+                owner TEXT NOT NULL,
+                intent_key TEXT NOT NULL,
+                request_hash TEXT NOT NULL,
+                record TEXT NOT NULL,
                 UNIQUE(owner, intent_key)
             );
-            CREATE TABLE IF NOT EXISTS outbox (
-                event_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, sequence INTEGER NOT NULL,
-                event TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0,
-                UNIQUE(job_id, sequence)
+            CREATE TABLE IF NOT EXISTS events (
+                job_id TEXT NOT NULL,
+                seq INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                PRIMARY KEY(job_id, seq)
             );
-            CREATE INDEX IF NOT EXISTS pending_outbox ON outbox(delivered, job_id, sequence);
             CREATE TABLE IF NOT EXISTS execution_leases (
                 job_id TEXT PRIMARY KEY, execution_id TEXT NOT NULL,
                 started_at REAL NOT NULL, initial_elapsed REAL NOT NULL,
                 elapsed_seconds REAL NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS jobs_active_status ON jobs(json_extract(record,'$.status'));
-            CREATE INDEX IF NOT EXISTS jobs_active_identity ON jobs(json_extract(record,'$.status'),job_id);
+            CREATE INDEX IF NOT EXISTS jobs_active_status ON jobs(status);
+            CREATE INDEX IF NOT EXISTS jobs_active_identity ON jobs(status, job_id);
             CREATE TABLE IF NOT EXISTS tool_operations (
                 operation_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, task_id TEXT NOT NULL,
                 command_id TEXT NOT NULL, input_hash TEXT NOT NULL, evidence_ref TEXT
             );
             CREATE INDEX IF NOT EXISTS tool_operation_scope ON tool_operations(job_id,task_id,command_id);
         """)
+        self._sub_lock = Lock()
+        self._subscribers: dict[str, list[tuple[asyncio.AbstractEventLoop, asyncio.Queue[JobEvent]]]] = {}
+
+    def _on_commit(self, batch: list[JobEvent]) -> None:
+        with self._sub_lock:
+            for event in batch:
+                for loop, queue in list(self._subscribers.get(event.job_id, ())):
+                    if loop.is_closed():
+                        continue
+                    try:
+                        running_loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        running_loop = None
+                    if running_loop is loop:
+                        queue.put_nowait(event)
+                    else:
+                        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+    def subscribe(self, job_id: str, *, owner: str) -> asyncio.Queue[JobEvent]:
+        self.get(job_id, owner=owner)
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[JobEvent] = asyncio.Queue()
+        with self._sub_lock:
+            self._subscribers.setdefault(job_id, []).append((loop, queue))
+        return queue
+
+    def unsubscribe(self, job_id: str, queue: asyncio.Queue[JobEvent]) -> None:
+        with self._sub_lock:
+            subs = self._subscribers.get(job_id)
+            if not subs:
+                return
+            kept = [entry for entry in subs if entry[1] is not queue]
+            if kept:
+                self._subscribers[job_id] = kept
+            else:
+                self._subscribers.pop(job_id, None)
 
     def _get(self, db, job_id: str, owner: str) -> JobRecord:
         row = db.execute("SELECT record FROM jobs WHERE job_id=? AND owner=?", (job_id, owner)).fetchone()
@@ -531,79 +576,69 @@ class JobStore(_SQLiteStore):
             raise JobNotFound("job not found")
         return JobRecord.model_validate_json(row["record"])
 
-    def _save(self, db, record: JobRecord) -> None:
+    def _save(self, db, record: JobRecord, *, error: str | None = None) -> None:
         record.updated_at = time.time()
-        db.execute("UPDATE jobs SET record=? WHERE job_id=? AND owner=?",
-                   (record.model_dump_json(), record.job_id, record.owner))
+        report_json = _json(record.result) if record.result is not None else None
+        db.execute(
+            "UPDATE jobs SET status=?, updated_at=?, report=?, error=COALESCE(?, error), record=? WHERE job_id=? AND owner=?",
+            (record.status, record.updated_at, report_json, error, record.model_dump_json(), record.job_id, record.owner),
+        )
 
-    def _enqueue_event(self, db, job_id: str, kind: EventKind, payload: EventPayload) -> PersistedEvent:
-        sequence = db.execute("SELECT COALESCE(MAX(sequence),0)+1 FROM outbox WHERE job_id=?", (job_id,)).fetchone()[0]
-        event = PersistedEvent(event_id=uuid4().hex, job_id=job_id, sequence=sequence,
-                               kind=kind, payload=payload, timestamp=time.time())
-        db.execute("INSERT INTO outbox(event_id,job_id,sequence,event) VALUES(?,?,?,?)",
-                   (event.event_id, job_id, sequence, event.model_dump_json()))
+    def _enqueue_event(self, db, job_id: str, event_type: str, payload: dict[str, Any]) -> JobEvent:
+        seq = db.execute("SELECT COALESCE(MAX(seq),0)+1 FROM events WHERE job_id=?", (job_id,)).fetchone()[0]
+        clean_payload = redact_secrets(dict(payload))
+        event = JobEvent(job_id=job_id, seq=seq, type=event_type, payload=clean_payload, timestamp=time.time())
+        db.execute(
+            "INSERT INTO events(job_id,seq,type,payload,timestamp) VALUES(?,?,?,?,?)",
+            (event.job_id, event.seq, event.type, _json(event.payload), event.timestamp),
+        )
+        batch = _TX_EVENTS.get()
+        if batch is not None:
+            batch.append(event)
         return event
 
-    def _enqueue_activity(self, db, event: ActivityEvent) -> ActivityEvent:
-        sequence = db.execute("SELECT COALESCE(MAX(sequence),0)+1 FROM outbox WHERE job_id=?", (event.runId,)).fetchone()[0]
-        saved = event.model_copy(update={"sequence": sequence})
-        db.execute("INSERT INTO outbox(event_id,job_id,sequence,event) VALUES(?,?,?,?)",
-                   (saved.eventId, saved.runId, sequence, saved.model_dump_json(exclude_none=True)))
-        return saved
-
-    def _settle_activities(self, db, job_id: str, status: JobStatus) -> None:
-        active: dict[str, ActivityEvent] = {}
-        for row in db.execute("SELECT event FROM outbox WHERE job_id=? AND json_extract(event,'$.type') IS NOT NULL ORDER BY sequence", (job_id,)):
-            event = ActivityEvent.model_validate_json(row[0])
-            if event.type == "activity.started":
-                active[event.activityId] = event
-            elif event.type in TERMINAL:
-                active.pop(event.activityId, None)
-        if status == "completed" and active:
-            raise InvalidActivity("job cannot complete with active activities")
-        active_steps: dict[int, PersistedEvent] = {}
-        for row in db.execute("SELECT event FROM outbox WHERE job_id=? AND json_extract(event,'$.kind')='step_update' ORDER BY sequence", (job_id,)):
-            step_event = PersistedEvent.model_validate_json(row[0])
-            if step_event.payload.step_idx is None:
-                continue
-            step_status = step_event.payload.status or step_event.payload.step_status
-            if step_status == "RUNNING":
-                active_steps[step_event.payload.step_idx] = step_event
-            elif step_status in {"DONE", "ERROR", "CANCELING"}:
-                active_steps.pop(step_event.payload.step_idx, None)
-        if status in {"failed", "cancelled", "interrupted", "completed"} and active_steps:
-            terminal_step_status: StepStatus = "CANCELING" if status == "cancelled" else "ERROR"
-            for step_idx, last_step in sorted(active_steps.items()):
-                next_delta = (last_step.payload.delta_seq or 0) + 1
-                title = last_step.payload.render_info.title if last_step.payload.render_info else None
-                self._enqueue_event(
-                    db,
-                    job_id,
-                    "step_update",
-                    EventPayload(
-                        agent_id=last_step.payload.agent_id,
-                        task_id=last_step.payload.task_id,
-                        run_id=last_step.payload.run_id,
-                        step_idx=step_idx,
-                        parent_step_idx=last_step.payload.parent_step_idx,
-                        agent_name=last_step.payload.agent_name,
-                        step_type=last_step.payload.step_type or "tool",
-                        status=terminal_step_status,
-                        step_status=terminal_step_status,
-                        delta_seq=next_delta,
-                        render_info=StepRenderInfo(title=title),
-                        error_details="Interrupted by job termination",
-                    ),
-                )
-        if status not in {"failed", "cancelled", "interrupted"}:
+    def _settle_steps(self, db, job_id: str, status: JobStatus) -> None:
+        if status not in {"failed", "cancelled", "interrupted", "completed"}:
             return
-        for started in active.values():
-            self._enqueue_activity(db, ActivityEvent(eventId=uuid4().hex, sequence=0, timestamp=time.time(),
-                runId=job_id, agentRunId=started.agentRunId, activityId=started.activityId,
-                parentActivityId=started.parentActivityId,
-                type="activity.failed" if status == "failed" else "activity.cancelled",
-                activityType=started.activityType,
-                data=ActivityData(errorCode="execution_failed") if status == "failed" else ActivityData()))
+        active_steps: dict[int, dict[str, Any]] = {}
+        for row in db.execute(
+            "SELECT payload FROM events WHERE job_id=? AND type='step_update' ORDER BY seq",
+            (job_id,),
+        ):
+            payload = json.loads(row["payload"])
+            step_idx = payload.get("step_idx")
+            if step_idx is None:
+                continue
+            step_status = payload.get("status") or payload.get("step_status")
+            if step_status == "RUNNING":
+                active_steps[step_idx] = payload
+            elif step_status in {"DONE", "ERROR", "CANCELING"}:
+                active_steps.pop(step_idx, None)
+        if not active_steps:
+            return
+        terminal_step_status: StepStatus = "CANCELING" if status == "cancelled" else "ERROR"
+        for step_idx, last_payload in sorted(active_steps.items()):
+            next_delta = (last_payload.get("delta_seq") or 0) + 1
+            title = (last_payload.get("render_info") or {}).get("title")
+            self._enqueue_event(
+                db,
+                job_id,
+                "step_update",
+                {
+                    "agent_id": last_payload.get("agent_id"),
+                    "task_id": last_payload.get("task_id"),
+                    "run_id": last_payload.get("run_id"),
+                    "step_idx": step_idx,
+                    "parent_step_idx": last_payload.get("parent_step_idx"),
+                    "agent_name": last_payload.get("agent_name"),
+                    "step_type": last_payload.get("step_type") or "tool",
+                    "status": terminal_step_status,
+                    "step_status": terminal_step_status,
+                    "delta_seq": next_delta,
+                    "render_info": {"title": title} if title is not None else {},
+                    "error_details": "Interrupted by job termination",
+                },
+            )
 
     def submit(self, *, owner: str, request: dict[str, Any], idempotency_key: str,
                limits: BalancedLimits | None = None) -> JobRecord:
@@ -624,9 +659,14 @@ class JobStore(_SQLiteStore):
             now = time.time()
             record = JobRecord(job_id=uuid4().hex, owner=owner, request=request, status="queued",
                                limits=effective_limits, created_at=now, updated_at=now)
-            db.execute("INSERT INTO jobs(job_id,owner,intent_key,request_hash,record) VALUES(?,?,?,?,?)",
-                       (record.job_id, owner, idempotency_key, request_hash, record.model_dump_json()))
-            self._enqueue_event(db, record.job_id, "job_queued", EventPayload(status="queued"))
+            folder_path = str(request.get("workspace_path") or "")
+            db.execute(
+                "INSERT INTO jobs(job_id,folder_path,status,created_at,updated_at,report,error,owner,intent_key,request_hash,record) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                (record.job_id, folder_path, record.status, now, now, None, None,
+                 owner, idempotency_key, request_hash, record.model_dump_json()),
+            )
+            self._enqueue_event(db, record.job_id, "job_queued", {"status": "queued"})
             return record
 
     def get(self, job_id: str, *, owner: str) -> JobRecord:
@@ -634,17 +674,18 @@ class JobStore(_SQLiteStore):
             return self._get(db, job_id, owner)
 
     def transition(self, job_id: str, *, owner: str, expected_status: JobStatus,
-                   status: JobStatus, result: dict[str, Any] | None = None) -> JobRecord:
+                   status: JobStatus, result: dict[str, Any] | None = None,
+                   error: str | None = None) -> JobRecord:
         with self._transaction() as db:
             record = self._get(db, job_id, owner)
             if record.status != expected_status or status not in _TRANSITIONS[record.status]:
                 raise JobConflict("job transition is no longer valid")
-            self._settle_activities(db, job_id, status)
+            self._settle_steps(db, job_id, status)
             record.status = status
             if result is not None:
                 record.result = result
-            self._save(db, record)
-            self._enqueue_event(db, job_id, f"job_{status}", EventPayload(status=status))
+            self._save(db, record, error=redact_secrets(error) if error is not None else None)
+            self._enqueue_event(db, job_id, f"job_{status}", {"status": status})
             return record
 
     def queued(self, *, limit: int = 100) -> list[JobRecord]:
@@ -653,14 +694,14 @@ class JobStore(_SQLiteStore):
             raise ValueError("job batch limit must be between 1 and 100")
         with self._transaction() as db:
             return [JobRecord.model_validate_json(row[0]) for row in db.execute(
-                "SELECT record FROM jobs WHERE json_extract(record,'$.status')='queued' ORDER BY rowid LIMIT ?", (limit,))]
+                "SELECT record FROM jobs WHERE status='queued' ORDER BY rowid LIMIT ?", (limit,))]
 
     def running(self, *, after: str = "", limit: int = 100) -> list[JobRecord]:
         if not 1 <= limit <= 100:
             raise ValueError("job batch limit must be between 1 and 100")
         with self._transaction() as db:
             return [JobRecord.model_validate_json(row[0]) for row in db.execute(
-                "SELECT record FROM jobs WHERE json_extract(record,'$.status')='running' AND job_id>? "
+                "SELECT record FROM jobs WHERE status='running' AND job_id>? "
                 "ORDER BY job_id LIMIT ?", (after, limit))]
 
     def claim(self, job_id: str, *, owner: str, execution_id: str) -> JobRecord:
@@ -674,7 +715,7 @@ class JobStore(_SQLiteStore):
                        (job_id, execution_id, time.time(), elapsed, elapsed))
             record.status = "running"
             self._save(db, record)
-            self._enqueue_event(db, job_id, "job_running", EventPayload(status="running"))
+            self._enqueue_event(db, job_id, "job_running", {"status": "running"})
             return record
 
     def heartbeat(self, job_id: str, *, owner: str, execution_id: str, run_seconds: float) -> bool:
@@ -701,11 +742,11 @@ class JobStore(_SQLiteStore):
                 lease["elapsed_seconds"], lease["initial_elapsed"] + max(0, time.time() - lease["started_at"]))
             record.ledger.elapsed_seconds = max(record.ledger.elapsed_seconds, min(record.limits.review_seconds, estimate))
             record.crash_recoveries += 1
-            self._settle_activities(db, job_id, "interrupted")
+            self._settle_steps(db, job_id, "interrupted")
             record.status = "interrupted"
             self._save(db, record)
             db.execute("DELETE FROM execution_leases WHERE job_id=?", (job_id,))
-            self._enqueue_event(db, job_id, "job_interrupted", EventPayload(status="interrupted"))
+            self._enqueue_event(db, job_id, "job_interrupted", {"status": "interrupted"})
 
     def release_execution(self, job_id: str, execution_id: str) -> None:
         with self._transaction() as db:
@@ -752,17 +793,22 @@ class JobStore(_SQLiteStore):
     def update_ledger(self, job_id: str, *, owner: str, ledger: dict[str, Any] | BudgetLedger,
                       followup: FollowupRequest | None = None, model_completions=()) -> None:
         updated = BudgetLedger.model_validate(ledger)
-        model_completions = [EventPayload.model_validate(payload) for payload in model_completions]
-        if len({payload.operation_id for payload in model_completions}) != len(model_completions):
+        completions = [dict(payload) for payload in model_completions]
+        if len({payload.get("operation_id") for payload in completions}) != len(completions):
             raise JobConflict("duplicate model completion")
         with self._transaction() as db:
             record = self._get(db, job_id, owner)
             previous = record.ledger
-            for payload in model_completions:
-                reservation = previous.inflight.get(payload.operation_id)
-                if (reservation is None or payload.operation_id in updated.inflight or payload.outcome is None
-                        or payload.agent_id != reservation.agent_id or payload.total_tokens is None
-                        or (payload.outcome == "unknown" and payload.total_tokens != reservation.tokens)):
+            for payload in completions:
+                op_id = payload.get("operation_id")
+                reservation = previous.inflight.get(op_id)
+                outcome = payload.get("outcome")
+                agent_id = payload.get("agent_id")
+                agent_val = agent_id.value if isinstance(agent_id, AgentId) else agent_id
+                total_tokens = payload.get("total_tokens")
+                if (reservation is None or op_id in updated.inflight or outcome is None
+                        or agent_val != reservation.agent_id.value or total_tokens is None
+                        or (outcome == "unknown" and total_tokens != reservation.tokens)):
                     raise JobConflict("model completion must settle a known reservation")
             for field in ("task_iterations", "task_tools", "task_schema_repairs", "operation_retries"):
                 if any(getattr(updated, field).get(key, 0) < count for key, count in getattr(previous, field).items()):
@@ -784,12 +830,20 @@ class JobStore(_SQLiteStore):
                 record.followup_admission = followup.model_copy(deep=True)
             record.ledger = updated
             self._save(db, record)
-            for payload in model_completions:
-                self._enqueue_event(db, job_id, "model_call_completed", payload)
+            for payload in completions:
+                normalized = {
+                    **payload,
+                    "agent_id": payload["agent_id"].value if isinstance(payload.get("agent_id"), AgentId) else payload.get("agent_id"),
+                }
+                self._enqueue_event(db, job_id, "model_call_completed", normalized)
             if (updated.total_tokens != previous.total_tokens or updated.task_tools != previous.task_tools
                     or updated.review_round != previous.review_round):
-                self._enqueue_event(db, job_id, "budget_updated", EventPayload(
-                    total_tokens=updated.total_tokens, duration_seconds=updated.elapsed_seconds))
+                self._enqueue_event(
+                    db,
+                    job_id,
+                    "budget_updated",
+                    {"total_tokens": updated.total_tokens, "duration_seconds": updated.elapsed_seconds},
+                )
 
     def complete_followup(self, job_id: str, *, owner: str) -> None:
         with self._transaction() as db:
@@ -807,89 +861,38 @@ class JobStore(_SQLiteStore):
             record.ledger.elapsed_seconds = max(record.ledger.elapsed_seconds, initial_elapsed + run_seconds)
             self._save(db, record)
 
-    def emit(self, job_id: str, *, owner: str, kind: EventKind, payload: dict[str, Any]) -> PersistedEvent:
-        parsed = EventPayload.model_validate(payload)
+    def emit(self, job_id: str, *, owner: str, event_type: str, payload: dict[str, Any] | None = None) -> JobEvent:
         with self._transaction() as db:
             self._get(db, job_id, owner)
-            return self._enqueue_event(db, job_id, kind, parsed)
+            return self._enqueue_event(db, job_id, event_type, payload or {})
 
-    def publish_activity(self, job_id: str, *, owner: str, event: ActivityEvent) -> ActivityEvent:
-        if event.runId != job_id or event.sequence != 0:
-            raise JobConflict("activity must belong to the requested run and be unsequenced")
-        with self._transaction() as db:
-            record = self._get(db, job_id, owner)
-            if record.status != "running":
-                raise JobConflict("activity requires a running job")
-            previous = db.execute("SELECT event FROM outbox WHERE event_id=?", (event.eventId,)).fetchone()
-            if previous is not None:
-                saved = _stored_event(previous[0])
-                if not isinstance(saved, ActivityEvent) or saved.model_copy(update={"sequence": 0}) != event:
-                    raise JobConflict("activity event identity reused with different data")
-                return saved
-            return self._enqueue_activity(db, event)
-
-    def pending_events(self, limit: int = 1000) -> list[StoredEvent]:
-        if not 1 <= limit <= 1000:
-            raise ValueError("event batch limit must be between 1 and 1000")
-        with self._transaction() as db:
-            return [_stored_event(row[0]) for row in db.execute(
-                "SELECT event FROM outbox WHERE delivered=0 ORDER BY rowid LIMIT ?", (limit,))]
-
-    def dispatch_events(self, target: "EventStore") -> int:
-        if target.path == self.path:
-            raise ValueError("Job Store and Event Store must be separate")
-        delivered = 0
-        for event in self.pending_events():
-            target.append(event)
-            with self._transaction() as db:
-                db.execute("UPDATE outbox SET delivered=1 WHERE event_id=?",
-                           (event.eventId if isinstance(event, ActivityEvent) else event.event_id,))
-            delivered += 1
-        return delivered
-
-
-class EventStore(_SQLiteStore):
-    def __init__(self, path: Path | str):
-        super().__init__(path, """
-            CREATE TABLE IF NOT EXISTS events (
-                event_id TEXT PRIMARY KEY, job_id TEXT NOT NULL,
-                sequence INTEGER NOT NULL, event TEXT NOT NULL, UNIQUE(job_id,sequence)
-            );
-        """)
-
-    def append(self, event: StoredEvent) -> None:
-        event_id = event.eventId if isinstance(event, ActivityEvent) else event.event_id
-        job_id = _event_job_id(event)
-        encoded = event.model_dump_json(exclude_none=True) if isinstance(event, ActivityEvent) else event.model_dump_json()
-        with self._transaction() as db:
-            previous = db.execute("SELECT event FROM events WHERE event_id=? OR (job_id=? AND sequence=?)",
-                                  (event_id, job_id, event.sequence)).fetchone()
-            if previous is not None:
-                if previous[0] != encoded:
-                    raise JobConflict("event identity reused with a different payload")
-                return
-            db.execute("INSERT INTO events(event_id,job_id,sequence,event) VALUES(?,?,?,?)",
-                       (event_id, job_id, event.sequence, encoded))
-
-    def replay(self, job_id: str, *, after: int = 0, limit: int = 1000) -> list[StoredEvent]:
-        # Internal store API: a transport must check JobStore.get(owner=...) first.
+    def events(self, job_id: str, *, owner: str, after: int = 0, limit: int = 1000) -> list[JobEvent]:
         if type(after) is not int or not 0 <= after <= MAX_EVENT_CURSOR or not 1 <= limit <= 1000:
             raise ValueError("invalid replay cursor or page size")
         with self._transaction() as db:
-            return [_stored_event(row[0]) for row in db.execute(
-                "SELECT event FROM events WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT ?",
-                (job_id, after, limit))]
+            self._get(db, job_id, owner)
+            return [
+                JobEvent(
+                    job_id=job_id,
+                    seq=row["seq"],
+                    type=row["type"],
+                    payload=json.loads(row["payload"]),
+                    timestamp=row["timestamp"],
+                )
+                for row in db.execute(
+                    "SELECT seq,type,payload,timestamp FROM events WHERE job_id=? AND seq>? ORDER BY seq LIMIT ?",
+                    (job_id, after, limit),
+                )
+            ]
 
 
 class DurableJobManager:
-    def __init__(self, store: JobStore, events: EventStore,
+    def __init__(self, store: JobStore,
                  execute: Callable[[JobRecord], Awaitable[dict[str, Any]]], *, concurrent_jobs: int = 1,
                  recover_timeout: Callable[[JobRecord], Awaitable[dict[str, Any]]] | None = None):
-        if store.path == events.path:
-            raise ValueError("Job Store and Event Store must be separate")
         if concurrent_jobs < 1:
             raise ValueError("at least one job worker is required")
-        self.store, self.events, self.execute = store, events, execute
+        self.store, self.execute = store, execute
         self.recover_timeout = recover_timeout
         self._slots = asyncio.Semaphore(concurrent_jobs)
         self._capacity = concurrent_jobs
@@ -922,7 +925,6 @@ class DurableJobManager:
         for job in running:
             if job.job_id not in self._tasks:
                 self.store.recover_abandoned(job.job_id, owner=job.owner)
-        self.store.dispatch_events(self.events)
         available = self._capacity - len(self._tasks)
         if available:
             for job in self.store.queued(limit=min(available, 100)):
@@ -935,7 +937,7 @@ class DurableJobManager:
             try:
                 self._scan()
             except Exception as error:
-                # Administrative scans/delivery are idempotent. Keep recovery
+                # Administrative scans are idempotent. Keep recovery
                 # alive with capped backoff; never log payloads or error text.
                 _LOG.warning(json.dumps({"event": "job_maintenance_failed", "entry_point": "job_maintenance",
                     "run_id": self._maintenance_id, "error_type": type(error).__name__, "retry_seconds": delay}))
@@ -967,7 +969,6 @@ class DurableJobManager:
                      limits: BalancedLimits | None = None) -> JobRecord:
         self._use_runtime()
         job = self.store.submit(owner=owner, request=request, idempotency_key=idempotency_key, limits=limits)
-        self.store.dispatch_events(self.events)
         if job.status == "queued":
             self._schedule(job)
         return job
@@ -986,7 +987,6 @@ class DurableJobManager:
                     claimed = True
                 except JobConflict:
                     return
-                self.store.dispatch_events(self.events)
                 started = time.monotonic()
                 heartbeat = asyncio.create_task(self._heartbeat(job, execution_id, started, asyncio.current_task()))
                 initial_elapsed = job.ledger.elapsed_seconds
@@ -1011,7 +1011,7 @@ class DurableJobManager:
                     self.store.update_ledger(job.job_id, owner=job.owner, ledger=current.ledger)
                     if self.recover_timeout is None:
                         raise
-                    self.store.emit(job.job_id, owner=job.owner, kind="error_occurred",
+                    self.store.emit(job.job_id, owner=job.owner, event_type="error_occurred",
                                     payload={"error_code": "review_time_exhausted"})
                     # Administrative finalization only: no new investigation,
                     # model/tool calls or extension of the cumulative budget.
@@ -1028,13 +1028,10 @@ class DurableJobManager:
             current = self.store.get(original.job_id, owner=original.owner)
             if claimed and current.status == "running":
                 code = "review_time_exhausted" if deadline_expired else "execution_failed"
-                self.store.emit(current.job_id, owner=current.owner, kind="error_occurred", payload={"error_code": code})
-                self.store.transition(current.job_id, owner=current.owner, expected_status="running", status="failed")
+                self.store.emit(current.job_id, owner=current.owner, event_type="error_occurred", payload={"error_code": code})
+                self.store.transition(current.job_id, owner=current.owner, expected_status="running", status="failed", error=redact_secrets(exc))
         finally:
             try:
-                # Flush the terminal outbox before yielding to heartbeat drain;
-                # polling a completed job must already have its replay event.
-                self.store.dispatch_events(self.events)
                 if heartbeat is not None:
                     heartbeat.cancel()
                     await asyncio.gather(heartbeat, return_exceptions=True)
@@ -1042,7 +1039,6 @@ class DurableJobManager:
                     self.store.account_execution_time(original.job_id, owner=original.owner,
                                                       initial_elapsed=initial_elapsed, run_seconds=time.monotonic() - started)
                     self.store.release_execution(original.job_id, execution_id)
-                self.store.dispatch_events(self.events)
             finally:
                 pass
 
@@ -1065,13 +1061,11 @@ class DurableJobManager:
             if task is not None:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
-            self.store.dispatch_events(self.events)
         return job
 
     async def resume(self, job_id: str, *, owner: str) -> JobRecord:
         self._use_runtime()
         job = self.store.transition(job_id, owner=owner, expected_status="interrupted", status="queued")
-        self.store.dispatch_events(self.events)
         self._schedule(job)
         return job
 

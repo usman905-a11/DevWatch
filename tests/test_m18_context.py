@@ -21,7 +21,7 @@ def inspected(repo,task,ref):
 
 def test_uninspected_source_survives_crowding_by_newer_inspected_facts(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    source=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    source=repo._read_file({'file_path':'service.py'},task).evidence_ref
     facts=[repo._record(dict(tool='parse_ast',source_scope=task.files,data='x'*1300+str(i)),work=task).evidence_ref
            for i in range(4)]
     private=AgentPrivateState(evidence_refs=[source,*facts],
@@ -37,8 +37,8 @@ def test_uninspected_source_survives_crowding_by_newer_inspected_facts(tmp_path)
 
 def test_active_candidate_evidence_precedes_other_uninspected_source(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    active=repo._read_source({'file_path':'service.py','start_line':2},task).evidence_ref
-    newer=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    active=repo._read_file({'file_path':'service.py','start_line':2},task).evidence_ref
+    newer=repo._read_file({'file_path':'service.py'},task).evidence_ref
     work=task.model_copy(update={'evidence_refs':[active]})
     context=repo.context(dict(task=work,private_state=AgentPrivateState(evidence_refs=[newer])))
     assert [page['evidence_ref'] for page in context['evidence']]==[active,newer]
@@ -46,7 +46,7 @@ def test_active_candidate_evidence_precedes_other_uninspected_source(tmp_path):
 
 def test_requested_offset_stays_first_without_acknowledging_or_widening_scope(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    source=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    source=repo._read_file({'file_path':'service.py'},task).evidence_ref
     fact=repo._record(dict(tool='parse_ast',source_scope=task.files,data='x'*4000),work=task).evidence_ref
     private=AgentPrivateState(evidence_refs=[fact,source],evidence_cursors={fact:1500})
     context=repo.context(dict(task=task,private_state=private))
@@ -54,7 +54,7 @@ def test_requested_offset_stays_first_without_acknowledging_or_widening_scope(tm
     assert context['evidence'][0]['offset']==1500
     assert not private.evidence_progress and not private.coverage.inspected_files
     outside=task.model_copy(update={'files':['other.py']})
-    foreign=repo._read_source({'file_path':'other.py'},outside).evidence_ref
+    foreign=repo._read_file({'file_path':'other.py'},outside).evidence_ref
     private.evidence_refs.append(foreign)
     with pytest.raises(PermissionError):
         repo.context(dict(task=task,private_state=private))
@@ -66,8 +66,8 @@ async def test_new_processed_tool_result_is_delivered_before_crowded_source(tmp_
     _,artifacts,_,original,task=setup_repository(tmp_path)
     source=''.join('value_%d = %r\n' % (i,'x'*80) for i in range(300))
     snapshot=artifacts.capture(owner='alice',files={'service.py':source})
-    repo=RepositoryContext(artifacts,original.cache,snapshot.snapshot_id,owner='alice')
-    refs=[repo._read_source({'file_path':'service.py','start_line':line,'end_line':line+79},task).evidence_ref
+    repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
+    refs=[repo._read_file({'file_path':'service.py','start_line':line,'end_line':line+79},task).evidence_ref
           for line in (1,81,161)]
     observed=await repo.tools().execute(task,AgentAction(kind='call_tool',tool='parse_ast',arguments={'file_path':'service.py'}))
     refs.append(observed.evidence_ref)

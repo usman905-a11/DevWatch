@@ -15,7 +15,7 @@ from tests.verification_fixtures import reviewed
 @pytest.mark.parametrize('count',[0,5,24])
 def test_small_medium_and_large_reviews_verify_in_bounded_batches_without_loss(tmp_path,count):
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     candidates={f'f{i}':{**candidate(repo,ref),'title':f'Claim {i}'} for i in range(count)}
     class Provider(ScriptedProvider):
         async def generate_completion(self,request):
@@ -87,7 +87,7 @@ def test_irreducible_prompt_is_rejected_before_provider_dispatch(tmp_path):
 def test_recoverable_tool_error_can_be_followed_by_a_successful_scoped_read(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
     provider=ScriptedProvider([dict(kind='call_tool',tool='parse_ast',arguments={'file_path':'service.py'}),
-        dict(kind='call_tool',tool='read_source',arguments={'file_path':'service.py'}),dict(kind='finish')])
+        dict(kind='call_tool',tool='read_file',arguments={'file_path':'service.py'}),dict(kind='finish')])
     tools=repo.tools()
     async def unavailable(arguments,work):
         raise LookupError('parser unavailable')

@@ -7,7 +7,6 @@ from types import SimpleNamespace
 import pytest
 
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import MODELS
@@ -28,9 +27,9 @@ def test_canonical_timeout_recovery_preserves_inspection_without_new_model_calls
                     self.cancelled = True
             return await super().generate_completion(request)
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = PausedFinal()
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events, provider, models=MODELS)
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs, provider, models=MODELS)
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="deadline")
         jobs.transition(job.job_id, owner="alice", expected_status="queued", status="running")
         operation = asyncio.create_task(executor(jobs.get(job.job_id, owner="alice")))
@@ -60,7 +59,7 @@ def test_manager_deadline_calls_recovery_only_after_executor_is_drained(tmp_path
         # Windows loop timers may expire slightly ahead of the accounting clock.
         monkeypatch.setattr("devwatch.review.jobs.time", SimpleNamespace(monotonic=lambda: 10., time=time.time))
     async def scenario():
-        _, _, snapshot, jobs, events = stores(tmp_path)
+        _, _, snapshot, jobs = stores(tmp_path)
         drained, recoveries = asyncio.Event(), []
         async def execute(job):
             try:
@@ -76,41 +75,41 @@ def test_manager_deadline_calls_recovery_only_after_executor_is_drained(tmp_path
         ledger = job.ledger.model_copy(deep=True)
         ledger.elapsed_seconds = 599.95
         jobs.update_ledger(job.job_id, owner="alice", ledger=ledger)
-        manager = DurableJobManager(jobs, events, execute, recover_timeout=recover)
+        manager = DurableJobManager(jobs, execute, recover_timeout=recover)
         await manager.start()
         result = await manager.wait(job.job_id, owner="alice")
         await manager.close()
         assert result.status == "completed"
         assert recoveries == [job.job_id]
-        assert any(event.payload.error_code == "review_time_exhausted" for event in events.replay(job.job_id))
+        assert any(event.payload.get("error_code") == "review_time_exhausted" for event in jobs.events(job.job_id, owner="alice"))
     asyncio.run(scenario())
 
 
 def test_executor_timeout_error_is_not_a_job_deadline(tmp_path):
     async def scenario():
-        _, _, snapshot, jobs, events = stores(tmp_path)
+        _, _, snapshot, jobs = stores(tmp_path)
         async def execute(job):
             raise TimeoutError("private tool timeout")
         async def recover(job):
             raise AssertionError("ordinary failure misclassified as job deadline")
-        manager = DurableJobManager(jobs, events, execute, recover_timeout=recover)
+        manager = DurableJobManager(jobs, execute, recover_timeout=recover)
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="inner-timeout")
         assert (await manager.wait(job.job_id, owner="alice")).status == "failed"
-        assert any(event.payload.error_code == "execution_failed" for event in events.replay(job.job_id))
+        assert any(event.payload.get("error_code") == "execution_failed" for event in jobs.events(job.job_id, owner="alice"))
         await manager.close()
     asyncio.run(scenario())
 
 
 def test_explicit_cancel_never_invokes_deadline_recovery(tmp_path):
     async def scenario():
-        _, _, snapshot, jobs, events = stores(tmp_path)
+        _, _, snapshot, jobs = stores(tmp_path)
         started = asyncio.Event()
         async def execute(job):
             started.set()
             await asyncio.Event().wait()
         async def recover(job):
             raise AssertionError("explicit cancellation published a report")
-        manager = DurableJobManager(jobs, events, execute, recover_timeout=recover)
+        manager = DurableJobManager(jobs, execute, recover_timeout=recover)
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="cancel")
         await started.wait()
         assert (await manager.cancel(job.job_id, owner="alice")).status == "cancelled"
@@ -142,7 +141,7 @@ def test_deadline_after_empty_followup_retains_initial_candidate_and_completed_c
                     latency_ms=1, usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15))
             return await super().generate_completion(request)
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = PausedAfterFollowup()
         from devwatch.review.subgraphs import AgentSubgraphs
         original = AgentSubgraphs._run_control
@@ -152,7 +151,7 @@ def test_deadline_after_empty_followup_retains_initial_candidate_and_completed_c
                 await asyncio.Event().wait()
             return await original(runtime, agent, **kwargs)
         monkeypatch.setattr(AgentSubgraphs, '_run_control', after_completed_followup)
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events, provider, models=MODELS)
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs, provider, models=MODELS)
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="followup-deadline")
         jobs.transition(job.job_id, owner="alice", expected_status="queued", status="running")
         operation = asyncio.create_task(executor(jobs.get(job.job_id, owner="alice")))

@@ -10,17 +10,17 @@ import time
 
 import pytest
 
-from devwatch.review.jobs import DurableJobManager, EventStore, JobConflict, JobStore
+from devwatch.review.jobs import DurableJobManager, JobConflict, JobStore
 
 
 WORKER = r'''
 import asyncio, json, sys
 from pathlib import Path
-from devwatch.review.jobs import DurableJobManager, EventStore, JobStore
+from devwatch.review.jobs import DurableJobManager, JobStore
 
 root = Path(sys.argv[1])
 async def main():
-    store, events = JobStore(root / "jobs.sqlite"), EventStore(root / "events.sqlite")
+    store = JobStore(root / "devwatch.sqlite")
     ready = asyncio.Event()
     async def execute(job):
         store.update_ledger(job.job_id, owner="alice", ledger={
@@ -32,7 +32,7 @@ async def main():
             await asyncio.Event().wait()
         finally:
             (root / "drained").write_text("drained")
-    manager = DurableJobManager(store, events, execute)
+    manager = DurableJobManager(store, execute)
     active = await manager.submit(owner="alice", request={}, idempotency_key="active")
     await ready.wait()
     queued = await manager.submit(owner="alice", request={}, idempotency_key="queued")
@@ -65,7 +65,7 @@ def worker(root, script=WORKER):
 
 
 def manager(root, execute):
-    return DurableJobManager(JobStore(root / "jobs.sqlite"), EventStore(root / "events.sqlite"), execute)
+    return DurableJobManager(JobStore(root / "devwatch.sqlite"), execute)
 
 
 async def reaches(store, identity, wanted):
@@ -99,10 +99,9 @@ def test_killed_worker_is_interrupted_and_queued_work_restarts_without_implicit_
                 assert calls == [identities["queued"]]
                 repeat = resumed.store.submit(owner="alice", request={}, idempotency_key="active")
                 assert repeat.job_id == identities["active"]
-                history = resumed.events.replay(saved.job_id)
-                assert [event.kind for event in history] == ["job_queued", "job_running", "budget_updated", "job_interrupted"]
-                assert history[2].payload.duration_seconds == 5
-                assert resumed.store.dispatch_events(resumed.events) == 0
+                history = resumed.store.events(saved.job_id, owner="alice")
+                assert [event.type for event in history] == ["job_queued", "job_running", "budget_updated", "job_interrupted"]
+                assert history[2].payload["duration_seconds"] == 5
             finally:
                 await resumed.close()
         asyncio.run(scenario())
@@ -169,7 +168,7 @@ def test_killed_service_resumes_saved_verification_snapshot_usage_and_replay(tmp
             assert client.post(prefix + "/resume", headers=BOB).status_code == 404
             assert client.get(prefix + "/report", headers=ALICE).status_code == 409
             before = client.get(prefix + "/events?limit=1000", headers=ALICE).json()["events"]
-            assert sum(event.get("kind") == "job_interrupted" for event in before) == 1
+            assert sum(event["type"] == "job_interrupted" for event in before) == 1
             assert client.post(prefix + "/resume", headers=ALICE).status_code == 202
             result = completed(client, identities["active"])
             assert result["status"] == "completed"
@@ -187,9 +186,9 @@ def test_killed_service_resumes_saved_verification_snapshot_usage_and_replay(tmp
             report = client.get(prefix + "/report", headers=ALICE).json()
             assert report["snapshot_id"] == identities["snapshot"]
             assert any("crash" in item.lower() for item in report["coverage"]["limitations"])
-            after = client.get(prefix + "/events", headers=ALICE, params={"after": before[-1]["sequence"]}).json()["events"]
-            assert [item.get("kind") for item in after].count("job_completed") == 1
-            unknown_calls = [item for item in after if item.get("kind") == "model_call_completed"
+            after = client.get(prefix + "/events", headers=ALICE, params={"after": before[-1]["seq"]}).json()["events"]
+            assert [item["type"] for item in after].count("job_completed") == 1
+            unknown_calls = [item for item in after if item["type"] == "model_call_completed"
                              and item["payload"].get("outcome") == "unknown"]
             assert {item["payload"]["operation_id"] for item in unknown_calls} == set(saved["ledger"]["inflight"])
             assert sum(item["payload"]["total_tokens"] for item in unknown_calls) == unknown

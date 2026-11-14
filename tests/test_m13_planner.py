@@ -22,7 +22,7 @@ async def test_planner_output_allowance_is_configurable_without_raising_total_bu
     state = await engine.run_planner(snapshot_id="snapshot", files=["service.py"])
     assert state["output"] is not None
     assert provider.requests[0].max_tokens == 2048
-    assert engine.budget.limits.planner_tokens == 25000
+    assert engine.budget.limits.job_tokens == 250000
 
 
 @pytest.mark.asyncio
@@ -81,7 +81,7 @@ async def test_planner_incomplete_response_has_one_accounted_recovery(finish):
 @pytest.mark.asyncio
 async def test_recovery_cannot_reset_planner_token_ceiling():
     provider = ScriptedProvider([{"kind": "submit_plan", "payload": plan_payload()}])
-    budget = BudgetManager()
+    budget = BudgetManager(BalancedLimits(job_tokens=25000))
     ticket = budget.reserve_model(AgentId.PLANNER, 12000)
     budget.record_model(ticket, prompt_tokens=12000, completion_tokens=0)
     # Real registered schemas reproduce the cumulative prompt admission problem.

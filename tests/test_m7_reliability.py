@@ -10,7 +10,6 @@ from devwatch.providers.base import LLMResponse, LLMUsage
 from devwatch.review.budgets import BudgetManager
 from devwatch.review.contracts import AgentId, AgentPrivateState, FindingCandidate, TokenUsage
 from devwatch.review.jobs import DurableJobManager, JobConflict
-from devwatch.review.stores import RepoCache
 from devwatch.review.subgraphs import AgentSubgraphs, PermissionedTools, ToolObservation
 from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession, _serializable
 from tests.test_canonical_workflow import ReviewProvider, stores
@@ -48,17 +47,17 @@ def test_invalid_tool_arguments_can_be_corrected_without_executing_them():
         async def read(arguments, work):
             calls.append(arguments)
             return ToolObservation(evidence_ref="source-1")
-        tools.register("read_source", read)
+        tools.register("read_file", read)
         provider = ScriptedProvider([
-            {"kind": "call_tool", "tool": "read_source", "arguments": {"unexpected": "private token"}},
-            {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": "service.py"}},
+            {"kind": "call_tool", "tool": "read_file", "arguments": {"unexpected": "private token"}},
+            {"kind": "call_tool", "tool": "read_file", "arguments": {"file_path": "service.py"}},
             {"kind": "submit_candidates", "payload": result()},
         ])
         output = await AgentSubgraphs(provider, tools, BudgetManager(), lambda state: {}, models=MODELS).run_specialist(task())
         assert output["output"].stop_reason == "evidence_incomplete"
         assert calls == [{"file_path": "service.py"}]
         assert json.loads(provider.requests[1].prompt).get("last_tool_error") == {
-            "tool": "read_source", "code": "recoverable_tool_error"}
+            "tool": "read_file", "code": "recoverable_tool_error"}
         assert json.loads(provider.requests[2].prompt).get("last_tool_error") is None
         assert output["private_state"].tool_call_count == 1
     asyncio.run(scenario())
@@ -140,7 +139,7 @@ def test_one_specialist_crash_keeps_sibling_candidate_and_persisted_progress(tmp
     async def crash_one(self, work, **kwargs):
         if work.task_id == "bug-1":
             if saved_candidate:
-                source = self.repository._read_source({"file_path": "service.py"}, work)
+                source = self.repository._read_file({"file_path": "service.py"}, work)
                 candidate = FindingCandidate(category="reliability", title="Persisted candidate before crash",
                     description="First item indexing raises on empty input", impact="Request failure", confidence=.7,
                     evidence_refs=[source.evidence_ref], location={"snapshot_id": self.repository.snapshot_id,
@@ -166,10 +165,10 @@ def test_one_specialist_crash_keeps_sibling_candidate_and_persisted_progress(tmp
                 provider="scripted", model=request.model, latency_ms=0,
                 usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15))
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = TwoSpecialists()
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events, provider, models=MODELS)
-        manager = DurableJobManager(jobs, events, executor)
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs, provider, models=MODELS)
+        manager = DurableJobManager(jobs, executor)
         try:
             job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="m7-partial")
             completed = await manager.wait(job.job_id, owner="alice")
@@ -195,10 +194,10 @@ def test_followup_specialist_crash_preserves_initial_findings(tmp_path, monkeypa
         return await original(self, work, **kwargs)
     monkeypatch.setattr(_ReviewSession, "run_task", crash_followup)
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs,
                                           ReviewProvider(followup=True), models=MODELS)
-        manager = DurableJobManager(jobs, events, executor)
+        manager = DurableJobManager(jobs, executor)
         try:
             job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="m7-followup")
             completed = await manager.wait(job.job_id, owner="alice")
@@ -246,7 +245,7 @@ def test_exhausted_budget_retains_saved_findings_and_cumulative_usage(limit):
         if limit == "iterations":
             budget.ledger.task_iterations["t1"] = 8
         elif limit == "tokens":
-            budget.ledger.agent_usage[AgentId.BUG_RELIABILITY] = TokenUsage(prompt_tokens=50_000)
+            budget.ledger.agent_usage[AgentId.BUG_RELIABILITY] = TokenUsage(prompt_tokens=budget.limits.job_tokens)
         else:
             budget.ledger.task_tools["t1"] = 12
         provider = ScriptedProvider([{"kind": "call_tool", "tool": "parse_ast", "arguments": {"file_path": "service.py"}}])
@@ -259,7 +258,7 @@ def test_exhausted_budget_retains_saved_findings_and_cumulative_usage(limit):
         assert output["output"].candidates == [candidate]
         assert output["output"].coverage.failed["t1"] == "budget_exhausted"
         assert len(provider.requests) == (1 if limit == "tools" else 0)
-        assert budget.ledger.total_tokens == (50_000 if limit == "tokens" else 15 if limit == "tools" else 0)
+        assert budget.ledger.total_tokens == (budget.limits.job_tokens if limit == "tokens" else 15 if limit == "tools" else 0)
         assert not budget.ledger.inflight
         if limit == "tools":
             assert budget.ledger.task_tools == {"t1": 12}
@@ -325,12 +324,12 @@ def test_recoverable_tool_feedback_survives_explicit_resume():
 @pytest.mark.parametrize("error", [OSError, sqlite3.OperationalError, JobConflict])
 def test_storage_and_ownership_failures_are_not_specialist_partial_success(tmp_path, monkeypatch, error):
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs,
                                           ReviewProvider(), models=MODELS)
         from devwatch.review.repository import RepositoryContext
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="storage")
-        repository = RepositoryContext(artifacts, RepoCache(layout.repo_cache), snapshot.snapshot_id, owner="alice")
+        repository = RepositoryContext(artifacts, snapshot.snapshot_id, owner="alice")
         session = _ReviewSession(executor, job, repository, BudgetManager(), ["service.py"])
         async def fail(*args, **kwargs):
             raise error("storage or ownership unavailable")

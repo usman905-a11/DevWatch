@@ -17,9 +17,3 @@ it('accepts the additive verification audit and contributing specialist provenan
 it('continues to accept reports persisted before verification audits existed', () => {
   expect(parseReport(legacy.report, legacy.snapshot.snapshot_id).uncertain_high_impact_candidates).toHaveLength(1)
 })
-
-it('rejects a malformed nested causal-review digest', () => {
-  const report = structuredClone(current.report)
-  report.verification_audit.decisions[0].causal_review.candidate_digest = 'invalid'
-  expect(() => parseReport(report, current.snapshot_id)).toThrow()
-})

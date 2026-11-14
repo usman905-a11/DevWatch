@@ -129,10 +129,9 @@ describe('durable UI session', () => {
     const frames: string[] = []
     // Step 0 stays RUNNING while 210 deltas arrive on step 1
     const step0 = {
-      event_id: 's0-0',
       job_id: jobId,
-      sequence: 1,
-      kind: 'step_update',
+      seq: 1,
+      type: 'step_update',
       timestamp: 1,
       payload: {
         ...basePayload,
@@ -149,10 +148,9 @@ describe('durable UI session', () => {
     for (let d = 0; d < 205; d++) {
       const seq = d + 2
       const delta = {
-        event_id: `s1-${d}`,
         job_id: jobId,
-        sequence: seq,
-        kind: 'step_update',
+        seq,
+        type: 'step_update',
         timestamp: 1,
         payload: {
           ...basePayload,

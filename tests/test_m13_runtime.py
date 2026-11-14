@@ -9,7 +9,6 @@ from devwatch.providers.base import LLMRequest
 from devwatch.providers.openai_adapter import OpenAIProviderAdapter
 from devwatch.review.contracts import AgentId, ModelTier
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 
@@ -66,10 +65,10 @@ async def test_sdk_planner_success_and_failure_reach_honest_full_graph_results(t
         return client
     adapter = OpenAIProviderAdapter(provider_name="gemini", request_delay=0)
     monkeypatch.setattr(adapter, "_get_httpx_async_client", transport)
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
-    executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
+    executor = CanonicalReviewExecutor(layout, artifacts, jobs,
         adapter, models={tier: "fixture-model" for tier in ModelTier})
-    manager = DurableJobManager(jobs, events, executor)
+    manager = DurableJobManager(jobs, executor)
     try:
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key=mode)
         finished = await manager.wait(job.job_id, owner="alice")
@@ -92,5 +91,5 @@ async def test_sdk_planner_success_and_failure_reach_honest_full_graph_results(t
     assert all(client.is_closed for client in transports)
     assert all(body["response_format"] == {"type": "json_object"} for body in planner_calls)
     assert len(planner_calls) == (1 if mode in {"normal", "quota", "authentication", "refusal"} else 2)
-    timeline = events.replay(job.job_id, limit=1000)
+    timeline = jobs.events(job.job_id, owner="alice", limit=1000)
     assert "private rejection" not in json.dumps([event.model_dump(mode="json") for event in timeline])

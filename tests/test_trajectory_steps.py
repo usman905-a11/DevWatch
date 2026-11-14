@@ -6,16 +6,15 @@ import pytest
 from pydantic import ValidationError
 
 from devwatch.review.jobs import (
-    EventPayload,
-    EventStore,
     JobStore,
     StepRenderInfo,
     StepUpdatePayload,
     TrajectoryStepTracker,
+    redact_secrets,
 )
 
 
-def test_step_contracts_validate_and_reject_private_fields():
+def test_step_contracts_validate_and_redact_private_fields():
     info = StepRenderInfo(
         title="Running pytest -q",
         command="pytest -q",
@@ -44,12 +43,9 @@ def test_step_contracts_validate_and_reject_private_fields():
     with pytest.raises(ValidationError):
         StepRenderInfo(title="bad", private_reasoning="secret")  # type: ignore[call-arg]
 
-    event_payload = EventPayload.model_validate(payload.model_dump(exclude_none=True))
-    assert event_payload.step_idx == 0
-    assert event_payload.step_type == "run_command"
-    assert event_payload.status == "RUNNING"
-    assert event_payload.render_info is not None
-    assert event_payload.render_info.title == "Running pytest -q"
+    redacted = redact_secrets({"api_key": "sk-12345678901234567890", "total_tokens": 42})
+    assert redacted["api_key"] == "[redacted]"
+    assert redacted["total_tokens"] == 42
 
 
 def test_step_scope_lifecycle_normal_deltas_and_nesting():
@@ -57,7 +53,7 @@ def test_step_scope_lifecycle_normal_deltas_and_nesting():
         emitted: list[tuple[str, dict]] = []
 
         def emit(kind: str, **payload):
-            emitted.append((kind, EventPayload.model_validate(payload).model_dump(mode="json")))
+            emitted.append((kind, payload))
 
         tracker = TrajectoryStepTracker(emit)
         async with tracker.step_scope(
@@ -133,7 +129,7 @@ def test_step_scope_guarantees_terminal_error_and_cancellation_with_redaction():
         emitted: list[tuple[str, dict]] = []
 
         def emit(kind: str, **payload):
-            emitted.append((kind, EventPayload.model_validate(payload).model_dump(mode="json")))
+            emitted.append((kind, payload))
 
         tracker = TrajectoryStepTracker(emit)
 
@@ -165,8 +161,7 @@ def test_step_scope_guarantees_terminal_error_and_cancellation_with_redaction():
 
 
 def test_job_store_settles_unfinished_running_steps_on_terminal_transition(tmp_path):
-    jobs = JobStore(tmp_path / "jobs.sqlite")
-    events = EventStore(tmp_path / "events.sqlite")
+    jobs = JobStore(tmp_path / "devwatch.sqlite")
     job = jobs.submit(owner="alice", request={"snapshot_id": "a" * 32}, idempotency_key="step-settle")
     jobs.claim(job.job_id, owner="alice", execution_id="exec-1")
 
@@ -174,7 +169,7 @@ def test_job_store_settles_unfinished_running_steps_on_terminal_transition(tmp_p
     jobs.emit(
         job.job_id,
         owner="alice",
-        kind="step_update",
+        event_type="step_update",
         payload={
             "step_idx": 0,
             "step_type": "planner",
@@ -186,7 +181,7 @@ def test_job_store_settles_unfinished_running_steps_on_terminal_transition(tmp_p
     jobs.emit(
         job.job_id,
         owner="alice",
-        kind="step_update",
+        event_type="step_update",
         payload={
             "step_idx": 0,
             "step_type": "planner",
@@ -198,7 +193,7 @@ def test_job_store_settles_unfinished_running_steps_on_terminal_transition(tmp_p
     jobs.emit(
         job.job_id,
         owner="alice",
-        kind="step_update",
+        event_type="step_update",
         payload={
             "step_idx": 1,
             "step_type": "run_command",
@@ -210,7 +205,7 @@ def test_job_store_settles_unfinished_running_steps_on_terminal_transition(tmp_p
     jobs.emit(
         job.job_id,
         owner="alice",
-        kind="step_update",
+        event_type="step_update",
         payload={
             "step_idx": 1,
             "step_type": "run_command",
@@ -221,24 +216,23 @@ def test_job_store_settles_unfinished_running_steps_on_terminal_transition(tmp_p
     )
 
     jobs.transition(job.job_id, owner="alice", expected_status="running", status="failed")
-    jobs.dispatch_events(events)
 
-    replayed = events.replay(job.job_id)
+    replayed = jobs.events(job.job_id, owner="alice")
     step1_events = [
-        e for e in replayed if getattr(e, "kind", None) == "step_update" and e.payload.step_idx == 1
+        e for e in replayed if e.type == "step_update" and e.payload.get("step_idx") == 1
     ]
     assert len(step1_events) == 3
     settled = step1_events[-1]
-    assert settled.payload.status == "ERROR"
-    assert settled.payload.delta_seq == 2
-    assert settled.payload.error_details == "Interrupted by job termination"
+    assert settled.payload["status"] == "ERROR"
+    assert settled.payload["delta_seq"] == 2
+    assert settled.payload["error_details"] == "Interrupted by job termination"
 
 
 def test_subgraph_emits_nested_agent_planner_and_enriched_tool_steps(tmp_path):
     from devwatch.review.budgets import BudgetManager
     from devwatch.review.contracts import AgentId, ReviewTask
     from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import ArtifactStore, RepoCache
+    from devwatch.review.stores import ArtifactStore
     from devwatch.review.subgraphs import AgentSubgraphs
     from tests.test_control_agents import MODELS
     from tests.test_iterative_agents import ScriptedProvider, result
@@ -247,22 +241,22 @@ def test_subgraph_emits_nested_agent_planner_and_enriched_tool_steps(tmp_path):
         "service.py": "def compute(x):\n    return x + 1\n",
         "utils.py": "def helper():\n    return compute(2)\n",
     }
-    artifacts = ArtifactStore(tmp_path / "artifacts")
+    artifacts = ArtifactStore(tmp_path / "devwatch.sqlite")
     manifest = artifacts.capture(owner="alice", files=files)
-    repo = RepositoryContext(artifacts, RepoCache(tmp_path / "cache.sqlite"), manifest.snapshot_id, owner="alice")
+    repo = RepositoryContext(artifacts, manifest.snapshot_id, owner="alice")
 
     provider = ScriptedProvider([
         {"kind": "call_tool", "tool": "repo_map", "arguments": {}},
         {"kind": "submit_candidates", "payload": {**result(), "task_id": "arch-1", "agent_id": "architecture_security"}},
         {"kind": "call_tool", "tool": "code_search", "arguments": {"query": "compute"}},
-        {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": "service.py", "start_line": 1, "end_line": 2}},
+        {"kind": "call_tool", "tool": "read_file", "arguments": {"file_path": "service.py", "start_line": 1, "end_line": 2}},
         {"kind": "submit_candidates", "payload": {**result(), "task_id": "logic-1", "agent_id": "logic_correctness"}},
     ])
 
     events: list[tuple[str, dict]] = []
 
     def emit(kind: str, **payload):
-        events.append((kind, EventPayload.model_validate(payload).model_dump(mode="json")))
+        events.append((kind, payload))
 
     arch_task = ReviewTask(
         task_id="arch-1",
@@ -320,7 +314,7 @@ def test_subgraph_emits_nested_agent_planner_and_enriched_tool_steps(tmp_path):
     assert planner_done[0]["render_info"]["title"] == "Selected tool: repo_map"
     assert planner_done[1]["render_info"]["title"] == "Planned action: submit_candidates"
     assert planner_done[2]["render_info"]["title"] == "Selected tool: code_search"
-    assert planner_done[3]["render_info"]["title"] == "Selected tool: read_source"
+    assert planner_done[3]["render_info"]["title"] == "Selected tool: read_file"
     assert planner_done[4]["render_info"]["title"] == "Planned action: submit_candidates"
 
     # repo_map step has files, match_count, evidence_ref
@@ -345,56 +339,6 @@ def test_subgraph_emits_nested_agent_planner_and_enriched_tool_steps(tmp_path):
 
     # Never leak raw source content
     assert "return x + 1" not in json.dumps(events)
-
-
-def test_slow_client_subscriber_buffer_resyncs_from_event_store_on_overflow(tmp_path):
-    from devwatch.review.jobs import JobStore, EventStore
-    from devwatch.review.service import SubscriberEventBuffer
-
-    jobs = JobStore(tmp_path / "jobs.sqlite")
-    events = EventStore(tmp_path / "events.sqlite")
-    job = jobs.submit(owner="alice", request={"snapshot_id": "a" * 32}, idempotency_key="slow-client")
-    jobs.transition(job.job_id, owner="alice", expected_status="queued", status="running")
-
-    buffer = SubscriberEventBuffer(after=0, maxsize=256)
-
-    # Emit 320 step_update events while slow client hasn't consumed any yet
-    for idx in range(320):
-        ev = jobs.emit(
-            job.job_id,
-            owner="alice",
-            kind="step_update",
-            payload={
-                "step_idx": idx,
-                "step_type": "planner",
-                "status": "DONE",
-                "step_status": "DONE",
-                "delta_seq": 0,
-                "render_info": {"title": f"Step {idx}"},
-            },
-        )
-        buffer.put_nowait(ev)
-
-    jobs.dispatch_events(events)
-    jobs.transition(job.job_id, owner="alice", expected_status="running", status="completed", result={"json": "{}"})
-    jobs.dispatch_events(events)
-
-    assert buffer.overflowed is True
-    assert buffer.queue.qsize() == 256
-
-    async def consume():
-        received = []
-        async for ev in buffer.stream(
-            replay_fn=lambda after, limit: events.replay(job.job_id, after=after, limit=limit),
-            is_active_fn=lambda: jobs.get(job.job_id, owner="alice").status in {"queued", "running"},
-        ):
-            received.append(ev)
-        return received
-
-    delivered = asyncio.run(consume())
-    sequences = [e.sequence for e in delivered]
-    assert sequences == list(range(1, len(delivered) + 1))
-    assert len(delivered) >= 322  # job_queued + job_started + 320 step_updates + job_completed
 
 
 

@@ -177,13 +177,14 @@ export function DurableApp() {
   }
 
   async function openEvidence(reference: string) {
-    if (!state.job) return
+    const snapshotId = state.job?.snapshot_id ?? state.report?.snapshot_id
+    if (!state.job || !snapshotId) return
     evidenceRequest.current?.abort()
     const request = new AbortController()
     evidenceRequest.current = request
     setEvidence('Loading tool evidence…')
     try {
-      const value = await client.evidence(state.job.job_id, state.job.snapshot_id, reference, request.signal)
+      const value = await client.evidence(state.job.job_id, snapshotId, reference, request.signal)
       if (!request.signal.aborted) setEvidence(JSON.stringify(value, null, 2))
     } catch {
       if (!request.signal.aborted) setEvidence('Tool evidence unavailable. Reconnect and retry.')

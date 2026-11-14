@@ -11,17 +11,15 @@ from hashlib import sha256
 import json
 from pathlib import Path
 import re
-import tomllib
 from typing import Any
-from uuid import uuid4
 
 from devwatch.config import Config
 from devwatch.review.contracts import CandidateRejection, Coverage, FindingCandidate, ReviewTask, SpecialistResult
 from devwatch.review.jobs import StepRenderInfo
-from devwatch.review.stores import ArtifactStore, CacheKey, RepoCache, validate_source_path
+from devwatch.review.stores import ArtifactStore, validate_source_path
 from devwatch.review.subgraphs import PermissionedTools, ToolObservation
 from devwatch.review.tool_errors import ToolFailure
-from devwatch.review.intelligence import PARSER_VERSION, analyze_source, import_edges
+from devwatch.review.intelligence import analyze_source
 from devwatch.review.workspace import WorkspaceError, WorkspaceManager, WorkspaceNotFoundError, build_workspace_manifest
 
 
@@ -35,13 +33,12 @@ class RepositoryContext:
     def __init__(
         self,
         artifacts: ArtifactStore,
-        cache: RepoCache,
         snapshot_id: str | None = None,
         *,
         owner: str,
         workspace_root: str | Path | None = None,
     ):
-        self.artifacts, self.cache, self.owner = artifacts, cache, owner
+        self.artifacts, self.owner = artifacts, owner
         self._workspace: WorkspaceManager | None = None
         if workspace_root is not None:
             self._workspace = WorkspaceManager()
@@ -53,8 +50,6 @@ class RepositoryContext:
                 raise ValueError("either workspace_root or snapshot_id is required")
             self.snapshot_id = snapshot_id
             self.manifest = artifacts.manifest(snapshot_id, owner=owner)
-        self.evidence_root = artifacts.root / "evidence" / self.snapshot_id
-        self.evidence_root.mkdir(parents=True, exist_ok=True)
         self._analysis = None
 
     def _source(self, path):
@@ -85,18 +80,10 @@ class RepositoryContext:
     def analyze(self) -> dict[str, Any]:
         if self._analysis is not None:
             return self._analysis
-        result = {}
-        for path, entry in sorted(self.manifest.entries.items()):
-            # Integrity is checked even on cache hits.
-            source = self._source(path)
-            key = CacheKey(owner_namespace=self.owner, namespace="repository-intelligence",
-                           content_hash=entry.content_hash, parser_version=PARSER_VERSION,
-                           analysis_config_hash=Path(path).suffix.lower())
-            facts = self.cache.get(key)
-            if facts is None:
-                facts = analyze_source(path, source)
-                self.cache.put(key, facts)
-            result[path] = facts
+        result = {
+            path: analyze_source(path, self._source(path))
+            for path in sorted(self.manifest.entries)
+        }
         self._analysis = result
         return result
 
@@ -114,10 +101,7 @@ class RepositoryContext:
             record["provenance"] = {"agent_id": work.agent_id.value, "task_id": work.task_id}
         encoded = _json(record)
         identity = "evidence-" + sha256(encoded.encode("utf-8")).hexdigest()
-        destination = self.evidence_root / (identity + ".json")
-        temporary = self.evidence_root / ("pending-" + uuid4().hex)
-        temporary.write_text(encoded, encoding="utf-8")
-        temporary.replace(destination)
+        self.artifacts.put_evidence(self.snapshot_id, identity, encoded)
         return ToolObservation(evidence_ref=identity, inspected=payload.get("inspected", [payload["file_path"]] if payload.get("file_path") else []))
 
     def scoped_evidence(self, identity: str, work) -> dict[str, Any]:
@@ -129,12 +113,13 @@ class RepositoryContext:
     def evidence(self, identity: str) -> dict[str, Any]:
         if not re.fullmatch(r"evidence-[0-9a-f]{64}", identity):
             raise ValueError("invalid evidence reference")
-        try:
-            record = json.loads((self.evidence_root / (identity + ".json")).read_text(encoding="utf-8"))
-            encoded = _json(record)
-        except FileNotFoundError as exc:
+        raw = self.artifacts.get_evidence(self.snapshot_id, identity)
+        if raw is None:
             raise ToolFailure("evidence_not_found", "Use an evidence_ref returned by a tool in this snapshot.",
-                              arguments={"evidence_ref": identity}) from exc
+                              arguments={"evidence_ref": identity})
+        try:
+            record = json.loads(raw)
+            encoded = _json(record)
         except (ValueError, UnicodeError) as exc:
             raise ToolFailure("evidence_integrity_failure", "Stop: evidence integrity could not be verified.",
                               recoverable=False, arguments={"evidence_ref": identity}) from exc
@@ -150,7 +135,7 @@ class RepositoryContext:
             self._source(path)
         return record
 
-    def _read_source(self, arguments, work):
+    def _read_file(self, arguments, work):
         if set(arguments) - {"file_path", "start_line", "end_line"}:
             raise ValueError("unsupported source arguments")
         path = self._scoped_path(arguments.get("file_path"), work)
@@ -167,24 +152,24 @@ class RepositoryContext:
                 "omit end_line for up to 80 lines. Empty files accept start_line=1.",
                 details={"line_count": len(lines), "max_lines": 200})
         if not lines:
-            return self._record({"tool": "read_source", "file_path": path, "line_count": 0,
+            return self._record({"tool": "read_file", "file_path": path, "line_count": 0,
                                  "content_hash": self.manifest.entries[path].content_hash, "data": ""}, work=work)
         # A bounded request may extend past EOF; report only the actual source
         # range rather than making the agent guess a short file's line count.
         end = min(end, len(lines))
         excerpt = "\n".join(lines[start - 1:end])
-        return self._record({"tool": "read_source", "file_path": path, "start_line": start,
+        return self._record({"tool": "read_file", "file_path": path, "start_line": start,
                              "end_line": end, "content_hash": self.manifest.entries[path].content_hash,
                              "data": excerpt}, work=work)
 
-    def _read_sources(self, arguments, work):
+    def _read_files(self, arguments, work):
         from devwatch.review.tool_catalogue import SourceArguments
         parsed = SourceArguments.model_validate(arguments).model_dump(exclude_unset=True)
         paths = [parsed.pop('file_path'), *parsed.pop('additional_files', [])]
         # Authorize the entire batch before materializing any source artifact.
         for path in paths:
             self._scoped_path(path, work)
-        observations = [self._read_source({**parsed, 'file_path':path}, work) for path in paths]
+        observations = [self._read_file({**parsed, 'file_path':path}, work) for path in paths]
         return observations[0].model_copy(update={
             'additional_evidence_refs':[item.evidence_ref for item in observations[1:]],
             'render_info': StepRenderInfo(files=paths[:25], evidence_ref=observations[0].evidence_ref)})
@@ -197,7 +182,7 @@ class RepositoryContext:
                               details={"total_chars": len(encoded)})
         end = min(len(encoded), offset + max_chars)
         page = {"evidence_ref": identity, "offset": offset, "end_offset": end,
-                "source_file": record.get("file_path") if record.get("tool") == "read_source" else None,
+                "source_file": record.get("file_path") if record.get("tool") == "read_file" else None,
                 "total_chars": len(encoded), "next_offset": end if end < len(encoded) else None,
                 "source_scope": record["source_scope"] if len(_json(record["source_scope"]).encode("utf-8")) <= 512 else [],
                 "scope_count": len(record["source_scope"]), "provenance": record.get("provenance", {}),
@@ -212,7 +197,7 @@ class RepositoryContext:
     def context(self, state):
         work, private, action = state["task"], state["private_state"], state.get("action")
         if action is not None and action.kind == "request_context":
-            return self._read_sources(action.arguments, work)
+            return self._read_files(action.arguments, work)
         pages = [self.evidence_page(identity, work, offset=private.evidence_cursors.get(identity, 0),
                                    max_chars=private.evidence_page_sizes.get(identity, 1500))
                  for identity in reversed(list(dict.fromkeys(work.evidence_refs + private.evidence_refs)))]
@@ -252,7 +237,7 @@ class RepositoryContext:
         StructuralEvidenceGate(self).validate(candidate, work)
         location = candidate.location
         if not any((receipt := private.evidence_progress.get(ref)) is not None and receipt.fully_inspected()
-                   and (record := self.scoped_evidence(ref, work)).get("tool") == "read_source"
+                   and (record := self.scoped_evidence(ref, work)).get("tool") == "read_file"
                    and record.get("file_path") == location.file_path
                    and record.get("start_line", 0) <= location.start_line
                    and record.get("end_line", 0) >= location.end_line for ref in candidate.evidence_refs):
@@ -262,8 +247,8 @@ class RepositoryContext:
         tools = PermissionedTools()
         tools.validate_confirmation = self.validate_confirmation
         tools.validate_candidate = self.validate_candidate
-        async def read_source(arguments, work):
-            return self._read_sources(arguments, work)
+        async def read_file(arguments, work):
+            return self._read_files(arguments, work)
         async def read_evidence(arguments, work):
             identity = arguments["evidence_ref"]
             offset = arguments.get("offset", 0)
@@ -277,59 +262,19 @@ class RepositoryContext:
             path = self._scoped_path(arguments["file_path"], work)
             data = self.analyze()[path]
             if data["status"] != "parsed":
-                raise ToolFailure("parser_unavailable", "Use read_source or code_search; parser facts are unavailable for this source.")
+                raise ToolFailure("parser_unavailable", "Use read_file or code_search; parser facts are unavailable for this source.")
             scope = [path]
-            if name in {"dependency_graph", "import_graph"}:
-                data = import_edges(self.analyze(), work.files)
-                data["edges"] = [edge for edge in data["edges"] if edge["from"] == path]
-                data["unresolved"] = [edge for edge in data["unresolved"] if edge["from"] == path]
-                scope = sorted({path} | {edge["to"] for edge in data["edges"]})
-            elif name == "call_graph":
+            if name == "call_graph":
                 data = {"calls": data["calls"], "limitations": data["limitations"]}
             elif name == "symbol_lookup":
                 symbol = arguments.get("symbol")
                 if symbol is not None and (not isinstance(symbol, str) or not 1 <= len(symbol) <= 256):
                     raise ValueError("bounded symbol name required")
                 data = [item for item in data["symbols"] if symbol is None or item["name"] == symbol]
-            elif name == "complexity":
-                data = {"cyclomatic_lower_bound": 1 + data["branch_count"], "symbol_count": len(data["symbols"]),
-                        "limitations": ["Syntactic complexity estimate, not a maintainability verdict"]}
             obs = self._record({"tool": name, "file_path": path, "source_scope": scope, "inspected": scope, "start_line": 1,
                                  "end_line": self.manifest.entries[path].line_count,
                                  "content_hash": self.manifest.entries[path].content_hash, "data": data}, work=work)
             return obs.model_copy(update={"render_info": StepRenderInfo(files=scope[:25], evidence_ref=obs.evidence_ref)})
-        async def config(arguments, work):
-            if set(arguments) != {"file_path"}:
-                raise ValueError("config_read requires exactly file_path")
-            path = self._scoped_path(arguments["file_path"], work)
-            source = self._source(path)
-            try:
-                data = json.loads(source) if path.endswith(".json") else tomllib.loads(source) if path.endswith(".toml") else None
-            except (json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
-                details = {key: value for key, value in {"line": getattr(exc, "lineno", None),
-                           "column": getattr(exc, "colno", None)}.items() if type(value) is int}
-                raise ToolFailure("invalid_configuration", "Check captured JSON/TOML syntax; use read_source to inspect the reported location.",
-                                  details=details) from exc
-            if data is None:
-                raise LookupError("Only captured JSON/TOML configuration is supported")
-            def redact(value):
-                if isinstance(value, dict):
-                    return {key: "[redacted]" if re.search(r"secret|password|token|api.?key|credential|private.?key", key, re.I)
-                            else redact(item) for key, item in value.items()}
-                return [redact(item) for item in value] if isinstance(value, list) else value
-            obs = self._record({"tool": "config_read", "file_path": path, "data": redact(data)}, work=work)
-            return obs.model_copy(update={"render_info": StepRenderInfo(files=[path], evidence_ref=obs.evidence_ref)})
-        async def git(name, arguments, work):
-            if set(arguments) != {"file_path"}:
-                raise ValueError("Git tools require exactly file_path")
-            path = self._scoped_path(arguments["file_path"], work)
-            metadata = self.manifest.git_metadata
-            value = metadata.diffs.get(path) if name == "git_diff" else metadata.history.get(path)
-            if value is None:
-                raise LookupError("No immutable Git metadata captured for this source")
-            obs = self._record({"tool": name, "file_path": path, "data": value.model_dump(mode="json") if hasattr(value, "model_dump") else value,
-                "limitations": ["Git metadata is client-reported context, not causal verification", *metadata.limitations]}, work=work)
-            return obs.model_copy(update={"render_info": StepRenderInfo(files=[path], evidence_ref=obs.evidence_ref)})
         async def repo_map(arguments, work):
             if arguments:
                 raise ValueError("repository map takes no arguments")
@@ -358,14 +303,11 @@ class RepositoryContext:
             matched_files = list(dict.fromkeys(item["file_path"] for item in matches))[:25]
             return obs.model_copy(update={"render_info": StepRenderInfo(
                 query=arguments["query"], match_count=len(matches), files=matched_files, evidence_ref=obs.evidence_ref)})
-        tools.register("read_source", read_source)
+        tools.register("read_file", read_file)
         tools.register("read_evidence", read_evidence)
         tools.register("repo_map", repo_map)
         tools.register("code_search", search)
-        tools.register("config_read", config)
-        tools.register("git_diff", partial(git, "git_diff"))
-        tools.register("git_history", partial(git, "git_history"))
-        for name in ("parse_ast", "symbol_lookup", "call_graph", "dependency_graph", "import_graph", "complexity"):
+        for name in ("parse_ast", "symbol_lookup", "call_graph"):
             tools.register(name, partial(facts, name))
         return tools
 

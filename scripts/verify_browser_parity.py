@@ -65,7 +65,7 @@ def run():
                             assert saved.value.failure() is None
                         page.get_by_text('Recent events', exact=False).click()
                         page.get_by_role('button', name='View tool evidence', exact=True).first.click()
-                        expect(page.get_by_role('region', name='Tool evidence')).to_contain_text('read_source')
+                        expect(page.get_by_role('region', name='Tool evidence')).to_contain_text('read_file')
                         job = page.locator('.job-bar > code').inner_text().split()[-1]
                         page.get_by_role("button", name="Files", exact=True).click()
                         page.get_by_role("button", name="Open service.py").click()

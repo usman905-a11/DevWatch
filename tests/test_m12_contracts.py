@@ -9,7 +9,6 @@ from devwatch.review.budgets import BudgetManager
 from devwatch.review.contracts import AgentPrivateState, ModelTier, SpecialistResult
 from devwatch.review.repository import SharedBlackboard, StructuralEvidenceGate
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.subgraphs import AgentSubgraphs
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_audit_evidence import candidate
@@ -25,7 +24,7 @@ MODELS = {tier: tier.value for tier in ModelTier}
 @pytest.mark.parametrize("reason", ["evidence_complete", "budget_exhausted"])
 async def test_explanation_is_preserved_without_changing_completion(tmp_path, reason):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({"file_path": "service.py"}, task).evidence_ref
+    ref = repo._read_file({"file_path": "service.py"}, task).evidence_ref
     explanation = "The requested source was inspected."
     payload = dict(task_id=task.task_id, agent_id=task.agent_id.value,
         candidates=[candidate(repo, ref)], coverage={}, stop_reason=reason,
@@ -55,7 +54,7 @@ async def test_explanation_is_preserved_without_changing_completion(tmp_path, re
 @pytest.mark.asyncio
 async def test_legacy_narrative_stop_preserves_candidates_as_invalid_completion(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({"file_path": "service.py"}, task).evidence_ref
+    ref = repo._read_file({"file_path": "service.py"}, task).evidence_ref
     narrative = "I have enough evidence"
     payload = dict(task_id=task.task_id, agent_id=task.agent_id.value,
         candidates=[candidate(repo, ref), {"title": "Malformed sibling"}],
@@ -118,11 +117,11 @@ async def test_full_graph_preserves_findings_through_completion_and_verification
                     action["payload"]["stop_explanation"] = "Inspected the empty input boundary."
             return response.model_copy(update={"content": json.dumps(action)})
 
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
     provider = CompletionProvider()
-    executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+    executor = CanonicalReviewExecutor(layout, artifacts, jobs,
                                       provider, models=MODELS)
-    manager = DurableJobManager(jobs, events, executor)
+    manager = DurableJobManager(jobs, executor)
     try:
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id},
                                    idempotency_key="completion-contract")

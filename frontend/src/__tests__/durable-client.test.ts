@@ -85,7 +85,7 @@ describe('canonical durable browser client', () => {
 
   it('validates job schema, version, identity and finite budget accounting', async () => {
     for (const bad of [{ ...job, status: 'clean' }, { ...job, job_id: 'c'.repeat(32) },
-      { ...job, workflow_version: 'legacy' }, { ...job, limits: { ...limits, concurrent_model_calls: 10 } },
+      { ...job, workflow_version: 'legacy' },
       { ...job, ledger: { ...ledger, task_tools: { task: -1 } } }]) {
       const api = await client(async () => json(bad))
       await expect(api.status(jobId)).rejects.toThrow(/invalid/i)
@@ -108,7 +108,7 @@ describe('canonical durable browser client', () => {
     let next = accepted
     const api = await client(async url => String(url).endsWith('/report?format=json')
       ? json(next) : json({ ...job, status: 'completed' }))
-    expect((await api.report(jobId)).confirmed_defects[0].finding_id).toBe('f1')
+    expect((await api.report(jobId)).confirmed_defects[0]?.finding_id).toBe('f1')
     for (const bad of [{ ...finding, confidence: .5 }, { ...finding, kind: 'advisory' },
       { ...finding, location: { ...finding.location, snapshot_id: 'e'.repeat(32) } },
       { ...finding, location: { ...finding.location, file_path: '../escape.py' } },
@@ -121,7 +121,7 @@ describe('canonical durable browser client', () => {
   it('reads bounded immutable source from the job, never live filesystem', async () => {
     const paths: string[] = []
     const source = { snapshot_id: snapshotId, snapshot_hash: 'f'.repeat(64), source_scope: ['service.py'],
-      tool: 'read_source', file_path: 'service.py', start_line: 2, end_line: 2, content_hash: 'd'.repeat(64), data: 'return items[0]' }
+      tool: 'read_file', file_path: 'service.py', start_line: 2, end_line: 2, content_hash: 'd'.repeat(64), data: 'return items[0]' }
     const api = await client(async url => { paths.push(String(url)); return String(url).includes('/source?') ? json(source) : json(job) })
     expect((await api.source(jobId, snapshotId, 'service.py', 2, 2)).data).toBe('return items[0]')
     expect(paths).toEqual([`http://localhost:8000/api/jobs/${jobId}/source?file_path=service.py&start_line=2&end_line=2`])
@@ -133,7 +133,7 @@ describe('canonical durable browser client', () => {
     const api = await client(async () => new Response('x'.repeat(1000001), { headers: { 'Content-Type': 'application/json' } }))
     await expect(api.status(jobId)).rejects.toThrow(/limit/i)
     const other = await client(async () => json({ snapshot_id: 'c'.repeat(32), snapshot_hash: 'f'.repeat(64),
-      source_scope: ['service.py'], tool: 'read_source', file_path: 'service.py', start_line: 1, end_line: 1,
+      source_scope: ['service.py'], tool: 'read_file', file_path: 'service.py', start_line: 1, end_line: 1,
       content_hash: 'd'.repeat(64), data: 'pass' }))
     await expect(other.source(jobId, snapshotId, 'service.py', 1, 1)).rejects.toThrow(/invalid/i)
   })

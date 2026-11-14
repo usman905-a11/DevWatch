@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 from devwatch.review.budgets import BudgetManager
 from devwatch.review.contracts import AgentId, AgentPrivateState, AgentWorkItem, ReviewTask, ModelTier
 from devwatch.review.repository import RepositoryContext
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import MODELS
@@ -46,14 +45,14 @@ def test_context_is_bounded_and_owned_before_job_creation(tmp_path,paths,size,st
 
 
 def test_declared_context_is_delivered_to_every_role_without_scope_or_receipt_inflation(tmp_path):
-    layout,artifacts,_,jobs,events=stores(tmp_path)
+    layout,artifacts,_,jobs=stores(tmp_path)
     snapshot=artifacts.capture(owner='alice',files={
         'service.py':'def first(items):\n    return items[0]\n',
         'constraints.txt':'Only nonempty lists are supported.\n'})
     job=jobs.submit(owner='alice',request=dict(snapshot_id=snapshot.snapshot_id,context_files=['constraints.txt']),
                     idempotency_key='context-everywhere')
-    repository=RepositoryContext(artifacts,RepoCache(layout.repo_cache),snapshot.snapshot_id,owner='alice')
-    executor=CanonicalReviewExecutor(layout,artifacts,RepoCache(layout.repo_cache),jobs,events,ReviewProvider(),models=MODELS)
+    repository=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
+    executor=CanonicalReviewExecutor(layout,artifacts,jobs,ReviewProvider(),models=MODELS)
     session=_ReviewSession(executor,job,repository,BudgetManager(job.limits),['service.py'])
     for role in AgentId:
         schema=AgentWorkItem if role in {AgentId.PLANNER,AgentId.SYNTHESIZER_VERIFIER} else ReviewTask

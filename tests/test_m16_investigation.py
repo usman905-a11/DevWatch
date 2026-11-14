@@ -20,7 +20,7 @@ def complete(task, candidates=(), refs=()):
 
 
 def read():
-    return dict(kind='call_tool',tool='read_source',arguments={'file_path':'service.py'})
+    return dict(kind='call_tool',tool='read_file',arguments={'file_path':'service.py'})
 
 
 def engine(repo, provider, **options):
@@ -78,7 +78,7 @@ async def test_repeating_an_acknowledged_immutable_read_stops_before_second_effe
 @pytest.mark.asyncio
 async def test_unacknowledged_source_candidate_gets_one_repair_then_explicit_incomplete_stop(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     action=complete(task,[candidate(repo,ref)])
     provider=ScriptedProvider([action,action])
     events=[]
@@ -95,8 +95,8 @@ async def test_unacknowledged_source_candidate_gets_one_repair_then_explicit_inc
 @pytest.mark.asyncio
 async def test_valid_sibling_survives_evidence_repair_followed_by_invalid_model_response(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    first=repo._read_source({'file_path':'service.py'},task).evidence_ref
-    second=repo._read_source({'file_path':'service.py','start_line':2,'end_line':2},task).evidence_ref
+    first=repo._read_file({'file_path':'service.py'},task).evidence_ref
+    second=repo._read_file({'file_path':'service.py','start_line':2,'end_line':2},task).evidence_ref
     good,bad={**candidate(repo,first),'title':'Known valid'}, {**candidate(repo,second),'title':'Unacknowledged'}
     provider=ScriptedProvider([complete(task,[good,bad],[first]),'{'])
     output=await engine(repo,provider).run_specialist(task,private_state=AgentPrivateState(evidence_refs=[first,second]))
@@ -125,14 +125,14 @@ async def test_acknowledged_ast_cannot_replace_source_retrieval_for_a_finding(tm
     output=await engine(repo,provider).run_specialist(task,private_state=AgentPrivateState(evidence_refs=[observation.evidence_ref]))
     assert len(provider.requests)==3
     assert output['output'].stop_reason=='evidence_complete' and len(output['output'].candidates)==1
-    assert repo.evidence(output['output'].candidates[0].evidence_refs[0])['tool']=='read_source'
+    assert repo.evidence(output['output'].candidates[0].evidence_refs[0])['tool']=='read_file'
 
 
 @pytest.mark.asyncio
 async def test_uninspected_assigned_sibling_is_explicit_incomplete_coverage(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
     task=task.model_copy(update={'files':['service.py','other.py']})
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     provider=ScriptedProvider([complete(task,refs=[ref])])
     output=await engine(repo,provider).run_specialist(task,private_state=AgentPrivateState(evidence_refs=[ref]))
     assert output['output'].stop_reason=='evidence_incomplete'
@@ -143,7 +143,7 @@ async def test_uninspected_assigned_sibling_is_explicit_incomplete_coverage(tmp_
 @pytest.mark.asyncio
 async def test_later_empty_completion_does_not_erase_a_valid_persisted_candidate(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     saved=FindingCandidate.model_validate(candidate(repo,ref))
     provider=ScriptedProvider([complete(task,refs=[ref])])
     output=await engine(repo,provider).run_specialist(task,private_state=AgentPrivateState(
@@ -187,7 +187,7 @@ async def test_successful_read_guard_survives_checkpoint_restart(tmp_path):
 @pytest.mark.asyncio
 async def test_followup_reuses_inspection_and_findings_without_repeating_a_read(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     provider=ScriptedProvider([read(),complete(task,[candidate(repo,ref)],[ref])])
     budget=BudgetManager()
     first=await engine(repo,provider,budget=budget).run_specialist(task)
@@ -205,13 +205,13 @@ async def test_completing_missing_inspection_clears_only_its_resolved_task_marke
     _,_,_,repo,task=setup_repository(tmp_path)
     budget=BudgetManager()
     first=await engine(repo,ScriptedProvider([complete(task)]),budget=budget).run_specialist(task)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     private=first['private_state']
-    private.coverage.failed[task.task_id+':read_source']='recoverable_tool_error'
+    private.coverage.failed[task.task_id+':read_file']='recoverable_tool_error'
     provider=ScriptedProvider([read(),complete(task,refs=[ref])])
     output=await engine(repo,provider,budget=budget).run_specialist(task,private_state=private)
     assert output['output'].stop_reason=='evidence_complete'
-    assert output['output'].coverage.failed=={task.task_id+':read_source':'recoverable_tool_error'}
+    assert output['output'].coverage.failed=={task.task_id+':read_file':'recoverable_tool_error'}
     assert output['output'].coverage.skipped=={}
 
 
@@ -219,8 +219,8 @@ async def test_completing_missing_inspection_clears_only_its_resolved_task_marke
 async def test_advancing_page_offsets_reaches_complete_inspection_without_stall(tmp_path):
     _,artifacts,_,original,task=setup_repository(tmp_path)
     snapshot=artifacts.capture(owner='alice',files={'service.py':'# '+'x'*4000+'\n'})
-    repo=RepositoryContext(artifacts,original.cache,snapshot.snapshot_id,owner='alice')
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     class Provider(ScriptedProvider):
         async def generate_completion(self,request):
             body=json.loads(request.prompt)

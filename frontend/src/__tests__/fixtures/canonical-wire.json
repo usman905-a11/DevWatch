@@ -1,1384 +1,1526 @@
 {
   "events": [
     {
-      "event_id": "7dda2cf944a7453e91c2f1edb56fe4ce",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "job_queued",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": "queued",
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "status": "queued"
       },
-      "sequence": 1,
-      "timestamp": 1792250265.8144548
+      "seq": 1,
+      "timestamp": 1794674461.7960992,
+      "type": "job_queued"
     },
     {
-      "event_id": "b22fa278e1af41b698c2abdc54494df0",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "job_running",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": "running",
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "status": "running"
       },
-      "sequence": 2,
-      "timestamp": 1792250265.8500764
+      "seq": 2,
+      "timestamp": 1794674461.8016322,
+      "type": "job_running"
     },
     {
-      "event_id": "2c9f54bbecbe42ffa8a42db888dc285f",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "agent_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "repository_intelligence",
+        "operation_id": "[redacted]"
+      },
+      "seq": 3,
+      "timestamp": 1794674461.8339121,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "repository_intelligence",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 4,
+      "timestamp": 1794674462.3757381,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "deterministic_analysis",
+        "operation_id": "[redacted]"
+      },
+      "seq": 5,
+      "timestamp": 1794674462.380162,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "deterministic_analysis",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 6,
+      "timestamp": 1794674462.3855276,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "change_analyzer",
+        "operation_id": "[redacted]"
+      },
+      "seq": 7,
+      "timestamp": 1794674462.3965554,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "change_analyzer",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 8,
+      "timestamp": 1794674462.4016826,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "planner_agent",
+        "operation_id": "[redacted]"
+      },
+      "seq": 9,
+      "timestamp": 1794674462.408154,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "planner",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
         "iteration": 0,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
         "phase": "planning",
-        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__planner",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "__planner"
       },
-      "sequence": 3,
-      "timestamp": 1792250266.4654996
+      "seq": 10,
+      "timestamp": 1794674462.4237618,
+      "type": "agent_started"
     },
     {
-      "event_id": "88d01dae9fe442fc8269447954444012",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "iteration_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "planner",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 1,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": "planning",
-        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__planner",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "agent_name": "planner",
+        "delta_seq": 0,
+        "error_details": null,
+        "parent_step_idx": null,
+        "render_info": {
+          "agent_name": "planner",
+          "files": [
+            "service.py",
+            "\ue000.py",
+            "\ud83d\ude00.py"
+          ],
+          "subtitle": "__planner",
+          "title": "Running planner (__planner)"
+        },
+        "run_id": "[redacted]",
+        "status": "RUNNING",
+        "step_idx": 0,
+        "step_status": "RUNNING",
+        "step_type": "agent_run",
+        "task_id": "__planner"
       },
-      "sequence": 4,
-      "timestamp": 1792250266.4857287
+      "seq": 11,
+      "timestamp": 1794674462.4283364,
+      "type": "step_update"
     },
     {
-      "event_id": "b486b6ac9a60416c9c7f9cb9ae934692",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "planner",
+        "graph_scope": "agent",
+        "iteration": 0,
+        "node": "investigate",
+        "operation_id": "[redacted]",
+        "phase": "planning",
+        "run_id": "[redacted]",
+        "task_id": "__planner"
+      },
+      "seq": 12,
+      "timestamp": 1794674462.4333432,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "planner",
+        "iteration": 1,
+        "phase": "planning",
+        "run_id": "[redacted]",
+        "task_id": "__planner"
+      },
+      "seq": 13,
+      "timestamp": 1794674462.4391663,
+      "type": "iteration_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "planner",
         "attempt": 1,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
         "iteration": 1,
-        "offset": null,
-        "operation_id": "72cbaccf375a4ed5bef0057987624721",
-        "outcome": null,
+        "operation_id": "[redacted]",
         "phase": "planning",
-        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__planner",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "__planner"
       },
-      "sequence": 5,
-      "timestamp": 1792250266.565136
+      "seq": 14,
+      "timestamp": 1794674462.485159,
+      "type": "model_call_started"
     },
     {
-      "event_id": "8190cb3d0f2c457bbf24e6ae42ccc9a3",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "planner",
+        "agent_name": "planner",
+        "delta_seq": 0,
+        "error_details": null,
+        "parent_step_idx": 0,
+        "render_info": {
+          "agent_name": "planner",
+          "subtitle": "small-test",
+          "title": "Planning next action..."
+        },
+        "run_id": "[redacted]",
+        "status": "RUNNING",
+        "step_idx": 1,
+        "step_status": "RUNNING",
+        "step_type": "planner",
+        "task_id": "__planner"
+      },
+      "seq": 15,
+      "timestamp": 1794674462.4904535,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "planner",
         "attempt": 1,
-        "count": null,
-        "duration_seconds": 0.03099999999994907,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
+        "duration_seconds": 0.015000000000100044,
         "finish_reason": "stop",
         "iteration": 1,
-        "offset": null,
-        "operation_id": "72cbaccf375a4ed5bef0057987624721",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "planning",
-        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
-        "status": null,
-        "stop_reason": null,
+        "run_id": "[redacted]",
         "task_id": "__planner",
-        "tool": null,
-        "total_tokens": 15,
-        "verdict": null
+        "total_tokens": 15
       },
-      "sequence": 6,
-      "timestamp": 1792250266.6066182
+      "seq": 16,
+      "timestamp": 1794674462.4944932,
+      "type": "model_call_completed"
     },
     {
-      "event_id": "6089f5f5c8be4b34ac0ace86a0e09d0a",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "budget_updated",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 0.7339999999999236,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": 15,
-        "verdict": null
+        "duration_seconds": 0.6870000000001255,
+        "total_tokens": 15
       },
-      "sequence": 7,
-      "timestamp": 1792250266.6066182
+      "seq": 17,
+      "timestamp": 1794674462.4944932,
+      "type": "budget_updated"
     },
     {
-      "event_id": "e7a1046d01434976b7fe473856e0bc4f",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "agent_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "planner",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 0.25,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
+        "agent_name": "planner",
+        "delta_seq": 1,
+        "error_details": null,
+        "parent_step_idx": 0,
+        "render_info": {
+          "duration_ms": 30,
+          "title": "Planned action: submit_plan"
+        },
+        "run_id": "[redacted]",
+        "status": "DONE",
+        "step_idx": 1,
+        "step_status": "DONE",
+        "step_type": "planner",
+        "task_id": "__planner"
+      },
+      "seq": 18,
+      "timestamp": 1794674462.5215323,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "planner",
+        "graph_scope": "agent",
         "iteration": 1,
-        "offset": null,
-        "operation_id": null,
+        "node": "investigate",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "planning",
-        "run_id": "56ea334a26de4c128fe9a1a4191bac19",
-        "status": null,
+        "run_id": "[redacted]",
+        "task_id": "__planner"
+      },
+      "seq": 19,
+      "timestamp": 1794674462.5484993,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "planner",
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "execute_action",
+        "operation_id": "[redacted]",
+        "phase": "planning",
+        "run_id": "[redacted]",
+        "task_id": "__planner"
+      },
+      "seq": 20,
+      "timestamp": 1794674462.5527954,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "planner",
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "execute_action",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded",
+        "phase": "planning",
+        "run_id": "[redacted]",
+        "task_id": "__planner"
+      },
+      "seq": 21,
+      "timestamp": 1794674462.5837529,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "planner",
+        "agent_name": "planner",
+        "delta_seq": 1,
+        "error_details": null,
+        "parent_step_idx": null,
+        "render_info": {
+          "duration_ms": 172,
+          "title": "Running planner (__planner)"
+        },
+        "run_id": "[redacted]",
+        "status": "DONE",
+        "step_idx": 0,
+        "step_status": "DONE",
+        "step_type": "agent_run",
+        "task_id": "__planner"
+      },
+      "seq": 22,
+      "timestamp": 1794674462.5887513,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "planner",
+        "duration_seconds": 0.17200000000002547,
+        "iteration": 1,
+        "outcome": "succeeded",
+        "phase": "planning",
+        "run_id": "[redacted]",
         "stop_reason": "evidence_complete",
         "task_id": "__planner",
-        "tool": null,
-        "total_tokens": 15,
-        "verdict": null
+        "total_tokens": 15
       },
-      "sequence": 8,
-      "timestamp": 1792250266.7170708
+      "seq": 23,
+      "timestamp": 1794674462.592789,
+      "type": "agent_completed"
     },
     {
-      "event_id": "c1dc8d339c9e4ff5b3bab73eb5d46162",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "agent_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "planner_agent",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 24,
+      "timestamp": 1794674462.5975966,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "context_manager",
+        "operation_id": "[redacted]"
+      },
+      "seq": 25,
+      "timestamp": 1794674462.602869,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "context_manager",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 26,
+      "timestamp": 1794674462.6194556,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "budget_manager",
+        "operation_id": "[redacted]"
+      },
+      "seq": 27,
+      "timestamp": 1794674462.6194556,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "budget_manager",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 28,
+      "timestamp": 1794674462.6460955,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "deterministic_router",
+        "operation_id": "[redacted]"
+      },
+      "seq": 29,
+      "timestamp": 1794674462.657494,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "deterministic_router",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 30,
+      "timestamp": 1794674462.662498,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "specialist_subgraphs",
+        "operation_id": "[redacted]"
+      },
+      "seq": 31,
+      "timestamp": 1794674462.6668067,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
         "iteration": 0,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
       },
-      "sequence": 9,
-      "timestamp": 1792250266.789889
+      "seq": 32,
+      "timestamp": 1794674462.678511,
+      "type": "agent_started"
     },
     {
-      "event_id": "a1b1acf488924355a6cf965e63d6a84d",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "iteration_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 1,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "agent_name": "logic_correctness",
+        "delta_seq": 0,
+        "error_details": null,
+        "parent_step_idx": null,
+        "render_info": {
+          "agent_name": "logic_correctness",
+          "files": [
+            "service.py"
+          ],
+          "subtitle": "logic-1",
+          "title": "Running logic_correctness (logic-1)"
+        },
+        "run_id": "[redacted]",
+        "status": "RUNNING",
+        "step_idx": 2,
+        "step_status": "RUNNING",
+        "step_type": "agent_run",
+        "task_id": "logic-1"
       },
-      "sequence": 10,
-      "timestamp": 1792250266.8256164
+      "seq": 33,
+      "timestamp": 1794674462.678511,
+      "type": "step_update"
     },
     {
-      "event_id": "557f41e67f554504b57d48dd8afa3890",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "graph_scope": "agent",
+        "iteration": 0,
+        "node": "investigate",
+        "operation_id": "[redacted]",
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 34,
+      "timestamp": 1794674462.6890888,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "iteration": 1,
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 35,
+      "timestamp": 1794674462.6928704,
+      "type": "iteration_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
         "iteration": 1,
-        "offset": null,
-        "operation_id": "48464e071acb47f785f3352961c92802",
-        "outcome": null,
+        "operation_id": "[redacted]",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
       },
-      "sequence": 11,
-      "timestamp": 1792250266.9141095
+      "seq": 36,
+      "timestamp": 1794674462.7235806,
+      "type": "model_call_started"
     },
     {
-      "event_id": "aeae0dfba32f459eb8eb84c18f548480",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "agent_name": "logic_correctness",
+        "delta_seq": 0,
+        "error_details": null,
+        "parent_step_idx": 2,
+        "render_info": {
+          "agent_name": "logic_correctness",
+          "subtitle": "medium-test",
+          "title": "Planning next action..."
+        },
+        "run_id": "[redacted]",
+        "status": "RUNNING",
+        "step_idx": 3,
+        "step_status": "RUNNING",
+        "step_type": "planner",
+        "task_id": "logic-1"
+      },
+      "seq": 37,
+      "timestamp": 1794674462.7275395,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
-        "count": null,
-        "duration_seconds": 0.047000000000025466,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
+        "duration_seconds": 0.015999999999849024,
         "finish_reason": "stop",
         "iteration": 1,
-        "offset": null,
-        "operation_id": "48464e071acb47f785f3352961c92802",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
+        "run_id": "[redacted]",
         "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": 15,
-        "verdict": null
+        "total_tokens": 15
       },
-      "sequence": 12,
-      "timestamp": 1792250266.95648
+      "seq": 38,
+      "timestamp": 1794674462.7310946,
+      "type": "model_call_completed"
     },
     {
-      "event_id": "cabe57fda7544ac2974f9b7aa4f4271e",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "budget_updated",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 1.094000000000051,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": 30,
-        "verdict": null
+        "duration_seconds": 0.9220000000000255,
+        "total_tokens": 30
       },
-      "sequence": 13,
-      "timestamp": 1792250266.95648
+      "seq": 39,
+      "timestamp": 1794674462.7310946,
+      "type": "budget_updated"
     },
     {
-      "event_id": "4b02419bb2cb4466974015666f2261b7",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "budget_updated",
-      "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 1.1869999999998981,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": 30,
-        "verdict": null
-      },
-      "sequence": 14,
-      "timestamp": 1792250267.052162
-    },
-    {
-      "event_id": "5c7435db600644759260c495c28f50be",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "tool_called",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 1,
-        "offset": null,
-        "operation_id": "1b5d32627f6e4fa5b7196b7eb9e82ab5",
-        "outcome": null,
-        "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": "read_source",
-        "total_tokens": null,
-        "verdict": null
+        "agent_name": "logic_correctness",
+        "delta_seq": 1,
+        "error_details": null,
+        "parent_step_idx": 2,
+        "render_info": {
+          "duration_ms": 30,
+          "title": "Selected tool: read_file"
+        },
+        "run_id": "[redacted]",
+        "status": "DONE",
+        "step_idx": 3,
+        "step_status": "DONE",
+        "step_type": "planner",
+        "task_id": "logic-1"
       },
-      "sequence": 15,
-      "timestamp": 1792250267.0779696
+      "seq": 40,
+      "timestamp": 1794674462.756558,
+      "type": "step_update"
     },
     {
-      "event_id": "e5bf62098e9c45debe4227653e403939",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "tool_result",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 0.047000000000025466,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
-        "finding_id": null,
-        "finish_reason": null,
+        "graph_scope": "agent",
         "iteration": 1,
-        "offset": null,
-        "operation_id": "1b5d32627f6e4fa5b7196b7eb9e82ab5",
+        "node": "investigate",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": "read_source",
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
       },
-      "sequence": 16,
-      "timestamp": 1792250267.1345236
+      "seq": 41,
+      "timestamp": 1794674462.7714179,
+      "type": "graph_node_completed"
     },
     {
-      "event_id": "17e1cffe26f14521922696324b3ad693",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "evidence_retrieved",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
-        "finding_id": null,
-        "finish_reason": null,
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "execute_action",
+        "operation_id": "[redacted]",
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 42,
+      "timestamp": 1794674462.7806873,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "duration_seconds": 0.9690000000000509,
+        "total_tokens": 30
+      },
+      "seq": 43,
+      "timestamp": 1794674462.7887022,
+      "type": "budget_updated"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "iteration": 1,
+        "operation_id": "[redacted]",
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1",
+        "tool": "read_file"
+      },
+      "seq": 44,
+      "timestamp": 1794674462.8121617,
+      "type": "tool_called"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "agent_name": "logic_correctness",
+        "delta_seq": 0,
+        "error_details": null,
+        "parent_step_idx": 2,
+        "render_info": {
+          "agent_name": "logic_correctness",
+          "files": [
+            "service.py"
+          ],
+          "title": "Reading service.py"
+        },
+        "run_id": "[redacted]",
+        "status": "RUNNING",
+        "step_idx": 4,
+        "step_status": "RUNNING",
+        "step_type": "read_file",
+        "task_id": "logic-1"
+      },
+      "seq": 45,
+      "timestamp": 1794674462.8171606,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "agent_name": "logic_correctness",
+        "delta_seq": 1,
+        "error_details": null,
+        "parent_step_idx": 2,
+        "render_info": {
+          "duration_ms": 16,
+          "evidence_ref": "[redacted]",
+          "files": [
+            "service.py"
+          ],
+          "title": "Reading service.py"
+        },
+        "run_id": "[redacted]",
+        "status": "DONE",
+        "step_idx": 4,
+        "step_status": "DONE",
+        "step_type": "read_file",
+        "task_id": "logic-1"
+      },
+      "seq": 46,
+      "timestamp": 1794674462.8253498,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "evidence_ref": "[redacted]",
         "iteration": 1,
         "offset": 0,
-        "operation_id": "1b5d32627f6e4fa5b7196b7eb9e82ab5",
-        "outcome": null,
+        "operation_id": "[redacted]",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
+        "run_id": "[redacted]",
         "task_id": "logic-1",
-        "tool": "read_source",
-        "total_tokens": null,
-        "verdict": null
+        "tool": "read_file"
       },
-      "sequence": 17,
-      "timestamp": 1792250267.1482155
+      "seq": 47,
+      "timestamp": 1794674462.833807,
+      "type": "evidence_retrieved"
     },
     {
-      "event_id": "b76ede5bbc7f4a8ca95666fdce2161e2",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "iteration_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
+        "duration_seconds": 0.016000000000076398,
         "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 2,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
+        "evidence_ref": "[redacted]",
+        "iteration": 1,
+        "operation_id": "[redacted]",
+        "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
+        "run_id": "[redacted]",
         "stop_reason": null,
         "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "tool": "read_file"
       },
-      "sequence": 18,
-      "timestamp": 1792250267.2363482
+      "seq": 48,
+      "timestamp": 1794674462.833807,
+      "type": "tool_result"
     },
     {
-      "event_id": "1990a63d036145e9b1dfff468fe34a8e",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "execute_action",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded",
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 49,
+      "timestamp": 1794674462.8548248,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "investigate",
+        "operation_id": "[redacted]",
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 50,
+      "timestamp": 1794674462.8625376,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "iteration": 2,
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 51,
+      "timestamp": 1794674462.8679233,
+      "type": "iteration_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
         "iteration": 2,
-        "offset": null,
-        "operation_id": "595ec831465b4275a937de42aaf8c84a",
-        "outcome": null,
+        "operation_id": "[redacted]",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
       },
-      "sequence": 19,
-      "timestamp": 1792250267.3318334
+      "seq": 52,
+      "timestamp": 1794674462.9280543,
+      "type": "model_call_started"
     },
     {
-      "event_id": "fa875e9cbcb247aa8c3ec322f084d4ee",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "agent_name": "logic_correctness",
+        "delta_seq": 0,
+        "error_details": null,
+        "parent_step_idx": 2,
+        "render_info": {
+          "agent_name": "logic_correctness",
+          "subtitle": "medium-test",
+          "title": "Planning next action..."
+        },
+        "run_id": "[redacted]",
+        "status": "RUNNING",
+        "step_idx": 5,
+        "step_status": "RUNNING",
+        "step_type": "planner",
+        "task_id": "logic-1"
+      },
+      "seq": 53,
+      "timestamp": 1794674462.932054,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
-        "count": null,
-        "duration_seconds": 0.03099999999994907,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
+        "duration_seconds": 0.015999999999849024,
         "finish_reason": "stop",
         "iteration": 2,
-        "offset": null,
-        "operation_id": "595ec831465b4275a937de42aaf8c84a",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
+        "run_id": "[redacted]",
         "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": 15,
-        "verdict": null
+        "total_tokens": 15
       },
-      "sequence": 20,
-      "timestamp": 1792250267.3730712
+      "seq": 54,
+      "timestamp": 1794674462.936053,
+      "type": "model_call_completed"
     },
     {
-      "event_id": "5c144f0ce77b4f6ab2d2a67ee21af39f",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "budget_updated",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 1.5,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": 45,
-        "verdict": null
+        "duration_seconds": 1.125,
+        "total_tokens": 45
       },
-      "sequence": 21,
-      "timestamp": 1792250267.3730712
+      "seq": 55,
+      "timestamp": 1794674462.936053,
+      "type": "budget_updated"
     },
     {
-      "event_id": "fb69d358555f478f970de13513b916f9",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "evidence_delivered",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": 433,
-        "error_code": null,
-        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
-        "finding_id": null,
-        "finish_reason": null,
+        "end_offset": 431,
+        "evidence_ref": "[redacted]",
         "iteration": 2,
         "offset": 0,
-        "operation_id": "595ec831465b4275a937de42aaf8c84a",
-        "outcome": null,
+        "operation_id": "[redacted]",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
       },
-      "sequence": 22,
-      "timestamp": 1792250267.4317572
+      "seq": 56,
+      "timestamp": 1794674462.936053,
+      "type": "evidence_delivered"
     },
     {
-      "event_id": "9fbd11cc31744497acb40773617faa08",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "evidence_inspected",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": 433,
-        "error_code": null,
-        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
-        "finding_id": null,
-        "finish_reason": null,
+        "agent_name": "logic_correctness",
+        "delta_seq": 1,
+        "error_details": null,
+        "parent_step_idx": 2,
+        "render_info": {
+          "duration_ms": 31,
+          "title": "Planned action: submit_candidates"
+        },
+        "run_id": "[redacted]",
+        "status": "DONE",
+        "step_idx": 5,
+        "step_status": "DONE",
+        "step_type": "planner",
+        "task_id": "logic-1"
+      },
+      "seq": 57,
+      "timestamp": 1794674462.9599319,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "end_offset": 431,
+        "evidence_ref": "[redacted]",
         "iteration": 2,
         "offset": 0,
-        "operation_id": null,
-        "outcome": null,
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
       },
-      "sequence": 23,
-      "timestamp": 1792250267.4974139
+      "seq": 58,
+      "timestamp": 1794674462.9729006,
+      "type": "evidence_inspected"
     },
     {
-      "event_id": "402a2ef0aed04c3badfc89fe2623f55e",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "candidate_submitted",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
+        "graph_scope": "agent",
+        "iteration": 2,
+        "node": "investigate",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded",
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 59,
+      "timestamp": 1794674462.9906895,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "graph_scope": "agent",
+        "iteration": 2,
+        "node": "execute_action",
+        "operation_id": "[redacted]",
+        "phase": "investigation",
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 60,
+      "timestamp": 1794674462.9958398,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
         "count": 1,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
         "iteration": 2,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
       },
-      "sequence": 24,
-      "timestamp": 1792250267.565032
+      "seq": 61,
+      "timestamp": 1794674462.999815,
+      "type": "candidate_submitted"
     },
     {
-      "event_id": "d84fdc4850e745118354fc45a757063f",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "agent_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 0.8440000000000509,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
+        "graph_scope": "agent",
         "iteration": 2,
-        "offset": null,
-        "operation_id": null,
+        "node": "execute_action",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "investigation",
-        "run_id": "72cf697ebf4f4372a6d5a01c96d71b48",
-        "status": null,
+        "run_id": "[redacted]",
+        "task_id": "logic-1"
+      },
+      "seq": 62,
+      "timestamp": 1794674463.0261962,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "agent_name": "logic_correctness",
+        "delta_seq": 1,
+        "error_details": null,
+        "parent_step_idx": null,
+        "render_info": {
+          "duration_ms": 359,
+          "title": "Running logic_correctness (logic-1)"
+        },
+        "run_id": "[redacted]",
+        "status": "DONE",
+        "step_idx": 2,
+        "step_status": "DONE",
+        "step_type": "agent_run",
+        "task_id": "logic-1"
+      },
+      "seq": 63,
+      "timestamp": 1794674463.0311947,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "logic_correctness",
+        "duration_seconds": 0.35999999999989996,
+        "iteration": 2,
+        "outcome": "succeeded",
+        "phase": "investigation",
+        "run_id": "[redacted]",
         "stop_reason": "evidence_complete",
         "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": 30,
-        "verdict": null
+        "total_tokens": 30
       },
-      "sequence": 25,
-      "timestamp": 1792250267.6351388
+      "seq": 64,
+      "timestamp": 1794674463.036393,
+      "type": "agent_completed"
     },
     {
-      "event_id": "e2cab686aec440d3998ce198b98c89f1",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "finding_created",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "specialist_subgraphs",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 65,
+      "timestamp": 1794674463.0413935,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "shared_blackboard",
+        "operation_id": "[redacted]"
+      },
+      "seq": 66,
+      "timestamp": 1794674463.0463932,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "logic_correctness",
-        "attempt": null,
         "count": 1,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": "finding-c9204e7f737036d9530efb96",
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
+        "finding_id": "[redacted]",
         "phase": "structural_gate",
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": "logic-1",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "task_id": "logic-1"
       },
-      "sequence": 26,
-      "timestamp": 1792250267.6824234
+      "seq": 67,
+      "timestamp": 1794674463.0805867,
+      "type": "finding_created"
     },
     {
-      "event_id": "288fdf73be7f447a8d60f391d15fea6e",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "validation_passed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
+        "graph_scope": "review",
+        "node": "shared_blackboard",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
+      },
+      "seq": 68,
+      "timestamp": 1794674463.0835161,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "[redacted]",
+        "operation_id": "[redacted]"
+      },
+      "seq": 69,
+      "timestamp": 1794674463.0972269,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
         "count": 1,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
         "outcome": "succeeded",
-        "phase": "structural_gate",
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "phase": "structural_gate"
       },
-      "sequence": 27,
-      "timestamp": 1792250267.7645485
+      "seq": 70,
+      "timestamp": 1794674463.1022265,
+      "type": "validation_passed"
     },
     {
-      "event_id": "81710491668e4a9496e3179abb93d559",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "finalization_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": "finalization",
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "graph_scope": "review",
+        "node": "[redacted]",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
       },
-      "sequence": 28,
-      "timestamp": 1792250268.1575022
+      "seq": 71,
+      "timestamp": 1794674463.1052291,
+      "type": "graph_node_completed"
     },
     {
-      "event_id": "0cfda0db20f44ccda47a81553b2ea592",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "agent_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "graph_scope": "review",
+        "node": "completion_workflow",
+        "operation_id": "[redacted]"
+      },
+      "seq": 72,
+      "timestamp": 1794674463.1172597,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "phase": "finalization"
+      },
+      "seq": 73,
+      "timestamp": 1794674463.1252599,
+      "type": "finalization_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
         "iteration": 0,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
         "phase": "verification",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "__final"
       },
-      "sequence": 29,
-      "timestamp": 1792250268.3026848
+      "seq": 74,
+      "timestamp": 1794674463.1352873,
+      "type": "agent_started"
     },
     {
-      "event_id": "56dd82d6380d473ebb029eef98277fba",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "iteration_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 1,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": "verification",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "agent_name": "synthesizer_verifier",
+        "delta_seq": 0,
+        "error_details": null,
+        "parent_step_idx": null,
+        "render_info": {
+          "agent_name": "synthesizer_verifier",
+          "files": [
+            "service.py",
+            "\ue000.py",
+            "\ud83d\ude00.py"
+          ],
+          "subtitle": "__final",
+          "title": "Running synthesizer_verifier (__final)"
+        },
+        "run_id": "[redacted]",
+        "status": "RUNNING",
+        "step_idx": 6,
+        "step_status": "RUNNING",
+        "step_type": "agent_run",
+        "task_id": "__final"
       },
-      "sequence": 30,
-      "timestamp": 1792250268.4651477
+      "seq": 75,
+      "timestamp": 1794674463.1414952,
+      "type": "step_update"
     },
     {
-      "event_id": "0946fc1542dc49b1a836596ea9a6dbdc",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "graph_scope": "agent",
+        "iteration": 0,
+        "node": "investigate",
+        "operation_id": "[redacted]",
+        "phase": "verification",
+        "run_id": "[redacted]",
+        "task_id": "__final"
+      },
+      "seq": 76,
+      "timestamp": 1794674463.1414952,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "iteration": 1,
+        "phase": "verification",
+        "run_id": "[redacted]",
+        "task_id": "__final"
+      },
+      "seq": 77,
+      "timestamp": 1794674463.1414952,
+      "type": "iteration_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": 1,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
         "iteration": 1,
-        "offset": null,
-        "operation_id": "29790b1f93fa4ddab163af12adab716f",
-        "outcome": null,
+        "operation_id": "[redacted]",
         "phase": "verification",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "__final"
       },
-      "sequence": 31,
-      "timestamp": 1792250268.648343
+      "seq": 78,
+      "timestamp": 1794674463.193019,
+      "type": "model_call_started"
     },
     {
-      "event_id": "d61c43ac3c65486b81bbb63c69fec88a",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "agent_name": "synthesizer_verifier",
+        "delta_seq": 0,
+        "error_details": null,
+        "parent_step_idx": 6,
+        "render_info": {
+          "agent_name": "synthesizer_verifier",
+          "subtitle": "strong-test",
+          "title": "Planning next action..."
+        },
+        "run_id": "[redacted]",
+        "status": "RUNNING",
+        "step_idx": 7,
+        "step_status": "RUNNING",
+        "step_type": "planner",
+        "task_id": "__final"
+      },
+      "seq": 79,
+      "timestamp": 1794674463.1972804,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": 1,
-        "count": null,
-        "duration_seconds": 0.1410000000000764,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
+        "duration_seconds": 0.016000000000076398,
         "finish_reason": "stop",
         "iteration": 1,
-        "offset": null,
-        "operation_id": "29790b1f93fa4ddab163af12adab716f",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "verification",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
+        "run_id": "[redacted]",
         "task_id": "__final",
-        "tool": null,
-        "total_tokens": 15,
-        "verdict": null
+        "total_tokens": 15
       },
-      "sequence": 32,
-      "timestamp": 1792250268.7911127
+      "seq": 80,
+      "timestamp": 1794674463.203359,
+      "type": "model_call_completed"
     },
     {
-      "event_id": "bc87d8a5c52c4ec585fdc985736f457c",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "budget_updated",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 2.9220000000000255,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": 60,
-        "verdict": null
+        "duration_seconds": 1.3910000000000764,
+        "total_tokens": 60
       },
-      "sequence": 33,
-      "timestamp": 1792250268.7911127
+      "seq": 81,
+      "timestamp": 1794674463.203359,
+      "type": "budget_updated"
     },
     {
-      "event_id": "5c1ab249085647f38dce2578c9c47f2c",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "evidence_delivered",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": 433,
-        "error_code": null,
-        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
-        "finding_id": null,
-        "finish_reason": null,
+        "end_offset": 431,
+        "evidence_ref": "[redacted]",
         "iteration": 1,
         "offset": 0,
-        "operation_id": "29790b1f93fa4ddab163af12adab716f",
-        "outcome": null,
+        "operation_id": "[redacted]",
         "phase": "verification",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "__final"
       },
-      "sequence": 34,
-      "timestamp": 1792250268.8608372
+      "seq": 82,
+      "timestamp": 1794674463.2073576,
+      "type": "evidence_delivered"
     },
     {
-      "event_id": "d46598c5ee8a4d608e9b21f30a880aab",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "evidence_inspected",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": 433,
-        "error_code": null,
-        "evidence_ref": "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638",
-        "finding_id": null,
-        "finish_reason": null,
+        "agent_name": "synthesizer_verifier",
+        "delta_seq": 1,
+        "error_details": null,
+        "parent_step_idx": 6,
+        "render_info": {
+          "duration_ms": 47,
+          "title": "Planned action: submit_verification"
+        },
+        "run_id": "[redacted]",
+        "status": "DONE",
+        "step_idx": 7,
+        "step_status": "DONE",
+        "step_type": "planner",
+        "task_id": "__final"
+      },
+      "seq": 83,
+      "timestamp": 1794674463.23222,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "end_offset": 431,
+        "evidence_ref": "[redacted]",
         "iteration": 1,
         "offset": 0,
-        "operation_id": null,
-        "outcome": null,
         "phase": "verification",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "__final"
       },
-      "sequence": 35,
-      "timestamp": 1792250268.922696
+      "seq": 84,
+      "timestamp": 1794674463.244643,
+      "type": "evidence_inspected"
     },
     {
-      "event_id": "0840d61e165f467380b04d81547df54d",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "verification_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "attempt": null,
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "investigate",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded",
+        "phase": "verification",
+        "run_id": "[redacted]",
+        "task_id": "__final"
+      },
+      "seq": 85,
+      "timestamp": 1794674463.2687154,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "execute_action",
+        "operation_id": "[redacted]",
+        "phase": "verification",
+        "run_id": "[redacted]",
+        "task_id": "__final"
+      },
+      "seq": 86,
+      "timestamp": 1794674463.2737963,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
         "count": 1,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": "finding-c9204e7f737036d9530efb96",
-        "finish_reason": null,
+        "finding_id": "[redacted]",
         "iteration": 1,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
         "phase": "verification",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
+        "run_id": "[redacted]",
         "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
         "verdict": "uncertain"
       },
-      "sequence": 36,
-      "timestamp": 1792250268.978265
+      "seq": 87,
+      "timestamp": 1794674463.2737963,
+      "type": "verification_completed"
     },
     {
-      "event_id": "bc99c04aec8c4b568a5f8e7283295419",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "iteration_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 2,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": "synthesis",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
-      },
-      "sequence": 37,
-      "timestamp": 1792250269.0807283
-    },
-    {
-      "event_id": "7dea3ec7a2f341439718a238d1f2f158",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_started",
-      "payload": {
-        "agent_id": "synthesizer_verifier",
-        "attempt": 1,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 2,
-        "offset": null,
-        "operation_id": "7b21e954f3d34b84b7c969c4f4177916",
-        "outcome": null,
-        "phase": "synthesis",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
-      },
-      "sequence": 38,
-      "timestamp": 1792250269.1651597
-    },
-    {
-      "event_id": "fd726938d82a4af4abca55e31dfafd18",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "model_call_completed",
-      "payload": {
-        "agent_id": "synthesizer_verifier",
-        "attempt": 1,
-        "count": null,
-        "duration_seconds": 0.06199999999989814,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": "stop",
-        "iteration": 2,
-        "offset": null,
-        "operation_id": "7b21e954f3d34b84b7c969c4f4177916",
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "execute_action",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "synthesis",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
-        "stop_reason": null,
-        "task_id": "__final",
-        "tool": null,
-        "total_tokens": 15,
-        "verdict": null
+        "run_id": "[redacted]",
+        "task_id": "__final"
       },
-      "sequence": 39,
-      "timestamp": 1792250269.2168036
+      "seq": 88,
+      "timestamp": 1794674463.2919052,
+      "type": "graph_node_completed"
     },
     {
-      "event_id": "5a4afbd675834d938a2dfa699e7e0740",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "budget_updated",
-      "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 3.3589999999999236,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": 75,
-        "verdict": null
-      },
-      "sequence": 40,
-      "timestamp": 1792250269.2168036
-    },
-    {
-      "event_id": "060e1a1e002f486995c5cc8eb4927ed4",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "agent_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 1.0470000000000255,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": 2,
-        "offset": null,
-        "operation_id": null,
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "investigate",
+        "operation_id": "[redacted]",
+        "phase": "synthesis",
+        "run_id": "[redacted]",
+        "task_id": "__final"
+      },
+      "seq": 89,
+      "timestamp": 1794674463.296906,
+      "type": "graph_node_started"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "graph_scope": "agent",
+        "iteration": 1,
+        "node": "investigate",
+        "operation_id": "[redacted]",
         "outcome": "succeeded",
         "phase": "synthesis",
-        "run_id": "b928d26e241e4225be9666faadf1efbf",
-        "status": null,
+        "run_id": "[redacted]",
+        "task_id": "__final"
+      },
+      "seq": 90,
+      "timestamp": 1794674463.3562725,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "agent_name": "synthesizer_verifier",
+        "delta_seq": 1,
+        "error_details": null,
+        "parent_step_idx": null,
+        "render_info": {
+          "duration_ms": 219,
+          "title": "Running synthesizer_verifier (__final)"
+        },
+        "run_id": "[redacted]",
+        "status": "DONE",
+        "step_idx": 6,
+        "step_status": "DONE",
+        "step_type": "agent_run",
+        "task_id": "__final"
+      },
+      "seq": 91,
+      "timestamp": 1794674463.3653207,
+      "type": "step_update"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "agent_id": "synthesizer_verifier",
+        "duration_seconds": 0.23400000000015098,
+        "iteration": 1,
+        "outcome": "succeeded",
+        "phase": "synthesis",
+        "run_id": "[redacted]",
         "stop_reason": "evidence_complete",
         "task_id": "__final",
-        "tool": null,
-        "total_tokens": 30,
-        "verdict": null
+        "total_tokens": 15
       },
-      "sequence": 41,
-      "timestamp": 1792250269.3483276
+      "seq": 92,
+      "timestamp": 1794674463.3735476,
+      "type": "agent_completed"
     },
     {
-      "event_id": "aac2c0c3554e4f5d92a38d90f3cc7268",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "validation_passed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
         "outcome": "succeeded",
-        "phase": "acceptance",
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "phase": "acceptance"
       },
-      "sequence": 42,
-      "timestamp": 1792250269.4159672
+      "seq": 93,
+      "timestamp": 1794674463.4091551,
+      "type": "validation_passed"
     },
     {
-      "event_id": "c3cafe9b21fc41b3a1ddba4890691485",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "report_render_started",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": "rendering",
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "phase": "rendering"
       },
-      "sequence": 43,
-      "timestamp": 1792250269.5483286
+      "seq": 94,
+      "timestamp": 1794674463.4185221,
+      "type": "report_render_started"
     },
     {
-      "event_id": "f759ed952a784ff2aceea55c2458002e",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "report_render_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 0.3910000000000764,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
+        "duration_seconds": 0.015000000000100044,
         "outcome": "succeeded",
-        "phase": "rendering",
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "phase": "rendering"
       },
-      "sequence": 44,
-      "timestamp": 1792250269.9433796
+      "seq": 95,
+      "timestamp": 1794674463.4251785,
+      "type": "report_render_completed"
     },
     {
-      "event_id": "c78b22da34724f429bab70a3eb873ddb",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "finalization_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": 1.8119999999998981,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
+        "duration_seconds": 0.29700000000002547,
         "outcome": "succeeded",
-        "phase": "finalization",
-        "run_id": null,
-        "status": null,
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "phase": "finalization"
       },
-      "sequence": 45,
-      "timestamp": 1792250269.9646907
+      "seq": 96,
+      "timestamp": 1794674463.4327576,
+      "type": "finalization_completed"
     },
     {
-      "event_id": "9dcbb6f11fb94ce8aa445504f199c07c",
-      "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-      "kind": "job_completed",
+      "job_id": "abc329936e0345989a42d28267484d47",
       "payload": {
-        "agent_id": null,
-        "attempt": null,
-        "count": null,
-        "duration_seconds": null,
-        "end_offset": null,
-        "error_code": null,
-        "evidence_ref": null,
-        "finding_id": null,
-        "finish_reason": null,
-        "iteration": null,
-        "offset": null,
-        "operation_id": null,
-        "outcome": null,
-        "phase": null,
-        "run_id": null,
-        "status": "completed",
-        "stop_reason": null,
-        "task_id": null,
-        "tool": null,
-        "total_tokens": null,
-        "verdict": null
+        "graph_scope": "review",
+        "node": "completion_workflow",
+        "operation_id": "[redacted]",
+        "outcome": "succeeded"
       },
-      "sequence": 46,
-      "timestamp": 1792250270.0981417
+      "seq": 97,
+      "timestamp": 1794674463.440781,
+      "type": "graph_node_completed"
+    },
+    {
+      "job_id": "abc329936e0345989a42d28267484d47",
+      "payload": {
+        "status": "completed"
+      },
+      "seq": 98,
+      "timestamp": 1794674463.465131,
+      "type": "job_completed"
     }
   ],
   "failed_task_report": {
@@ -1403,31 +1545,99 @@
         "\ud83d\ude00.py": "not_inspected"
       }
     },
-    "limitations": [],
-    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
-    "summary": "One uncertain candidate",
+    "limitations": [
+      "Independent arithmetic checks cover only explicit predicates on their declared integer domains. Source relevance and other prose remain model judgments, not independently proven facts."
+    ],
+    "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
+    "summary": "Partial review: 0 confirmed defect(s), 1 uncertain candidate(s), 0 advisory finding(s). 1 captured source file(s) inspected; 3 skipped and 0 failed coverage entry/entries. Coverage applies only to the captured source and recorded evidence.",
     "uncertain_high_impact_candidates": [
       {
+        "arithmetic_claims": [],
         "category": "logic",
-        "confidence": 0.7,
+        "confidence": 0.5,
         "description": "The first item is indexed without an empty check",
         "evidence_refs": [
-          "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638"
+          "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
         ],
-        "finding_id": "finding-c9204e7f737036d9530efb96",
+        "finding_id": "finding-98dcfcfe228732d134bc71ae",
         "impact": "Request can fail",
         "kind": "high_impact_candidate",
         "location": {
           "end_line": 2,
           "file_path": "service.py",
-          "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
+          "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
           "start_line": 2
         },
         "remediation": "",
         "title": "Empty input raises",
         "verification_rationale": "Boundary failure follows syntactically; caller contract is unknown"
       }
-    ]
+    ],
+    "verification_audit": {
+      "arithmetic_checks": {},
+      "conflicts": [],
+      "decisions": [
+        {
+          "arithmetic_counterexamples": [],
+          "causal_review": {
+            "assessments": [
+              {
+                "evidence_refs": [
+                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "title",
+                "status": "supported"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "description",
+                "status": "supported"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "impact",
+                "status": "uncertain"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                ],
+                "explanation": "No additional remediation claim.",
+                "field": "remediation",
+                "status": "supported"
+              }
+            ],
+            "candidate_digest": "9daa62f3d110a236ec96fffedd3238168b9efd07c948ba65e4188e9d2687ce2c",
+            "causal_basis": "For items=[], indexing element zero raises IndexError before a value can be returned."
+          },
+          "confidence": 0.5,
+          "evidence_refs": [
+            "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+          ],
+          "finding_id": "finding-98dcfcfe228732d134bc71ae",
+          "rationale": "Boundary failure follows syntactically; caller contract is unknown",
+          "verdict": "uncertain"
+        }
+      ],
+      "disagreements": [],
+      "duplicate_groups": [],
+      "duplicate_reviews": [],
+      "followup_requests": [],
+      "provenance": {
+        "finding-98dcfcfe228732d134bc71ae": {
+          "agent_id": "logic_correctness",
+          "task_id": "logic-1"
+        }
+      },
+      "review_observations": []
+    }
   },
   "files": {
     "service.py": "def first(items):\n    return items[0]\n",
@@ -1435,8 +1645,8 @@
     "\ud83d\ude00.py": "pass\n"
   },
   "job": {
-    "created_at": 1792250265.8144548,
-    "job_id": "9787d8467c1c4d408746bce7c97cc55e",
+    "created_at": 1794674461.7946491,
+    "job_id": "abc329936e0345989a42d28267484d47",
     "ledger": {
       "agent_usage": {
         "logic_correctness": {
@@ -1448,16 +1658,16 @@
           "prompt_tokens": 10
         },
         "synthesizer_verifier": {
-          "completion_tokens": 10,
-          "prompt_tokens": 20
+          "completion_tokens": 5,
+          "prompt_tokens": 10
         }
       },
-      "elapsed_seconds": 4.25,
+      "elapsed_seconds": 1.6720000000000255,
       "inflight": {},
       "operation_retries": {},
       "review_round": 1,
       "task_iterations": {
-        "__final": 2,
+        "__final": 1,
         "__planner": 1,
         "logic-1": 2
       },
@@ -1469,23 +1679,22 @@
     "limits": {
       "command_timeout_seconds": 120,
       "concurrent_model_calls": 3,
-      "final_agent_tokens": 50000,
       "iterations_per_task": 8,
       "job_tokens": 250000,
       "model_context_tokens": 32768,
-      "planner_tokens": 25000,
+      "planner_output_tokens": 4096,
       "provider_timeout_seconds": 30,
       "review_rounds": 2,
       "review_seconds": 600,
       "schema_repairs_per_task": 1,
-      "specialist_tokens": 50000,
       "tool_calls_per_task": 12,
       "transient_retries": 2
     },
-    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
+    "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
     "status": "completed",
-    "updated_at": 1792250270.1315022,
-    "workflow_version": "seven-agent-v1"
+    "updated_at": 1794674463.4719315,
+    "workflow_version": "seven-agent-v1",
+    "workspace_path": null
   },
   "report": {
     "advisories": [],
@@ -1506,31 +1715,99 @@
         "\ud83d\ude00.py": "not_inspected"
       }
     },
-    "limitations": [],
-    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
-    "summary": "One uncertain candidate",
+    "limitations": [
+      "Independent arithmetic checks cover only explicit predicates on their declared integer domains. Source relevance and other prose remain model judgments, not independently proven facts."
+    ],
+    "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
+    "summary": "Partial review: 0 confirmed defect(s), 1 uncertain candidate(s), 0 advisory finding(s). 1 captured source file(s) inspected; 3 skipped and 0 failed coverage entry/entries. Coverage applies only to the captured source and recorded evidence.",
     "uncertain_high_impact_candidates": [
       {
+        "arithmetic_claims": [],
         "category": "logic",
-        "confidence": 0.7,
+        "confidence": 0.5,
         "description": "The first item is indexed without an empty check",
         "evidence_refs": [
-          "evidence-52eb4988e4350d6f47ad9488082238b7beca4919418b01f477f78a8f57868638"
+          "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
         ],
-        "finding_id": "finding-c9204e7f737036d9530efb96",
+        "finding_id": "finding-98dcfcfe228732d134bc71ae",
         "impact": "Request can fail",
         "kind": "high_impact_candidate",
         "location": {
           "end_line": 2,
           "file_path": "service.py",
-          "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
+          "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
           "start_line": 2
         },
         "remediation": "",
         "title": "Empty input raises",
         "verification_rationale": "Boundary failure follows syntactically; caller contract is unknown"
       }
-    ]
+    ],
+    "verification_audit": {
+      "arithmetic_checks": {},
+      "conflicts": [],
+      "decisions": [
+        {
+          "arithmetic_counterexamples": [],
+          "causal_review": {
+            "assessments": [
+              {
+                "evidence_refs": [
+                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "title",
+                "status": "supported"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "description",
+                "status": "supported"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                ],
+                "explanation": "The supplied source and input contract establish this complete field.",
+                "field": "impact",
+                "status": "uncertain"
+              },
+              {
+                "evidence_refs": [
+                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                ],
+                "explanation": "No additional remediation claim.",
+                "field": "remediation",
+                "status": "supported"
+              }
+            ],
+            "candidate_digest": "9daa62f3d110a236ec96fffedd3238168b9efd07c948ba65e4188e9d2687ce2c",
+            "causal_basis": "For items=[], indexing element zero raises IndexError before a value can be returned."
+          },
+          "confidence": 0.5,
+          "evidence_refs": [
+            "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+          ],
+          "finding_id": "finding-98dcfcfe228732d134bc71ae",
+          "rationale": "Boundary failure follows syntactically; caller contract is unknown",
+          "verdict": "uncertain"
+        }
+      ],
+      "disagreements": [],
+      "duplicate_groups": [],
+      "duplicate_reviews": [],
+      "followup_requests": [],
+      "provenance": {
+        "finding-98dcfcfe228732d134bc71ae": {
+          "agent_id": "logic_correctness",
+          "task_id": "logic-1"
+        }
+      },
+      "review_observations": []
+    }
   },
   "snapshot": {
     "capture_coverage": {
@@ -1568,7 +1845,7 @@
       "limitations": []
     },
     "owner": "key-091d54677e472013d98d39c7312be93228f8cf198a5dc893cdb44ff6cb48a599",
-    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f"
+    "snapshot_id": "8849cff83f4148cebb44bcca64863e86"
   },
   "source": {
     "content_hash": "c9f28bea98a2738fd61db45b1a927b35357a4a9a22303e1343450814dea7c632",
@@ -1576,41 +1853,21 @@
     "end_line": 2,
     "file_path": "service.py",
     "snapshot_hash": "a92a5277e19fe4acd1488a7778fa3a0a6f409f8687f2caf403c2be1e04457f52",
-    "snapshot_id": "eca27fed55dc4bb89f2f00396bdeb17f",
+    "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
     "source_scope": [
       "service.py"
     ],
     "start_line": 1,
-    "tool": "read_source"
+    "tool": "read_file"
   },
   "unicode_event": {
-    "event_id": "unicode-fixture",
-    "job_id": "9787d8467c1c4d408746bce7c97cc55e",
-    "kind": "agent_started",
+    "job_id": "abc329936e0345989a42d28267484d47",
     "payload": {
       "agent_id": "logic_correctness",
-      "attempt": null,
-      "count": null,
-      "duration_seconds": null,
-      "end_offset": null,
-      "error_code": null,
-      "evidence_ref": null,
-      "finding_id": null,
-      "finish_reason": null,
-      "iteration": null,
-      "offset": null,
-      "operation_id": null,
-      "outcome": null,
-      "phase": null,
-      "run_id": null,
-      "status": null,
-      "stop_reason": null,
-      "task_id": "\u4efb\u52a1.\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00",
-      "tool": null,
-      "total_tokens": null,
-      "verdict": null
+      "task_id": "\u4efb\u52a1.\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00"
     },
-    "sequence": 1,
-    "timestamp": 1.0
+    "seq": 1,
+    "timestamp": 1.0,
+    "type": "agent_started"
   }
 }

@@ -1,4 +1,4 @@
-"""Separated local store locations, immutable source snapshots and versioned cache."""
+"""Separated local store locations and immutable source snapshots in SQLite."""
 
 from dataclasses import dataclass
 import fnmatch
@@ -7,7 +7,6 @@ import json
 import os
 from pathlib import Path
 import re
-import time
 from uuid import uuid4
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
@@ -25,24 +24,12 @@ class StoreLayout:
         object.__setattr__(self, "root", Path(self.root).resolve())
 
     @property
-    def jobs(self) -> Path:
-        return self.root / "jobs.sqlite"
+    def app_db(self) -> Path:
+        return self.root / "devwatch.sqlite"
 
     @property
     def checkpoints(self) -> Path:
         return self.root / "checkpoints.sqlite"
-
-    @property
-    def repo_cache(self) -> Path:
-        return self.root / "repo-cache.sqlite"
-
-    @property
-    def artifacts(self) -> Path:
-        return self.root / "artifacts"
-
-    @property
-    def events(self) -> Path:
-        return self.root / "events.sqlite"
 
 
 class SnapshotIntegrityError(ValueError):
@@ -139,25 +126,31 @@ def validate_source_path(name: str) -> str:
     return name
 
 
-class ArtifactStore:
-    """Only capture creates source snapshots. There is no source-write API.
+class ArtifactStore(_SQLiteStore):
+    """SQLite-backed immutable snapshots and read-only evidence records."""
 
-    Local operators can alter disk contents; reads detect tampering rather than
-    treating the host filesystem as a security boundary. Commands use scratch.
-    """
+    def __init__(self, path: Path | str):
+        super().__init__(
+            path,
+            """
+            CREATE TABLE IF NOT EXISTS snapshots (
+                snapshot_id TEXT PRIMARY KEY, owner TEXT NOT NULL, manifest TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS snapshot_files (
+                snapshot_id TEXT NOT NULL, file_path TEXT NOT NULL, content TEXT NOT NULL,
+                PRIMARY KEY(snapshot_id, file_path)
+            );
+            CREATE TABLE IF NOT EXISTS evidence (
+                snapshot_id TEXT NOT NULL, evidence_ref TEXT NOT NULL, payload TEXT NOT NULL,
+                PRIMARY KEY(snapshot_id, evidence_ref)
+            );
+            """,
+        )
 
-    def __init__(self, root: Path | str):
-        self.root = Path(root).resolve()
-        for directory in ("snapshots", "scratch", "reports"):
-            (self.root / directory).mkdir(parents=True, exist_ok=True)
-
-    def _snapshot_dir(self, snapshot_id: str) -> Path:
+    @staticmethod
+    def _validate_snapshot_id(snapshot_id: str) -> None:
         if not re.fullmatch(r"[0-9a-f]{32}", snapshot_id):
             raise ValueError("invalid snapshot identity")
-        path = (self.root / "snapshots" / snapshot_id).resolve()
-        if not path.is_relative_to(self.root / "snapshots"):
-            raise ValueError("snapshot path escaped the Artifact Store")
-        return path
 
     def capture(self, *, owner: str, files: dict[str, str], capture_coverage: CaptureCoverage | None = None,
                 git_metadata: GitMetadata | None = None) -> SnapshotManifest:
@@ -165,7 +158,7 @@ class ArtifactStore:
             raise ValueError("bounded snapshot owner is required")
         if len(files) > Config.MAX_FILES_PER_REVIEW:
             raise ValueError("snapshot file count exceeded")
-        entries, encoded, identities = {}, {}, set()
+        entries, encoded_texts, identities = {}, {}, set()
         for raw_path, content in files.items():
             path = validate_source_path(raw_path)
             identity = os.path.normcase(path)
@@ -175,7 +168,7 @@ class ArtifactStore:
             data = content.encode("utf-8")
             if len(data) > Config.MAX_BYTES_PER_FILE:
                 raise ValueError("snapshot file size exceeded")
-            encoded[path] = data
+            encoded_texts[path] = content
             entries[path] = SourceEntry(content_hash=sha256(data).hexdigest(), byte_count=len(data),
                                         line_count=len(content.splitlines()))
         if sum(entry.byte_count for entry in entries.values()) > Config.MAX_REPO_TOTAL_BYTES:
@@ -188,22 +181,24 @@ class ArtifactStore:
                                     content_hash=_content_hash(entries), entries=entries,
                                     capture_coverage=coverage, capture_hash=_capture_hash(coverage),
                                     git_metadata=metadata, git_hash=_git_hash(metadata))
-        final = self._snapshot_dir(manifest.snapshot_id)
-        staging = self.root / "snapshots" / f"pending-{manifest.snapshot_id}"
-        staging.mkdir()
-        for path, data in encoded.items():
-            destination = staging / "source" / path
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(data)
-        (staging / "source").mkdir(exist_ok=True)
-        (staging / "manifest.json").write_text(manifest.model_dump_json(), encoding="utf-8")
-        # Same-volume directory rename publishes a complete immutable snapshot.
-        os.replace(staging, final)
+        with self._transaction() as db:
+            db.execute(
+                "INSERT INTO snapshots(snapshot_id,owner,manifest) VALUES(?,?,?)",
+                (manifest.snapshot_id, owner, manifest.model_dump_json()),
+            )
+            db.executemany(
+                "INSERT INTO snapshot_files(snapshot_id,file_path,content) VALUES(?,?,?)",
+                [(manifest.snapshot_id, path, content) for path, content in encoded_texts.items()],
+            )
         return manifest
 
     def manifest(self, snapshot_id: str, *, owner: str) -> SnapshotManifest:
-        directory = self._snapshot_dir(snapshot_id)
-        manifest = SnapshotManifest.model_validate_json((directory / "manifest.json").read_text(encoding="utf-8"))
+        self._validate_snapshot_id(snapshot_id)
+        with self._transaction() as db:
+            row = db.execute("SELECT manifest FROM snapshots WHERE snapshot_id=?", (snapshot_id,)).fetchone()
+        if row is None:
+            raise FileNotFoundError("snapshot not found")
+        manifest = SnapshotManifest.model_validate_json(row["manifest"])
         if manifest.owner != owner:
             raise PermissionError("snapshot is not owned by this principal")
         if (manifest.snapshot_id != snapshot_id or _content_hash(manifest.entries) != manifest.content_hash
@@ -212,118 +207,42 @@ class ArtifactStore:
             raise SnapshotIntegrityError("snapshot manifest identity mismatch")
         return manifest
 
-    def source_root(self, snapshot_id: str, *, owner: str) -> Path:
-        self.manifest(snapshot_id, owner=owner)
-        return self._snapshot_dir(snapshot_id) / "source"
-
     def read_source(self, snapshot_id: str, file_path: str, *, owner: str) -> str:
         manifest = self.manifest(snapshot_id, owner=owner)
         file_path = validate_source_path(file_path)
         entry = manifest.entries.get(file_path)
         if entry is None:
             raise FileNotFoundError("source was not captured in this snapshot")
-        root = self._snapshot_dir(snapshot_id) / "source"
-        path = (root / file_path).resolve()
-        if not path.is_relative_to(root):
-            raise SnapshotIntegrityError("snapshot source escaped its root")
-        data = path.read_bytes()
+        with self._transaction() as db:
+            row = db.execute(
+                "SELECT content FROM snapshot_files WHERE snapshot_id=? AND file_path=?",
+                (snapshot_id, file_path),
+            ).fetchone()
+        if row is None:
+            raise FileNotFoundError("source was not captured in this snapshot")
+        text = row["content"]
+        data = text.encode("utf-8")
         if len(data) != entry.byte_count or sha256(data).hexdigest() != entry.content_hash:
             raise SnapshotIntegrityError("snapshot source content changed")
-        return data.decode("utf-8")
+        return text
 
-    def create_scratch(self, snapshot_id: str, *, owner: str, files: list[str] | None = None) -> Path:
-        manifest = self.manifest(snapshot_id, owner=owner)
-        # Read and validate the entire snapshot before creating a command workspace.
-        selected = list(manifest.entries) if files is None else files
-        if any(name not in manifest.entries for name in selected):
-            raise PermissionError("Scratch source must belong to the captured snapshot")
-        contents = {name: self.read_source(snapshot_id, name, owner=owner) for name in selected}
-        scratch = self.root / "scratch" / uuid4().hex
-        scratch.mkdir()
-        for name, content in contents.items():
-            destination = scratch / name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(content.encode("utf-8"))
-        return scratch
-
-    def _report_pdf_path(self, job_id: str, reference: str, *, owner: str) -> Path:
-        if not re.fullmatch(r"[0-9a-f]{32}", job_id) or not re.fullmatch(r"[0-9a-f]{64}", reference):
-            raise ValueError("invalid report artifact identity")
-        path = (self.root / "reports" / sha256(owner.encode("utf-8")).hexdigest() / job_id / f"{reference}.pdf").resolve()
-        if not path.is_relative_to(self.root / "reports"):
-            raise SnapshotIntegrityError("report artifact escaped the Artifact Store")
-        return path
-
-    def put_report_pdf(self, job_id: str, snapshot_id: str, *, owner: str, data: bytes) -> str:
-        self.manifest(snapshot_id, owner=owner)
-        if (not isinstance(data, bytes) or len(data) > 10_000_000
-                or not data.startswith(b"%PDF-") or not data.rstrip().endswith(b"%%EOF")):
-            raise ValueError("bounded PDF bytes required")
-        reference = sha256(data).hexdigest()
-        path = self._report_pdf_path(job_id, reference, owner=owner)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.parent / f"pending-{uuid4().hex}"
-        try:
-            with temporary.open("xb") as stream:
-                stream.write(data)
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
-        return reference
-
-    def read_report_pdf(self, job_id: str, snapshot_id: str, *, owner: str, reference: str) -> bytes:
-        self.manifest(snapshot_id, owner=owner)
-        with self._report_pdf_path(job_id, reference, owner=owner).open("rb") as stream:
-            data = stream.read(10_000_001)
-        if len(data) > 10_000_000 or sha256(data).hexdigest() != reference:
-            raise SnapshotIntegrityError("report artifact content changed")
-        return data
-
-
-class CacheConflict(ValueError):
-    pass
-
-
-class CacheKey(ContractModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    owner_namespace: str = Field(min_length=1)
-    namespace: str = Field(min_length=1)
-    content_hash: str = Field(min_length=1)
-    parser_version: str = ""
-    analysis_config_hash: str = ""
-    prompt_version: str = ""
-    model_name: str = ""
-    schema_version: str = "seven-agent-v1"
-
-    @property
-    def digest(self) -> str:
-        return sha256(_canonical_json(self.model_dump(mode="json")).encode("utf-8")).hexdigest()
-
-
-class RepoCache(_SQLiteStore):
-    def __init__(self, path: Path | str):
-        super().__init__(path, "CREATE TABLE IF NOT EXISTS cache (digest TEXT PRIMARY KEY, payload TEXT NOT NULL);")
+    def put_evidence(self, snapshot_id: str, evidence_ref: str, payload: str) -> None:
+        self._validate_snapshot_id(snapshot_id)
+        if not re.fullmatch(r"evidence-[0-9a-f]{64}", evidence_ref):
+            raise ValueError("invalid evidence reference")
         with self._transaction() as db:
-            if "last_used" not in {row[1] for row in db.execute("PRAGMA table_info(cache)")}:
-                db.execute("ALTER TABLE cache ADD COLUMN last_used REAL NOT NULL DEFAULT 0")
-                db.execute("UPDATE cache SET last_used=?", (time.time(),))
+            db.execute(
+                "INSERT OR REPLACE INTO evidence(snapshot_id,evidence_ref,payload) VALUES(?,?,?)",
+                (snapshot_id, evidence_ref, payload),
+            )
 
-    def put(self, key: CacheKey, value) -> None:
-        payload = _canonical_json(value)
-        if len(payload.encode("utf-8")) > 10_000_000:
-            raise ValueError("cache payload exceeds local limit")
+    def get_evidence(self, snapshot_id: str, evidence_ref: str) -> str | None:
+        self._validate_snapshot_id(snapshot_id)
+        if not re.fullmatch(r"evidence-[0-9a-f]{64}", evidence_ref):
+            raise ValueError("invalid evidence reference")
         with self._transaction() as db:
-            previous = db.execute("SELECT payload FROM cache WHERE digest=?", (key.digest,)).fetchone()
-            if previous is not None:
-                if previous[0] != payload:
-                    raise CacheConflict("same cache identity produced different content")
-                db.execute("UPDATE cache SET last_used=? WHERE digest=?", (time.time(), key.digest))
-                return
-            db.execute("INSERT INTO cache(digest,payload,last_used) VALUES(?,?,?)", (key.digest, payload, time.time()))
-
-    def get(self, key: CacheKey):
-        with self._transaction() as db:
-            row = db.execute("SELECT payload FROM cache WHERE digest=?", (key.digest,)).fetchone()
-            if row is not None:
-                db.execute("UPDATE cache SET last_used=? WHERE digest=?", (time.time(), key.digest))
-            return json.loads(row[0]) if row else None
+            row = db.execute(
+                "SELECT payload FROM evidence WHERE snapshot_id=? AND evidence_ref=?",
+                (snapshot_id, evidence_ref),
+            ).fetchone()
+        return row["payload"] if row is not None else None

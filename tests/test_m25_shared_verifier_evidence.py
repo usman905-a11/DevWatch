@@ -9,9 +9,9 @@ from tests.verification_fixtures import decision
 
 def test_final_agent_can_cross_cite_inspected_same_source_from_two_candidates(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    first = repo._read_source({'file_path': 'service.py'}, task).evidence_ref
+    first = repo._read_file({'file_path': 'service.py'}, task).evidence_ref
     sibling = task.model_copy(update={'task_id':'another-review', 'agent_id':AgentId.BUG_RELIABILITY})
-    second = repo._read_source({'file_path': 'service.py'}, sibling).evidence_ref
+    second = repo._read_file({'file_path': 'service.py'}, sibling).evidence_ref
     assert first != second
     claims = {'f1': candidate(repo, first), 'f2': candidate(repo, second)}
     refs = [first, second]
@@ -26,9 +26,9 @@ def test_final_agent_can_cross_cite_inspected_same_source_from_two_candidates(tm
 
 def test_a_real_inspected_other_file_cannot_replace_source_covering_the_claim(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    first = repo._read_source({'file_path': 'service.py'}, task).evidence_ref
+    first = repo._read_file({'file_path': 'service.py'}, task).evidence_ref
     work = task.model_copy(update={'files':['other.py']})
-    unrelated = repo._read_source({'file_path':'other.py'}, work).evidence_ref
+    unrelated = repo._read_file({'file_path':'other.py'}, work).evidence_ref
     claims = {'f1': candidate(repo, first), 'f2': {**candidate(repo, unrelated),
         'location':dict(snapshot_id=repo.snapshot_id, file_path='other.py', start_line=1, end_line=1)}}
     records = [decision(claims['f1'], [unrelated]), decision(claims['f2'], [unrelated], identity='f2')]

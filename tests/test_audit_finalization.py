@@ -21,7 +21,7 @@ def payload(repo, ref):
 @pytest.mark.parametrize('damage',['missing','wrong_id','immutable','rationale','decision'])
 def test_legacy_synthesis_still_cannot_alter_recorded_verification(tmp_path,damage):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref = repo._read_file({'file_path':'service.py'},task).evidence_ref
     good = payload(repo,ref)
     bad = json.loads(json.dumps(good))
     if damage=='missing': bad['report_draft']['confirmed_defects']=[]
@@ -42,7 +42,7 @@ def test_legacy_synthesis_still_cannot_alter_recorded_verification(tmp_path,dama
 
 def test_compact_synthesis_assembles_verified_fields_deterministically(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref = repo._read_file({'file_path':'service.py'},task).evidence_ref
     good = payload(repo,ref)
     runtime,_ = engine(repo,[dict(kind='submit_verification',inspected_evidence=[ref],payload={'decisions':good['decisions']}),
         dict(kind='submit_synthesis',payload={'summary':'Reviewed source','limitations':[]})])
@@ -52,7 +52,7 @@ def test_compact_synthesis_assembles_verified_fields_deterministically(tmp_path)
 
 def test_verifier_may_raise_confidence_after_inspecting_new_evidence(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     good=payload(repo,ref)
     claim={**candidate(repo,ref),'confidence':.6}
     good['decisions'][0]['causal_review']=reviewed(claim,[ref])
@@ -64,8 +64,8 @@ def test_verifier_may_raise_confidence_after_inspecting_new_evidence(tmp_path):
 
 def test_acceptance_requires_verifier_inspection_and_allows_verifier_evidence(tmp_path):
     _, _, _, repo, task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
-    own=repo._read_source({'file_path':'service.py','start_line':2,'end_line':2},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
+    own=repo._read_file({'file_path':'service.py','start_line':2,'end_line':2},task).evidence_ref
     raw=payload(repo,own)
     draft=ReportDraft.model_validate(raw['report_draft'])
     decisions=[VerificationDecision.model_validate(raw['decisions'][0])]
@@ -79,7 +79,6 @@ def test_acceptance_requires_verifier_inspection_and_allows_verifier_evidence(tm
 
 def test_broken_optional_summary_cannot_discard_confirmed_findings_or_fail_coverage(tmp_path):
     from devwatch.review.jobs import DurableJobManager
-    from devwatch.review.stores import RepoCache
     from devwatch.review.workflow import CanonicalReviewExecutor
     from tests.test_canonical_workflow import ReviewProvider, stores
     from tests.test_control_agents import MODELS
@@ -97,10 +96,10 @@ def test_broken_optional_summary_cannot_discard_confirmed_findings_or_fail_cover
                 action['payload']['report_draft']['confirmed_defects']=[]
             return response.model_copy(update={'content':json.dumps(action)})
     async def run():
-        layout,artifacts,snapshot,jobs,events=stores(tmp_path)
+        layout,artifacts,snapshot,jobs=stores(tmp_path)
         provider=BrokenSynthesis()
-        executor=CanonicalReviewExecutor(layout,artifacts,RepoCache(layout.repo_cache),jobs,events,provider,models=MODELS)
-        manager=DurableJobManager(jobs,events,executor)
+        executor=CanonicalReviewExecutor(layout,artifacts,jobs,provider,models=MODELS)
+        manager=DurableJobManager(jobs,executor)
         job=await manager.submit(owner='alice',request={'snapshot_id':snapshot.snapshot_id},idempotency_key='repair-fallback')
         done=await manager.wait(job.job_id,owner='alice')
         await manager.close()
@@ -115,7 +114,6 @@ def test_broken_optional_summary_cannot_discard_confirmed_findings_or_fail_cover
 
 
 def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path, monkeypatch):
-    from devwatch.review.stores import RepoCache
     from devwatch.review.workflow import CanonicalReviewExecutor
     from tests.test_canonical_workflow import ReviewProvider, stores
     from tests.test_control_agents import MODELS
@@ -137,14 +135,14 @@ def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path, 
                 response=response.model_copy(update={'content':json.dumps(action)})
             return response
     async def run():
-        layout,artifacts,snapshot,jobs,events=stores(tmp_path)
+        layout,artifacts,snapshot,jobs=stores(tmp_path)
         provider=PausedSynthesis()
         async def pause_assembly(engine, state):
             await engine._save(state)
             provider.entered.set()
             await asyncio.Event().wait()
         monkeypatch.setattr(AgentSubgraphs, '_assemble_verified', pause_assembly)
-        executor=CanonicalReviewExecutor(layout,artifacts,RepoCache(layout.repo_cache),jobs,events,provider,models=MODELS)
+        executor=CanonicalReviewExecutor(layout,artifacts,jobs,provider,models=MODELS)
         job=jobs.submit(owner='alice',request={'snapshot_id':snapshot.snapshot_id},idempotency_key='deadline-verified')
         jobs.transition(job.job_id,owner='alice',expected_status='queued',status='running')
         operation=asyncio.create_task(executor(jobs.get(job.job_id,owner='alice')))
@@ -169,7 +167,7 @@ def test_partial_recovery_downgrades_a_confirmation_without_inspection_receipts(
     from devwatch.review.repository import SharedBlackboard,StructuralEvidenceGate
     from devwatch.review.workflow import _ReviewSession
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     board=SharedBlackboard(StructuralEvidenceGate(repo))
     board.publish(task,SpecialistResult(task_id=task.task_id,agent_id=task.agent_id,candidates=[candidate(repo,ref)],coverage={},stop_reason='evidence_complete'))
     identity=next(iter(board.candidates))
@@ -185,19 +183,18 @@ def test_inconsistent_persisted_synthesis_recovers_from_recorded_verification(tm
     from devwatch.review.budgets import BudgetManager
     from devwatch.review.contracts import SpecialistResult,VerificationSynthesisResult
     from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import RepoCache
     from devwatch.review.workflow import CanonicalReviewExecutor,_ReviewSession
     from tests.test_canonical_workflow import stores
     from tests.test_control_agents import MODELS
     from tests.test_iterative_agents import ScriptedProvider
     async def run():
-        layout,artifacts,snapshot,jobs,events=stores(tmp_path)
-        repo=RepositoryContext(artifacts,RepoCache(layout.repo_cache),snapshot.snapshot_id,owner='alice')
+        layout,artifacts,snapshot,jobs=stores(tmp_path)
+        repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
         from devwatch.review.contracts import ReviewTask
         task=ReviewTask(task_id='logic-1',agent_id='logic_correctness',files=['service.py'],focus='boundary')
-        ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+        ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
         provider=ScriptedProvider([])
-        executor=CanonicalReviewExecutor(layout,artifacts,repo.cache,jobs,events,provider,models=MODELS)
+        executor=CanonicalReviewExecutor(layout,artifacts,jobs,provider,models=MODELS)
         job=jobs.submit(owner='alice',request={'snapshot_id':snapshot.snapshot_id},idempotency_key='corrupted-synthesis')
         job=jobs.transition(job.job_id,owner='alice',expected_status='queued',status='running')
         session=_ReviewSession(executor,job,repo,BudgetManager(),['service.py'])

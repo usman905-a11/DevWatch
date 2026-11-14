@@ -13,7 +13,7 @@ from tests.test_repository_context import setup_repository
 
 def setup(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     good=candidate(repo,ref)
     bad=dict(good)
     bad.pop('impact')

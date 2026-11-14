@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 
-from devwatch.review.jobs import EventPayload, PersistedEvent
+from devwatch.review.jobs import JobEvent
 from devwatch.review.contracts import ReportDraft, ReviewTask
 from tests.test_review_service import ALICE, app, completed
 
@@ -24,8 +24,7 @@ def main():
             report = client.get(prefix + "/report", headers=ALICE).json()
             events = client.get(prefix + "/events?limit=1000", headers=ALICE).json()["events"]
             source = client.get(prefix + "/source?file_path=service.py&start_line=1&end_line=2", headers=ALICE).json()
-            unicode_event = PersistedEvent(event_id="unicode-fixture", job_id=job["job_id"], sequence=1,
-                kind="agent_started", payload=EventPayload(agent_id="logic_correctness", task_id="任务." + "𠀀" * 120), timestamp=1)
+            unicode_event = JobEvent(job_id=job["job_id"], seq=1, type="agent_started", payload={"agent_id": "logic_correctness", "task_id": "任务." + "𠀀" * 120}, timestamp=1)
             failed_report = ReportDraft.model_validate(report)
             for task_id in ("security.", "con"):
                 task = ReviewTask(task_id=task_id, agent_id="architecture_security", files=["service.py"], focus="Inspect configuration")

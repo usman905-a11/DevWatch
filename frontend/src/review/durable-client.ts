@@ -185,7 +185,9 @@ export class DurableReviewClient {
   async report(jobId: string, signal?: AbortSignal): Promise<ReportDraft> {
     const job = await this.status(jobId, signal)
     if (job.status !== 'completed') throw new ProtocolError('Report is not finalized')
-    return parseReport(await this.json(`/api/jobs/${jobId}/report?format=json`, {}, signal, 10000000), job.snapshot_id)
+    const rawReport = await this.json(`/api/jobs/${jobId}/report?format=json`, {}, signal, 10000000) as Record<string, unknown>
+    const snapshotId = job.snapshot_id ?? (typeof rawReport?.snapshot_id === 'string' ? rawReport.snapshot_id : '')
+    return parseReport(rawReport, snapshotId)
   }
   async markdown(jobId: string, signal?: AbortSignal): Promise<string> {
     await this.report(jobId, signal)

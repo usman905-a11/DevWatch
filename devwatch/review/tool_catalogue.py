@@ -64,24 +64,18 @@ class SearchArguments(Arguments):
 
 
 TOOL_ARGUMENTS: dict[str, type[Arguments]] = {
-    "read_source": SourceArguments, "read_evidence": EvidenceArguments,
+    "read_file": SourceArguments, "read_evidence": EvidenceArguments,
     "repo_map": Arguments, "code_search": SearchArguments, "symbol_lookup": SymbolArguments,
-    **{name: FileArguments for name in ("parse_ast", "call_graph", "dependency_graph", "import_graph", "complexity", "config_read", "git_diff", "git_history")},
+    "parse_ast": FileArguments, "call_graph": FileArguments,
 }
 DESCRIPTIONS = {
-    "read_source": "Read immutable source lines (1-based, <=200). EOF clamps; empty accepts start=1.",
+    "read_file": "Read immutable source lines (1-based, <=200). EOF clamps; empty accepts start=1.",
     "read_evidence": "Page scoped evidence JSON by character offset; follow next_offset. Acknowledge delivered pages with inspected_evidence.",
     "repo_map": "List captured file metadata in the assigned scope.",
     "code_search": "Search assigned immutable files for a literal string; at most 20 matches, each truncated to 500 characters.",
-    "parse_ast": "Retrieve deterministic parser facts for an assigned file; unsupported or invalid syntax requires source/search fallback.",
     "symbol_lookup": "List parsed symbols in an assigned file, optionally matching an exact symbol name; no runtime resolution.",
+    "parse_ast": "Retrieve deterministic parser facts for an assigned file; unsupported or invalid syntax requires source/search fallback.",
     "call_graph": "Retrieve syntactic call sites in an assigned file; targets are not proven runtime dispatch.",
-    "dependency_graph": "Retrieve resolved local import edges from an assigned file within task scope, plus unresolved imports.",
-    "import_graph": "Retrieve resolved local import edges from an assigned file within task scope, plus unresolved imports.",
-    "complexity": "Estimate syntactic cyclomatic lower bound and symbol count; not a maintainability verdict.",
-    "config_read": "Read captured JSON/TOML configuration with sensitive keys redacted.",
-    "git_diff": "Read captured client-reported Git diff; not causal verification.",
-    "git_history": "Read captured client-reported Git history; not causal verification.",
 }
 
 

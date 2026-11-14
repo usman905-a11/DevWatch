@@ -34,7 +34,7 @@ SPECIALISTS = frozenset({
     AgentId.QUALITY_TESTABILITY, AgentId.ARCHITECTURE_SECURITY,
     AgentId.PERFORMANCE_SCALABILITY,
 })
-COMMON_TOOLS = frozenset({"read_source", "read_evidence"})
+COMMON_TOOLS = frozenset({"read_file", "read_evidence"})
 
 
 class ModelTier(str, Enum):
@@ -47,10 +47,7 @@ class BalancedLimits(ContractModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     review_seconds: int = Field(default=600, ge=1, le=600)
     job_tokens: int = Field(default=250_000, ge=1, le=250_000)
-    specialist_tokens: int = Field(default=50_000, ge=1, le=50_000)
-    planner_tokens: int = Field(default=25_000, ge=1, le=25_000)
     planner_output_tokens: int = Field(default=4096, ge=512, le=8192)
-    final_agent_tokens: int = Field(default=50_000, ge=1, le=50_000)
     concurrent_model_calls: int = Field(default=3, ge=1, le=3)
     iterations_per_task: int = Field(default=8, ge=1, le=8)
     tool_calls_per_task: int = Field(default=12, ge=1, le=12)
@@ -457,9 +454,6 @@ class AgentContract(ContractModel):
     def authorize_tool(self, name: str, *, produces_measurement_artifact: bool = False) -> str:
         if name in self.allowed_tools:
             return name
-        if (name == "write_artifact" and self.agent_id == AgentId.PERFORMANCE_SCALABILITY
-                and produces_measurement_artifact):
-            return name
         raise PermissionError(f"{self.agent_id.value} is not permitted to use {name}")
 
     def validate_action(self, action: AgentAction, *, produces_measurement_artifact: bool = False) -> None:
@@ -483,9 +477,7 @@ def _contract(agent_id: AgentId, responsibility: str, tools: set[str], tier: Mod
     return AgentContract(
         agent_id=agent_id, responsibility=responsibility,
         system_prompt=system_policy(agent_id.value, responsibility),
-        model_policy=ModelPolicy(initial_tier=tier, escalation_tier=(
-            ModelTier.MEDIUM if tier == ModelTier.SMALL else ModelTier.STRONG if tier == ModelTier.MEDIUM else None
-        ), max_escalations=0 if tier == ModelTier.STRONG else 1),
+        model_policy=ModelPolicy(initial_tier=tier, escalation_tier=None, max_escalations=0),
         allowed_tools=COMMON_TOOLS | tools,
         shared_state_permissions=("read_scoped_snapshot", "read_selected_context", "read_scoped_evidence",
                                   "read_scoped_blackboard", "submit_to_deterministic_reducer"),
@@ -497,27 +489,27 @@ def _contract(agent_id: AgentId, responsibility: str, tools: set[str], tier: Mod
 AGENT_CONTRACTS = MappingProxyType({
     AgentId.PLANNER: _contract(
         AgentId.PLANNER, "Select specialists, priority files/symbols, risks, tasks and review strategy from deterministic signals",
-        {"repo_map", "git_diff", "symbol_lookup", "dependency_graph", "config_read"}, ModelTier.SMALL,
+        {"repo_map", "symbol_lookup", "call_graph"}, ModelTier.SMALL,
         output_schema="ReviewPlan",
         actions=frozenset({"request_context", "call_tool", "submit_plan", "finish"})),
     AgentId.BUG_RELIABILITY: _contract(
         AgentId.BUG_RELIABILITY, "Investigate failure paths, exceptions, resource lifecycle and reliability",
-        {"parse_ast", "git_diff", "code_search", "symbol_lookup", "call_graph"}, ModelTier.MEDIUM),
+        {"parse_ast", "code_search", "symbol_lookup", "call_graph"}, ModelTier.MEDIUM),
     AgentId.LOGIC_CORRECTNESS: _contract(
         AgentId.LOGIC_CORRECTNESS, "Trace behavioral invariants and cross-symbol control/data flow",
         {"parse_ast", "call_graph", "symbol_lookup", "code_search"}, ModelTier.MEDIUM),
     AgentId.QUALITY_TESTABILITY: _contract(
         AgentId.QUALITY_TESTABILITY, "Assess complexity, coupling, test gaps and maintainability with evidence",
-        {"complexity", "parse_ast", "code_search", "dependency_graph"}, ModelTier.MEDIUM),
+        {"parse_ast", "code_search", "symbol_lookup", "call_graph"}, ModelTier.MEDIUM),
     AgentId.ARCHITECTURE_SECURITY: _contract(
         AgentId.ARCHITECTURE_SECURITY, "Inspect boundaries, dependencies, configuration and exploitable paths",
-        {"repo_map", "dependency_graph", "import_graph", "config_read", "git_history", "code_search"}, ModelTier.STRONG),
+        {"repo_map", "call_graph", "symbol_lookup", "code_search"}, ModelTier.STRONG),
     AgentId.PERFORMANCE_SCALABILITY: _contract(
         AgentId.PERFORMANCE_SCALABILITY, "Measure costly call paths, scaling behavior and DB/query bottlenecks",
-        {"call_graph", "complexity", "parse_ast", "code_search", "dependency_graph"}, ModelTier.MEDIUM),
+        {"call_graph", "parse_ast", "code_search", "symbol_lookup"}, ModelTier.MEDIUM),
     AgentId.SYNTHESIZER_VERIFIER: _contract(
         AgentId.SYNTHESIZER_VERIFIER, "Verify evidence, resolve duplicates/conflicts, then synthesize a structured draft",
-        {"code_search", "symbol_lookup", "call_graph", "dependency_graph"}, ModelTier.STRONG,
+        {"code_search", "symbol_lookup", "call_graph", "parse_ast"}, ModelTier.STRONG,
         output_schema="VerificationSynthesisResult",
         actions=frozenset({"request_context", "call_tool", "submit_verification", "request_followup", "submit_synthesis", "finish"})),
 })

@@ -9,7 +9,6 @@ from devwatch.providers.base import LLMRequest
 from devwatch.providers.openai_adapter import OpenAIProviderAdapter
 from devwatch.review.contracts import BalancedLimits, ModelTier, SPECIALISTS
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_repository_context import setup_repository
@@ -17,7 +16,7 @@ from tests.test_repository_context import setup_repository
 
 def test_short_source_reads_clamp_requested_end_to_real_eof(tmp_path):
     _, _, _, repository, task = setup_repository(tmp_path)
-    observation = repository._read_source({"file_path": "service.py", "start_line": 1, "end_line": 80}, task)
+    observation = repository._read_file({"file_path": "service.py", "start_line": 1, "end_line": 80}, task)
     record = repository.evidence(observation.evidence_ref)
     assert (record["start_line"], record["end_line"]) == (1, 2)
     assert record["data"] == "def first(items):\n    return items[0]"
@@ -30,7 +29,7 @@ def test_short_source_reads_clamp_requested_end_to_real_eof(tmp_path):
 def test_eof_clamping_does_not_admit_invalid_or_unbounded_ranges(tmp_path, arguments):
     _, _, _, repository, task = setup_repository(tmp_path)
     with pytest.raises(ValueError):
-        repository._read_source({"file_path": "service.py", **arguments}, task)
+        repository._read_file({"file_path": "service.py", **arguments}, task)
 
 
 @pytest.mark.asyncio
@@ -55,7 +54,7 @@ async def test_every_role_uses_json_actions_and_bounded_reasoning_through_sdk_fu
             action["payload"]["review_tasks"][0]["agent_id"] = specialist.value
         elif role == specialist.value and action["kind"] == "submit_candidates":
             action["payload"]["agent_id"] = specialist.value
-        if action["kind"] == "call_tool" and action["tool"] == "read_source":
+        if action["kind"] == "call_tool" and action["tool"] == "read_file":
             action["arguments"]["end_line"] = 80
         content = json.dumps(action)
         # Visible fenced JSON was observed live outside JSON mode. Model the
@@ -72,10 +71,10 @@ async def test_every_role_uses_json_actions_and_bounded_reasoning_through_sdk_fu
         return client
     adapter = OpenAIProviderAdapter(provider_name="gemini", request_delay=0)
     monkeypatch.setattr(adapter, "_get_httpx_async_client", transport)
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
-    executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
+    executor = CanonicalReviewExecutor(layout, artifacts, jobs,
         adapter, models={tier: "fixture-model" for tier in ModelTier})
-    manager = DurableJobManager(jobs, events, executor)
+    manager = DurableJobManager(jobs, executor)
     try:
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id},
                                    idempotency_key="m13-live-remediation",

@@ -8,9 +8,8 @@ import pytest
 
 from devwatch.providers.base import LLMResponse, LLMUsage
 from devwatch.review.contracts import AgentId, ModelTier
-from devwatch.review.jobs import DurableJobManager, EventStore, JobStore
-from devwatch.review.activity_stream import ActivityEvent
-from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
+from devwatch.review.jobs import DurableJobManager, JobStore
+from devwatch.review.stores import ArtifactStore, StoreLayout
 from tests.test_control_agents import plan_payload
 from tests.verification_fixtures import reviewed
 
@@ -37,7 +36,7 @@ class ReviewProvider:
             action = dict(kind="submit_plan", payload=plan_payload())
         elif role == "logic_correctness":
             if not data["private_state"]["evidence_refs"]:
-                action = dict(kind="call_tool", tool="read_source", arguments={"file_path": "service.py"})
+                action = dict(kind="call_tool", tool="read_file", arguments={"file_path": "service.py"})
             else:
                 candidate = dict(category="logic", title="Empty input raises", description="The first item is indexed without an empty check",
                     impact="Request can fail", confidence=0.9, evidence_refs=data["private_state"]["evidence_refs"],
@@ -69,20 +68,20 @@ class ReviewProvider:
 
 def stores(tmp_path):
     layout = StoreLayout(tmp_path / "runtime")
-    artifacts = ArtifactStore(layout.artifacts)
+    artifacts = ArtifactStore(layout.app_db)
     snapshot = artifacts.capture(owner="alice", files={"service.py": "def first(items):\n    return items[0]\n", "skipped.ts": "export const x = 1;\n"})
-    jobs, events = JobStore(layout.jobs), EventStore(layout.events)
-    return layout, artifacts, snapshot, jobs, events
+    jobs = JobStore(layout.app_db)
+    return layout, artifacts, snapshot, jobs
 
 
 def test_full_graph_returns_an_accepted_report_and_persistent_agent_events(tmp_path):
     api = workflow_api()
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = ReviewProvider()
-        executor = api.CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        executor = api.CanonicalReviewExecutor(layout, artifacts, jobs,
                                               provider, models={tier: tier.value for tier in ModelTier})
-        manager = DurableJobManager(jobs, events, executor)
+        manager = DurableJobManager(jobs, executor)
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="intent-1")
         completed = await manager.wait(job.job_id, owner="alice")
         assert completed.status == "completed"
@@ -92,22 +91,12 @@ def test_full_graph_returns_an_accepted_report_and_persistent_agent_events(tmp_p
         assert report["coverage"]["inspected_files"] == ["service.py"]
         assert report["coverage"]["skipped"]["skipped.ts"] == "not_inspected"
         assert completed.ledger.total_tokens == 60
-        jobs.dispatch_events(events)
-        stream = events.replay(job.job_id)
-        activities = [event for event in stream if isinstance(event, ActivityEvent)]
-        identities = {event.data.agentId for event in activities if event.type == "activity.started"
-                      and event.activityType == "result" and event.data.agentId}
-        assert identities == {AgentId.PLANNER, AgentId.LOGIC_CORRECTNESS, AgentId.SYNTHESIZER_VERIFIER}
-        assert any(event.type == "activity.started" and event.activityType == "file_read" for event in activities)
-        final_responses = [event for event in activities if event.type == "activity.completed"
-                           and event.activityType == "response" and event.data.text]
-        assert len(final_responses) == 1
-        response = final_responses[0]
-        assert response.data.text == report["summary"]
-        assert "".join(event.data.text or "" for event in activities if event.activityId == response.activityId
-                       and event.type == "activity.delta") == response.data.text
-        assert not any(event.kind in {"agent_started", "tool_called", "tool_result"} for event in stream
-                       if not isinstance(event, ActivityEvent))
+        stream = jobs.events(job.job_id, owner="alice")
+        steps = [event for event in stream if event.type == "step_update"]
+        identities = {event.payload["agent_name"] for event in steps
+                      if event.payload.get("step_type") == "agent_run" and event.payload.get("agent_name")}
+        assert identities == {AgentId.PLANNER.value, AgentId.LOGIC_CORRECTNESS.value, AgentId.SYNTHESIZER_VERIFIER.value}
+        assert any(event.payload.get("step_type") == "read_file" for event in steps)
         assert all("return items[0]" not in event.model_dump_json() for event in stream)
         await manager.close()
     asyncio.run(scenario())
@@ -116,11 +105,11 @@ def test_full_graph_returns_an_accepted_report_and_persistent_agent_events(tmp_p
 def test_one_followup_reuses_cumulative_agent_budgets_and_never_renders_early(tmp_path):
     api = workflow_api()
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = ReviewProvider(followup=True)
-        executor = api.CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        executor = api.CanonicalReviewExecutor(layout, artifacts, jobs,
                                               provider, models={tier: tier.value for tier in ModelTier})
-        manager = DurableJobManager(jobs, events, executor)
+        manager = DurableJobManager(jobs, executor)
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="intent-2")
         completed = await manager.wait(job.job_id, owner="alice")
         assert completed.status == "completed"
@@ -137,10 +126,10 @@ def test_one_followup_reuses_cumulative_agent_budgets_and_never_renders_early(tm
 def test_forged_candidate_is_failed_coverage_instead_of_a_published_finding(tmp_path):
     api = workflow_api()
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
-        executor = api.CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
+        executor = api.CanonicalReviewExecutor(layout, artifacts, jobs,
             ReviewProvider(invalid=True), models={tier: tier.value for tier in ModelTier})
-        manager = DurableJobManager(jobs, events, executor)
+        manager = DurableJobManager(jobs, executor)
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="intent-3")
         completed = await manager.wait(job.job_id, owner="alice")
         assert completed.status == "completed"
@@ -154,9 +143,9 @@ def test_forged_candidate_is_failed_coverage_instead_of_a_published_finding(tmp_
 def test_snapshot_ownership_is_checked_before_any_model_call(tmp_path):
     api = workflow_api()
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = ReviewProvider()
-        executor = api.CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        executor = api.CanonicalReviewExecutor(layout, artifacts, jobs,
                                               provider, models={tier: tier.value for tier in ModelTier})
         job = jobs.submit(owner="bob", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="intent-4")
         with pytest.raises(PermissionError):

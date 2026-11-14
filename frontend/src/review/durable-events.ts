@@ -1,18 +1,17 @@
 /** Authenticated, bounded SSE replay. Stopping observation never cancels execution. */
 import { ConnectionError, DurableReviewClient } from './durable-client'
 import {
-  ActivityEvent,
   identity,
+  JobEvent,
   JobStatus,
   JobView,
-  PersistedEvent,
   ProtocolError,
   ReportDraft,
+  StepRenderInfo,
   StepStatus,
   StepType,
   StepUpdatePayload,
   StreamEvent,
-  validateWire,
 } from './wire'
 
 const LIVE_STEP_OUTPUT_CAP_BYTES = 65536
@@ -168,8 +167,8 @@ export function reduceTrajectorySteps(
 ): TrajectoryStep[] {
   let map = new Map<number, TrajectoryStep>()
   for (const event of events) {
-    if (!('kind' in event) || event.kind !== 'step_update') continue
-    const p = event.payload
+    if (event.type !== 'step_update') continue
+    const p = event.payload as Record<string, any>
     if (p.step_idx == null || !p.step_type) continue
     const stepStatus = (p.step_status ?? (p.status as StepStatus | null) ?? 'RUNNING') as StepStatus
     map = applyStepUpdate(
@@ -181,7 +180,7 @@ export function reduceTrajectorySteps(
         step_type: p.step_type,
         status: stepStatus,
         delta_seq: p.delta_seq ?? 0,
-        render_info: p.render_info ?? {},
+        render_info: (p.render_info ?? {}) as StepRenderInfo,
         error_details: p.error_details ?? null,
       },
       p.agent_id,
@@ -227,19 +226,29 @@ export class SseParser {
   finish(): void { this.line = ''; this.data = []; this.frame = { id: '', kind: '', data: '' }; this.bytes = 0; this.skipLf = false }
 }
 
-export function parseEvent(frame: SseFrame, jobId: string): StreamEvent {
+export function parseEvent(frame: SseFrame, jobId: string): JobEvent {
   let data: unknown
   try { data = JSON.parse(frame.data) } catch { throw new ProtocolError() }
-  if (data && typeof data === 'object' && 'type' in data) {
-    const event = validateWire<ActivityEvent>('ActivityEvent', data)
-    if (event.runId !== jobId || !Number.isSafeInteger(event.sequence) || frame.id !== String(event.sequence)
-      || frame.kind !== event.type) throw new ProtocolError()
-    return event
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new ProtocolError()
+  const event = data as Record<string, unknown>
+  if (
+    event.job_id !== jobId
+    || typeof event.seq !== 'number'
+    || !Number.isSafeInteger(event.seq)
+    || event.seq < 1
+    || frame.id !== String(event.seq)
+    || typeof event.type !== 'string'
+    || !event.type
+    || frame.kind !== event.type
+    || !event.payload
+    || typeof event.payload !== 'object'
+    || Array.isArray(event.payload)
+    || typeof event.timestamp !== 'number'
+    || !Number.isFinite(event.timestamp)
+  ) {
+    throw new ProtocolError()
   }
-  const event = validateWire<PersistedEvent>('PersistedEvent', data)
-  if (event.job_id !== jobId || !Number.isSafeInteger(event.sequence) || frame.id !== String(event.sequence)
-    || frame.kind !== event.kind) throw new ProtocolError()
-  return event
+  return event as unknown as JobEvent
 }
 
 export interface JobObserver {
@@ -255,7 +264,7 @@ export function observeJob(client: DurableReviewClient, jobId: string, observer:
   options: { after?: number; retryDelayMs?: number } = {}): Observation {
   identity(jobId)
   let cursor = options.after ?? 0
-  const seenIds = new Set<string>()
+  const seenSeqs = new Set<number>()
   const retryDelay = options.retryDelayMs ?? 250
   if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isFinite(retryDelay) || retryDelay < 1 || retryDelay > 10000) throw new ProtocolError('Invalid replay options')
   const lifecycle = new AbortController()
@@ -307,15 +316,14 @@ export function observeJob(client: DurableReviewClient, jobId: string, observer:
             try { decoded = decoder.decode(chunk.value, { stream: true }) } catch { throw new ProtocolError() }
             for (const frame of parser.feed(decoded)) {
               const event = parseEvent(frame, jobId)
-              if (event.sequence <= cursor) continue
-              const eventId = 'type' in event ? event.eventId : event.event_id
-              if (seenIds.has(eventId)) { cursor = event.sequence; continue }
+              if (event.seq <= cursor) continue
+              if (seenSeqs.has(event.seq)) { cursor = event.seq; continue }
               await consume(observer.onEvent, event)
               if (lifecycle.signal.aborted) return
-              cursor = event.sequence
-              seenIds.add(eventId)
-              if (seenIds.size > 2000) seenIds.delete(seenIds.values().next().value!)
-              if ('kind' in event && event.kind === 'budget_updated' && observer.onJob && performance.now() - lastAccountingRefresh >= 1000) {
+              cursor = event.seq
+              seenSeqs.add(event.seq)
+              if (seenSeqs.size > 2000) seenSeqs.delete(seenSeqs.values().next().value!)
+              if (event.type === 'budget_updated' && observer.onJob && performance.now() - lastAccountingRefresh >= 1000) {
                 const currentJob = await client.status(jobId, lifecycle.signal)
                 await consume(observer.onJob, currentJob)
                 lastAccountingRefresh = performance.now()

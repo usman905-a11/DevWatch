@@ -92,9 +92,9 @@ async def test_full_graph_preserves_duplicates_through_normal_and_partial_accept
                 if mode == "synthesis_failure":
                     action["payload"] = {"invalid": True}
             return response.model_copy(update={"content": json.dumps(action)})
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
-    executor = executor_for(layout, artifacts, jobs, events, DuplicatesProvider(["logic-a", "logic-b"]))
-    manager = DurableJobManager(jobs, events, executor)
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
+    executor = executor_for(layout, artifacts, jobs, DuplicatesProvider(["logic-a", "logic-b"]))
+    manager = DurableJobManager(jobs, executor)
     try:
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="duplicates")
         done = await manager.wait(job.job_id, owner="alice")

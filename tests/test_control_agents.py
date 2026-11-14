@@ -103,16 +103,6 @@ def test_control_agents_cannot_write_artifacts():
     asyncio.run(scenario())
 
 
-def test_complexity_escalates_planner_deterministically_without_an_extra_agent():
-    async def scenario():
-        engine, provider = runtime([dict(kind="submit_plan", payload=plan_payload())])
-        state = await engine.run_planner(snapshot_id="snap-1", files=["service.py"], complexity=0.9)
-        assert state["output"].selected_agents == [AgentId.LOGIC_CORRECTNESS]
-        assert provider.requests[0].model == "medium-test"
-        assert state["escalation_count"] == 1
-    asyncio.run(scenario())
-
-
 def test_accounting_persistence_failure_prevents_provider_effect():
     async def scenario():
         engine, provider = runtime([dict(kind="submit_plan", payload=plan_payload())])

@@ -18,16 +18,15 @@ from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
 
 from devwatch.review.budgets import BudgetManager
-from devwatch.review.activity_stream import ActivityEvent, ActivityStream, AgentActivityPublisher
 from devwatch.review.declared_context import load_declared_context
 from devwatch.review.contracts import (
     AgentId, AgentPrivateState, AgentWorkItem, ReviewPlan, ReviewTask, SpecialistResult,
     VerificationPhaseResult, VerificationSynthesisResult, VerificationDecision, ReportDraft,
 )
 from devwatch.review.finalization import FinalAcceptanceGate, FinalizationWorkflow, assemble_report, render_accepted_report
-from devwatch.review.jobs import EventPayload, EventStore, JobConflict, JobRecord, JobStore, TrajectoryStepTracker, _SQLiteStore, safe_stop_reason
+from devwatch.review.jobs import JobConflict, JobRecord, JobStore, TrajectoryStepTracker, _SQLiteStore, observed_node, safe_stop_reason
 from devwatch.review.repository import RepositoryContext, SharedBlackboard, StructuralEvidenceGate
-from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
+from devwatch.review.stores import ArtifactStore, StoreLayout
 from devwatch.review.subgraphs import AgentSubgraphs
 from devwatch.review.verification import (validate_decision, validate_relations,
     checkpoint_verification, CHALLENGE_POLICY, require_independent_verification)
@@ -87,10 +86,10 @@ class ReviewGraphState(TypedDict, total=False):
 
 
 class CanonicalReviewExecutor:
-    def __init__(self, layout: StoreLayout, artifacts: ArtifactStore, cache: RepoCache,
-                 jobs: JobStore, events: EventStore, provider, *, models):
-        self.layout, self.artifacts, self.cache = layout, artifacts, cache
-        self.jobs, self.events, self.provider, self.models = jobs, events, provider, dict(models)
+    def __init__(self, layout: StoreLayout, artifacts: ArtifactStore,
+                 jobs: JobStore, provider, *, models):
+        self.layout, self.artifacts = layout, artifacts
+        self.jobs, self.provider, self.models = jobs, provider, dict(models)
         self.checkpoints = AgentCheckpoints(layout.checkpoints)
         self.model_slots = asyncio.Semaphore(3)
 
@@ -100,34 +99,33 @@ class CanonicalReviewExecutor:
     def reconcile_models(self, job, budget):
         pending, started, cursor = dict(budget.ledger.inflight), set(), 0
         if pending:
-            self.jobs.dispatch_events(self.events)
             while True:
-                page = self.events.replay(job.job_id, after=cursor)
+                page = self.jobs.events(job.job_id, owner=job.owner, after=cursor)
                 for event in page:
-                    if isinstance(event, ActivityEvent):
-                        if event.type == "activity.started" and event.activityType == "response" and event.activityId in pending:
-                            started.add(event.activityId)
-                    elif event.kind == "model_call_started" and event.payload.operation_id in pending:
-                        started.add(event.payload.operation_id)
+                    if event.type == "model_call_started" and event.payload.get("operation_id") in pending:
+                        started.add(event.payload["operation_id"])
                 if not page or len(started) == len(pending):
                     break
-                cursor = page[-1].sequence
+                cursor = page[-1].seq
         reconciled = []
         for ticket, reservation in pending.items():
             budget.record_model(ticket, prompt_tokens=reservation.tokens, completion_tokens=0)
             if ticket in started:
-                reconciled.append(EventPayload(agent_id=reservation.agent_id, operation_id=ticket,
-                    outcome="unknown", total_tokens=reservation.tokens))
+                reconciled.append({
+                    "agent_id": reservation.agent_id.value,
+                    "operation_id": ticket,
+                    "outcome": "unknown",
+                    "total_tokens": reservation.tokens,
+                })
         # Cost settlement and its unknown-completion events share the Job Store
-        # transaction/outbox. Reservations without a start never invent a call.
+        # transaction. Reservations without a start never invent a call.
         self.jobs.update_ledger(job.job_id, owner=job.owner, ledger=budget.ledger, model_completions=reconciled)
-        self.jobs.dispatch_events(self.events)
 
     async def recover_timeout(self, job: JobRecord):
         """Revalidate persisted evidence after workers drain; never call a model."""
         if job.workflow_version != "seven-agent-v1" or job.ledger.elapsed_seconds < job.limits.review_seconds:
             raise ReviewExecutionError("deadline recovery requires an exhausted canonical job")
-        repository = RepositoryContext(self.artifacts, self.cache, job.request["snapshot_id"], owner=job.owner)
+        repository = RepositoryContext(self.artifacts, job.request["snapshot_id"], owner=job.owner)
         budget = BudgetManager(job.limits, job.ledger.model_copy(deep=True))
         self.reconcile_models(job, budget)
         session = _ReviewSession(self, job, repository, budget, [])
@@ -182,8 +180,6 @@ class CanonicalReviewExecutor:
         workflow = FinalizationWorkflow(partial, no_followup, accept, budget=budget, tasks=tasks,
                                         renderer=lambda accepted: self.render_report(job, accepted), emit=session.emit)
         rendered = (await workflow.run())["rendered"]
-        session.activity.public_response(json.loads(rendered["json"])["summary"])
-        session.activity.finish()
         return rendered
 
     async def __call__(self, job: JobRecord):
@@ -197,12 +193,11 @@ class CanonicalReviewExecutor:
         if "workspace_path" in job.request:
             repository = RepositoryContext(
                 self.artifacts,
-                self.cache,
                 owner=job.owner,
                 workspace_root=job.request["workspace_path"],
             )
         else:
-            repository = RepositoryContext(self.artifacts, self.cache, job.request["snapshot_id"], owner=job.owner)
+            repository = RepositoryContext(self.artifacts, job.request["snapshot_id"], owner=job.owner)
         changed = job.request.get("changed_files", sorted(repository.manifest.entries))
         if not isinstance(changed, list) or any(path not in repository.manifest.entries for path in changed):
             raise ValueError("changed files must belong to the immutable snapshot")
@@ -217,12 +212,8 @@ class CanonicalReviewExecutor:
                 previous = await graph.aget_state(config)
                 try:
                     if previous.values.get("rendered") and not previous.next:
-                        session.activity.public_response(json.loads(previous.values["rendered"]["json"])["summary"])
-                        session.activity.finish()
                         return previous.values["rendered"]
                     result = await graph.ainvoke(None if previous.values else {"snapshot_id": repository.snapshot_id}, config)
-                    session.activity.public_response(json.loads(result["rendered"]["json"])["summary"])
-                    session.activity.finish()
                     return result["rendered"]
                 finally:
                     budget.refresh_time()
@@ -239,8 +230,6 @@ class _ReviewSession:
             if job.crash_recoveries else ()))
         self.review_tasks = {}
         self._persistence_lock = asyncio.Lock()
-        self.activity = AgentActivityPublisher(ActivityStream(job.job_id,
-            lambda event: executor.jobs.publish_activity(job.job_id, owner=job.owner, event=event)))
         self.steps = TrajectoryStepTracker(self.emit)
         self.step_scope = self.steps.step_scope
         self.step = self.steps.step
@@ -253,11 +242,8 @@ class _ReviewSession:
             self.budget.refresh_time()
             self.executor.jobs.update_ledger(self.job.job_id, owner=self.job.owner,
                 ledger=self.budget.ledger, model_completions=[payload])
-        if kind == "step_update":
-            self.executor.jobs.emit(self.job.job_id, owner=self.job.owner, kind="step_update", payload=payload)
             return
-        self.activity.record(kind, **payload)
-        self.executor.jobs.dispatch_events(self.executor.events)
+        self.executor.jobs.emit(self.job.job_id, owner=self.job.owner, event_type=kind, payload=payload)
 
     async def persist_agent(self, state, ledger):
         async with self._persistence_lock:
@@ -323,7 +309,6 @@ class _ReviewSession:
         return AgentPrivateState.model_validate(checkpoint["state"]["private_state"]) if checkpoint else None
 
     def compile(self, saver):
-        from devwatch.review.activity_stream import observed_node
         builder = StateGraph(ReviewGraphState)
         nodes = {"repository_intelligence": self.intelligence, "deterministic_analysis": self.deterministic,
                  "change_analyzer": self.change_analysis, "planner_agent": self.planner,

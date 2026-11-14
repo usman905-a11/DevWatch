@@ -19,7 +19,7 @@ def test_catalogue_exposes_only_registered_role_tools_and_exact_arguments(tmp_pa
     catalogue = tools.catalogue(work)
     names = {entry['name'] for entry in catalogue}
     assert names == AGENT_CONTRACTS[agent].allowed_tools.intersection(tools._handlers)
-    source = next(entry for entry in catalogue if entry['name'] == 'read_source')
+    source = next(entry for entry in catalogue if entry['name'] == 'read_file')
     assert source['arguments']['required'] == ['file_path']
     assert source['arguments']['additionalProperties'] is False
     assert source['arguments']['properties']['start_line']['minimum'] == 1
@@ -35,7 +35,7 @@ def test_catalogue_exposes_only_registered_role_tools_and_exact_arguments(tmp_pa
             await engine.run_specialist(work)
     asyncio.run(run())
     visible = json.loads(provider.requests[0].prompt)['tool_catalogue']
-    expected = ({'read_source'} if agent not in {AgentId.PLANNER, AgentId.SYNTHESIZER_VERIFIER}
+    expected = ({'read_file'} if agent not in {AgentId.PLANNER, AgentId.SYNTHESIZER_VERIFIER}
                 else names - {'read_evidence'})
     assert visible == [entry for entry in catalogue if entry['name'] in expected]
 
@@ -48,4 +48,4 @@ def test_catalogue_exposes_only_registered_role_tools_and_exact_arguments(tmp_pa
 def test_catalogue_argument_validation_precedes_handler(tmp_path, arguments):
     _, _, _, repo, task = setup_repository(tmp_path)
     with pytest.raises(ValueError):
-        asyncio.run(repo.tools().execute(task, AgentAction(kind='call_tool', tool='read_source', arguments=arguments)))
+        asyncio.run(repo.tools().execute(task, AgentAction(kind='call_tool', tool='read_file', arguments=arguments)))

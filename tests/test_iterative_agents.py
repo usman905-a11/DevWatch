@@ -72,11 +72,11 @@ def test_specialist_investigates_with_tool_then_another_model_iteration():
 def test_denied_tool_never_executes_and_reports_failed_coverage():
     api = runtime()
     async def scenario():
-        provider = ScriptedProvider([{"kind": "call_tool", "tool": "config_read", "arguments": {}}])
+        provider = ScriptedProvider([{"kind": "call_tool", "tool": "write_artifact", "arguments": {}}])
         tools = api.PermissionedTools()
         async def forbidden(*args):
             raise AssertionError("role permission was bypassed")
-        tools.register("config_read", forbidden)
+        tools.register("write_artifact", forbidden)
         engine = api.AgentSubgraphs(provider, tools, BudgetManager(), lambda state: {},
                                     models={tier: tier.value for tier in ModelTier})
         state = await engine.run_specialist(task())

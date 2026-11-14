@@ -47,7 +47,7 @@ def test_large_evidence_can_be_reassembled_with_bounded_scoped_pages(tmp_path):
 def test_processing_is_separate_from_delivery_and_acknowledged_inspection(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
     runtime, _ = engine(repo, [
-        {'kind':'call_tool','tool':'read_source','arguments':{'file_path':'service.py'}},
+        {'kind':'call_tool','tool':'read_file','arguments':{'file_path':'service.py'}},
         {'kind':'finish'},
     ])
     state = asyncio.run(runtime.run_specialist(task))
@@ -70,7 +70,7 @@ def candidate(repo, ref):
 @pytest.mark.parametrize('inspect_evidence', [False, True])
 def test_confirmation_requires_delivered_acknowledged_evidence(tmp_path, inspect_evidence):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path':'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path':'service.py'}, task).evidence_ref
     action = dict(kind='submit_verification', payload=dict(decisions=[dict(finding_id='f1', verdict='confirmed',
         confidence=.9, rationale='Index access raises on empty input', evidence_refs=[ref],
         causal_review=reviewed(candidate(repo, ref), [ref]))]))
@@ -87,13 +87,13 @@ def test_confirmation_requires_delivered_acknowledged_evidence(tmp_path, inspect
 
 def test_verifier_can_cite_its_own_scoped_evidence_with_provenance(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path':'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path':'service.py'}, task).evidence_ref
     from tests.test_iterative_agents import ScriptedProvider
     class Provider(ScriptedProvider):
         async def generate_completion(self, request):
             data = json.loads(request.prompt)
             if not data['private_state']['evidence_refs']:
-                self.responses = iter([dict(kind='call_tool',tool='read_source',arguments={'file_path':'service.py','start_line':2,'end_line':2})])
+                self.responses = iter([dict(kind='call_tool',tool='read_file',arguments={'file_path':'service.py','start_line':2,'end_line':2})])
             else:
                 own = data['private_state']['evidence_refs'][0]
                 self.responses = iter([dict(kind='submit_verification', inspected_evidence=[own], payload=dict(decisions=[
@@ -111,12 +111,12 @@ def test_verifier_can_cite_its_own_scoped_evidence_with_provenance(tmp_path):
 
 def test_long_single_line_source_is_stored_and_paged_instead_of_becoming_inaccessible(tmp_path):
     from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import ArtifactStore,RepoCache
-    artifacts=ArtifactStore(tmp_path/'artifacts')
+    from devwatch.review.stores import ArtifactStore
+    artifacts=ArtifactStore(tmp_path/'devwatch.sqlite')
     snapshot=artifacts.capture(owner='alice',files={'service.py':'message = '+repr('x'*30000)+'\n'})
-    repo=RepositoryContext(artifacts,RepoCache(tmp_path/'cache'),snapshot.snapshot_id,owner='alice')
+    repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
     from tests.test_iterative_agents import task
-    observed=repo._read_source({'file_path':'service.py'},task())
+    observed=repo._read_file({'file_path':'service.py'},task())
     page=repo.evidence_page(observed.evidence_ref,task())
     assert page['next_offset'] is not None
     assert len(page['excerpt'].encode())<3000
@@ -124,7 +124,7 @@ def test_long_single_line_source_is_stored_and_paged_instead_of_becoming_inacces
 
 def test_unseen_or_unrelated_evidence_cannot_confirm_a_candidate(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    ref=repo._read_source({'file_path':'service.py'},task).evidence_ref
+    ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     forged='evidence-'+'0'*64
     action=dict(kind='submit_verification',inspected_evidence=[forged],payload={'decisions':[
         dict(finding_id='f1',verdict='confirmed',confidence=.9,rationale='Claim',evidence_refs=[forged])]})

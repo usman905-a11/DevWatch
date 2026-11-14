@@ -11,7 +11,7 @@ import pytest
 from devwatch.review.contracts import ModelTier
 from devwatch.review.repository import RepositoryContext
 from devwatch.review.service import ServiceSettings, create_app
-from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
+from devwatch.review.stores import ArtifactStore, StoreLayout
 
 
 def _make_client(tmp_path: Path) -> TestClient:
@@ -168,11 +168,9 @@ def test_repository_context_reads_live_workspace_without_snapshot_copy(tmp_path:
     (repo / "node_modules" / "skip.js").write_text("ignored\n", encoding="utf-8")
 
     layout = StoreLayout(tmp_path / "runtime")
-    artifacts = ArtifactStore(layout.artifacts)
-    cache = RepoCache(layout.repo_cache)
+    artifacts = ArtifactStore(layout.app_db)
 
-    ctx = RepositoryContext(artifacts, cache, owner="local", workspace_root=repo)
+    ctx = RepositoryContext(artifacts, owner="local", workspace_root=repo)
     assert list(ctx.manifest.entries.keys()) == ["app.py"]
     assert ctx._source("app.py") == "def greet():\n    return 'hi'\n"
-    # No snapshot copy was written to artifacts/snapshots
-    assert list((layout.artifacts / "snapshots").iterdir()) == []
+    assert not (tmp_path / "runtime" / "artifacts" / "snapshots").exists()

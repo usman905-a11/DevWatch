@@ -8,7 +8,6 @@ from devwatch.providers.base import LLMRequest
 from devwatch.providers.openai_adapter import OpenAIProviderAdapter
 from devwatch.review.contracts import BalancedLimits, ModelTier
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 
@@ -34,7 +33,7 @@ async def test_filtered_catalogues_cross_sdk_and_keep_source_backed_report(tmp_p
             if prompt['selected_context'].get('evidence'):
                 assert 'parse_ast' in names
             else:
-                assert names=={'read_source'}
+                assert names=={'read_file'}
         assert sum(len(message['content'].encode()) for message in body['messages'])+body['max_tokens']+512<=20000
         response=await provider.generate_completion(LLMRequest(model=body['model'],prompt=json.dumps(prompt)))
         return httpx.Response(200,json=dict(id='m17-fixture',object='chat.completion',created=1,model=body['model'],
@@ -46,10 +45,10 @@ async def test_filtered_catalogues_cross_sdk_and_keep_source_backed_report(tmp_p
         return client
     adapter=OpenAIProviderAdapter(provider_name='gemini',request_delay=0)
     monkeypatch.setattr(adapter,'_get_httpx_async_client',transport)
-    layout,artifacts,snapshot,jobs,events=stores(tmp_path)
-    executor=CanonicalReviewExecutor(layout,artifacts,RepoCache(layout.repo_cache),jobs,events,
+    layout,artifacts,snapshot,jobs=stores(tmp_path)
+    executor=CanonicalReviewExecutor(layout,artifacts,jobs,
         adapter,models={tier:'fixture-model' for tier in ModelTier})
-    manager=DurableJobManager(jobs,events,executor)
+    manager=DurableJobManager(jobs,executor)
     try:
         job=await manager.submit(owner='alice',request={'snapshot_id':snapshot.snapshot_id},
             idempotency_key='m17-filtered',limits=BalancedLimits(model_context_tokens=20000))

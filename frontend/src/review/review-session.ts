@@ -7,7 +7,7 @@ import {
   reconcileTerminalJobSteps,
   TrajectoryStep,
 } from './durable-events'
-import { JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StepStatus, StreamEvent } from './wire'
+import { JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StepRenderInfo, StepStatus, StepType, StreamEvent } from './wire'
 
 export interface SessionState {
   job: JobView | null; manifest: SnapshotManifest | null; report: ReportDraft | null
@@ -92,23 +92,25 @@ export class ReviewSession {
     this.observation = observeJob(this.client, job.job_id, {
       onEvent: event => {
         if (!current()) return
-        if ('kind' in event && event.kind === 'step_update' && event.payload.step_idx != null && event.payload.step_type) {
-          const p = event.payload
-          const stepStatus = (p.step_status ?? (p.status as StepStatus | null) ?? 'RUNNING') as StepStatus
-          this.stepsByIdx = applyStepUpdate(
-            this.stepsByIdx,
-            {
-              step_idx: p.step_idx!,
-              parent_step_idx: p.parent_step_idx ?? null,
-              agent_name: p.agent_name ?? p.agent_id ?? undefined,
-              step_type: p.step_type!,
-              status: stepStatus,
-              delta_seq: p.delta_seq ?? 0,
-              render_info: p.render_info ?? {},
-              error_details: p.error_details ?? null,
-            },
-            p.agent_id,
-          )
+        if (event.type === 'step_update') {
+          const p = event.payload as Record<string, any>
+          if (p.step_idx != null && p.step_type) {
+            const stepStatus = (p.step_status ?? (p.status as StepStatus | null) ?? 'RUNNING') as StepStatus
+            this.stepsByIdx = applyStepUpdate(
+              this.stepsByIdx,
+              {
+                step_idx: p.step_idx as number,
+                parent_step_idx: (p.parent_step_idx as number | null) ?? null,
+                agent_name: (p.agent_name ?? p.agent_id ?? undefined) as string | undefined,
+                step_type: p.step_type as StepType,
+                status: stepStatus,
+                delta_seq: (p.delta_seq as number | null) ?? 0,
+                render_info: (p.render_info ?? {}) as StepRenderInfo,
+                error_details: (p.error_details as string | null) ?? null,
+              },
+              p.agent_id as string | null | undefined,
+            )
+          }
         }
         this.update({
           events: [...this.state.events, event].slice(-200),
@@ -143,10 +145,11 @@ export class ReviewSession {
   }
   async openSource(path: string, start: number, end: number) {
     const job = this.state.job, navigation = ++this.navigation, generation = this.generation
-    if (!job) return
+    const snapshotId = job?.snapshot_id ?? this.state.report?.snapshot_id
+    if (!job || !snapshotId) return
     this.update({ source: null, sourceError: null })
     try {
-      const source = await this.client.source(job.job_id, job.snapshot_id, path, start, end, this.request.signal)
+      const source = await this.client.source(job.job_id, snapshotId, path, start, end, this.request.signal)
       if (generation === this.generation && navigation === this.navigation) this.update({ source })
     } catch {
       if (generation === this.generation && navigation === this.navigation) this.update({ sourceError: 'Source excerpt unavailable. Select a smaller range and retry.' })

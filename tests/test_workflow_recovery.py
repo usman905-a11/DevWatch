@@ -5,7 +5,6 @@ import json
 
 from devwatch.review.contracts import ModelTier
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.assembly_fixtures import held_assembly
@@ -13,7 +12,7 @@ from tests.assembly_fixtures import held_assembly
 
 def test_resume_after_verification_continues_synthesis_without_reverifying(tmp_path):
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         synthesis_entered = asyncio.Event()
         class PausedProvider(ReviewProvider):
             async def generate_completion(self, request):
@@ -22,9 +21,9 @@ def test_resume_after_verification_continues_synthesis_without_reverifying(tmp_p
                     await asyncio.Event().wait()
                 return await super().generate_completion(request)
         first = PausedProvider()
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs,
                                           first, models={tier: tier.value for tier in ModelTier})
-        manager = DurableJobManager(jobs, events, executor)
+        manager = DurableJobManager(jobs, executor)
         with held_assembly(first, synthesis_entered):
             job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="resume")
             await asyncio.wait_for(synthesis_entered.wait(), timeout=20)
@@ -33,9 +32,9 @@ def test_resume_after_verification_continues_synthesis_without_reverifying(tmp_p
         assert interrupted.status == "interrupted"
         tokens_before = interrupted.ledger.total_tokens
         second = ReviewProvider()
-        resumed_executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        resumed_executor = CanonicalReviewExecutor(layout, artifacts, jobs,
                                                   second, models={tier: tier.value for tier in ModelTier})
-        resumed = DurableJobManager(jobs, events, resumed_executor)
+        resumed = DurableJobManager(jobs, resumed_executor)
         await resumed.resume(job.job_id, owner="alice")
         completed = await resumed.wait(job.job_id, owner="alice")
         assert completed.status == "completed"
@@ -48,7 +47,7 @@ def test_resume_after_verification_continues_synthesis_without_reverifying(tmp_p
 
 def test_resume_preserves_an_admitted_followup_and_does_not_repeat_it(tmp_path):
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         admitted = asyncio.Event()
         class PausedFollowupProvider(ReviewProvider):
             async def generate_completion(self, request):
@@ -57,17 +56,17 @@ def test_resume_preserves_an_admitted_followup_and_does_not_repeat_it(tmp_path):
                     admitted.set()
                     await asyncio.Event().wait()
                 return await super().generate_completion(request)
-        executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs,
             PausedFollowupProvider(followup=True), models={tier: tier.value for tier in ModelTier})
-        manager = DurableJobManager(jobs, events, executor)
+        manager = DurableJobManager(jobs, executor)
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="followup")
         await asyncio.wait_for(admitted.wait(), timeout=10)
         await manager.close()
         assert jobs.get(job.job_id, owner="alice").ledger.review_round == 2
         second = ReviewProvider(followup=True)
-        resumed_executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+        resumed_executor = CanonicalReviewExecutor(layout, artifacts, jobs,
                                                   second, models={tier: tier.value for tier in ModelTier})
-        resumed = DurableJobManager(jobs, events, resumed_executor)
+        resumed = DurableJobManager(jobs, resumed_executor)
         await resumed.resume(job.job_id, owner="alice")
         completed = await resumed.wait(job.job_id, owner="alice")
         assert completed.status == "completed"

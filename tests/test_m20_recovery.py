@@ -11,7 +11,7 @@ from tests.verification_fixtures import decision
 
 def setup(tmp_path):
     _, _, _, repo, task = setup_repository(tmp_path)
-    ref = repo._read_source({'file_path': 'service.py'}, task).evidence_ref
+    ref = repo._read_file({'file_path': 'service.py'}, task).evidence_ref
     board = SharedBlackboard(StructuralEvidenceGate(repo))
     board.publish(task, SpecialistResult(task_id=task.task_id, agent_id=task.agent_id,
         candidates=[candidate(repo, ref)], coverage={}, stop_reason='evidence_complete'))
@@ -66,8 +66,8 @@ def test_restored_synthesis_requires_every_cited_artifact_to_be_fully_inspected(
     from devwatch.review.contracts import EvidenceProgress
     from tests.test_audit_evidence import engine
     _, _, _, repo, task = setup_repository(tmp_path)
-    first = repo._read_source({'file_path':'service.py'}, task).evidence_ref
-    second = repo._read_source({'file_path':'service.py', 'start_line':2, 'end_line':2}, task).evidence_ref
+    first = repo._read_file({'file_path':'service.py'}, task).evidence_ref
+    second = repo._read_file({'file_path':'service.py', 'start_line':2, 'end_line':2}, task).evidence_ref
     claim = candidate(repo, first)
     progress = {}
     for ref, complete in ((first, True), (second, False)):

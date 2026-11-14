@@ -7,7 +7,7 @@ import pytest
 from devwatch.review.capture import capture_source
 from devwatch.review.contracts import AgentAction, AgentId, ReviewTask
 from devwatch.review.repository import RepositoryContext
-from devwatch.review.stores import ArtifactStore, RepoCache
+from devwatch.review.stores import ArtifactStore
 
 
 def test_capture_keeps_staged_and_unstaged_git_evidence_snapshot_bound(tmp_path):
@@ -27,15 +27,15 @@ def test_capture_keeps_staged_and_unstaged_git_evidence_snapshot_bound(tmp_path)
     assert "+value = 2" in capture.git_metadata.diffs["service.py"]["staged"]
     assert "+value = 3" in capture.git_metadata.diffs["service.py"]["unstaged"]
     assert "Initial fixture" in str(capture.git_metadata.history["service.py"])
-    artifacts = ArtifactStore(tmp_path / "artifacts")
+    artifacts = ArtifactStore(tmp_path / "devwatch.sqlite")
     snapshot = artifacts.capture(owner="alice", files=capture.files, git_metadata=capture.git_metadata)
     (root / "service.py").write_text("value = 99\n")
-    repo = RepositoryContext(artifacts, RepoCache(tmp_path / "cache.sqlite"), snapshot.snapshot_id, owner="alice")
+    repo = RepositoryContext(artifacts, snapshot.snapshot_id, owner="alice")
     task = ReviewTask(task_id="bug", agent_id=AgentId.BUG_RELIABILITY, files=["service.py"], focus="Changed value")
     async def scenario():
-        evidence = await repo.tools().execute(task, AgentAction(kind="call_tool", tool="git_diff", arguments={"file_path": "service.py"}))
+        evidence = await repo.tools().execute(task, AgentAction(kind="call_tool", tool="read_file", arguments={"file_path": "service.py"}))
         record = repo.evidence(evidence.evidence_ref)
-        assert "+value = 3" in str(record) and "value = 99" not in str(record)
+        assert "value = 3" in str(record) and "value = 99" not in str(record)
         assert "DO-NOT-UPLOAD" not in str(snapshot.model_dump())
         with pytest.raises(PermissionError):
             artifacts.manifest(snapshot.snapshot_id, owner="bob")

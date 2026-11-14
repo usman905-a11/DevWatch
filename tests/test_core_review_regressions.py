@@ -7,21 +7,20 @@ import pytest
 
 from devwatch.review.contracts import AgentAction, AgentId, AgentPrivateState, ModelTier, ReviewPlan
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import plan_payload
 from tests.test_repository_context import setup_repository
 
 
-def executor_for(layout, artifacts, jobs, events, provider):
-    return CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+def executor_for(layout, artifacts, jobs, provider):
+    return CanonicalReviewExecutor(layout, artifacts, jobs,
                                   provider, models={tier: tier.value for tier in ModelTier})
 
 
 def test_initial_specialist_interruption_resumes_investigation(tmp_path):
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         entered = asyncio.Event()
         class PausedSpecialist(ReviewProvider):
             async def generate_completion(self, request):
@@ -29,12 +28,12 @@ def test_initial_specialist_interruption_resumes_investigation(tmp_path):
                     entered.set()
                     await asyncio.Event().wait()
                 return await super().generate_completion(request)
-        manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, PausedSpecialist()))
+        manager = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, PausedSpecialist()))
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="initial-resume")
         await asyncio.wait_for(entered.wait(), 10)
         await manager.close()
         provider = ReviewProvider()
-        resumed = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, provider))
+        resumed = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, provider))
         await resumed.resume(job.job_id, owner="alice")
         completed = await resumed.wait(job.job_id, owner="alice")
         assert completed.status == "completed"
@@ -47,7 +46,7 @@ def test_initial_specialist_interruption_resumes_investigation(tmp_path):
 def test_failed_dispatch_cancels_and_drains_other_specialists(tmp_path, monkeypatch):
     from devwatch.review.workflow import _ReviewSession
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         entered, cancelled = asyncio.Event(), asyncio.Event()
         class PausedSibling(ReviewProvider):
             async def generate_completion(self, request):
@@ -72,7 +71,7 @@ def test_failed_dispatch_cancels_and_drains_other_specialists(tmp_path, monkeypa
                 raise OSError("event persistence unavailable")
             return await original(self, task, **kwargs)
         monkeypatch.setattr(_ReviewSession, "run_task", fail_one)
-        manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, PausedSibling()))
+        manager = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, PausedSibling()))
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="sibling")
         failed = await manager.wait(job.job_id, owner="alice")
         assert failed.status == "failed"
@@ -98,7 +97,7 @@ def test_aggregate_evidence_cannot_be_retrieved_or_attached_outside_task_scope(t
             await repo.tools().execute(task, AgentAction(kind="call_tool", tool="read_evidence", arguments={"evidence_ref": observed.evidence_ref}))
         with pytest.raises(PermissionError):
             repo.context({"task": task, "private_state": AgentPrivateState(evidence_refs=[observed.evidence_ref]), "action": None})
-        source = await repo.tools().execute(task, AgentAction(kind="call_tool", tool="read_source", arguments={"file_path": "service.py"}))
+        source = await repo.tools().execute(task, AgentAction(kind="call_tool", tool="read_file", arguments={"file_path": "service.py"}))
         from devwatch.review.contracts import FindingCandidate
         candidate = FindingCandidate(category="logic", title="Claim", description="Claim", impact="Failure", confidence=0.7,
             location=dict(snapshot_id=manifest.snapshot_id, file_path="service.py", start_line=2, end_line=2),
@@ -110,11 +109,11 @@ def test_aggregate_evidence_cannot_be_retrieved_or_attached_outside_task_scope(t
 
 def test_large_python_ast_does_not_exhaust_planner_before_first_call(tmp_path):
     async def scenario():
-        layout, artifacts, _, jobs, events = stores(tmp_path)
+        layout, artifacts, _, jobs = stores(tmp_path)
         source = "\n".join(f"def function_{index}(items):\n    return items[0]\n" for index in range(600))
         snapshot = artifacts.capture(owner="alice", files={"service.py": source})
         provider = ReviewProvider()
-        manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, provider))
+        manager = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, provider))
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="large-ast")
         completed = await manager.wait(job.job_id, owner="alice")
         assert completed.status == "completed"
@@ -127,9 +126,9 @@ def test_large_python_ast_does_not_exhaust_planner_before_first_call(tmp_path):
 
 def test_final_agent_receives_task_ids_and_runtime_candidate_provenance(tmp_path):
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = ReviewProvider()
-        manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, provider))
+        manager = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, provider))
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="provenance")
         assert (await manager.wait(job.job_id, owner="alice")).status == "completed"
         context = next(json.loads(request.prompt)["selected_context"] for request in provider.requests if json.loads(request.prompt)["phase"] == "verification")
@@ -141,7 +140,7 @@ def test_final_agent_receives_task_ids_and_runtime_candidate_provenance(tmp_path
 
 def test_synthesis_cannot_claim_inspection_of_unopened_source(tmp_path):
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         class InventedCoverage(ReviewProvider):
             async def generate_completion(self, request):
                 response = await super().generate_completion(request)
@@ -150,7 +149,7 @@ def test_synthesis_cannot_claim_inspection_of_unopened_source(tmp_path):
                     action["payload"]["report_draft"]["coverage"] = dict(inspected_files=["service.py", "skipped.ts"], inspected_symbols=["invented"])
                     response = response.model_copy(update={"content": json.dumps(action)})
                 return response
-        manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, InventedCoverage()))
+        manager = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, InventedCoverage()))
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="coverage")
         completed = await manager.wait(job.job_id, owner="alice")
         assert completed.status == "completed"
@@ -164,12 +163,12 @@ def test_synthesis_cannot_claim_inspection_of_unopened_source(tmp_path):
 
 def test_final_iteration_exhaustion_returns_a_partial_uncertain_report(tmp_path):
     async def scenario():
-        layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+        layout, artifacts, snapshot, jobs = stores(tmp_path)
         from devwatch.review.budgets import BudgetLedger
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="partial")
         jobs.update_ledger(job.job_id, owner="alice", ledger=BudgetLedger(task_iterations={"__final": 8}))
         provider = ReviewProvider()
-        manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, provider))
+        manager = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, provider))
         await manager.start()
         completed = await manager.wait(job.job_id, owner="alice")
         assert completed.status == "completed"

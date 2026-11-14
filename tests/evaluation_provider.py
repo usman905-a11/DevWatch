@@ -34,7 +34,7 @@ class EvaluationProvider:
                 action = {'kind': 'call_tool', 'tool': 'read_evidence', 'arguments': {
                     'evidence_ref': pending['evidence_ref'], 'offset': pending['next_offset']}}
             elif missing:
-                action = {"kind": "call_tool", "tool": "read_source", "arguments": {"file_path": missing[0]}}
+                action = {"kind": "call_tool", "tool": "read_file", "arguments": {"file_path": missing[0]}}
             else:
                 candidates = []
                 delivered = " ".join(page["excerpt"] for page in context["evidence"])
@@ -49,7 +49,7 @@ class EvaluationProvider:
         elif phase == "verification":
             if state["candidates"] and not private["evidence_refs"]:
                 location = next(iter(state["candidates"].values()))["location"]
-                action = {"kind": "call_tool", "tool": "read_source", "arguments": {
+                action = {"kind": "call_tool", "tool": "read_file", "arguments": {
                     "file_path": location["file_path"], "start_line": location["start_line"], "end_line": location["end_line"]}}
             else:
                 action = {"kind": "submit_verification", "payload": {"decisions": [{"finding_id": identity,

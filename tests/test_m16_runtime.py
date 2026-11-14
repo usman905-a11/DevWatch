@@ -8,7 +8,6 @@ from devwatch.providers.base import LLMRequest
 from devwatch.providers.openai_adapter import OpenAIProviderAdapter
 from devwatch.review.contracts import BalancedLimits, ModelTier
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 
@@ -32,7 +31,7 @@ async def test_sdk_investigation_repair_and_stops_reach_honest_accepted_reports(
                 candidate = action['payload']['candidates'][0]
                 action['payload']['candidates'].append({**candidate, 'title': 'Unsupported sibling', 'evidence_refs': ['missing']})
             elif mode == 'no_progress':
-                action = dict(kind='call_tool', tool='read_source', arguments={'file_path': 'service.py'},
+                action = dict(kind='call_tool', tool='read_file', arguments={'file_path': 'service.py'},
                               inspected_evidence=action['inspected_evidence'])
         assert sum(len(message['content'].encode()) for message in body['messages']) + body['max_tokens'] + 512 <= 20000
         return httpx.Response(200, json=dict(id='m16-fixture', object='chat.completion', created=1, model=body['model'],
@@ -46,10 +45,10 @@ async def test_sdk_investigation_repair_and_stops_reach_honest_accepted_reports(
 
     adapter = OpenAIProviderAdapter(provider_name='gemini', request_delay=0)
     monkeypatch.setattr(adapter, '_get_httpx_async_client', transport)
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
-    executor = CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
+    executor = CanonicalReviewExecutor(layout, artifacts, jobs,
         adapter, models={tier: 'fixture-model' for tier in ModelTier})
-    manager = DurableJobManager(jobs, events, executor)
+    manager = DurableJobManager(jobs, executor)
     try:
         job = await manager.submit(owner='alice', request={'snapshot_id': snapshot.snapshot_id},
             idempotency_key='m16-' + mode, limits=BalancedLimits(model_context_tokens=20000))
@@ -68,13 +67,7 @@ async def test_sdk_investigation_repair_and_stops_reach_honest_accepted_reports(
     assert [finding['title'] for finding in findings] == ([] if mode == 'no_progress' else ['Empty input raises'])
     assert len(specialist) == (2 if mode == 'no_progress' else 3)
     assert done.ledger.task_tools['logic-1'] == 1
-    jobs.dispatch_events(events)
-    stream = events.replay(job.job_id, limit=1000)
-    assert sum(getattr(event, "type", None) == "activity.started" and event.data.message == "candidate_rejected" for event in stream) == int(mode == 'partial_siblings')
-    completed_results = [event for event in stream if getattr(event, "type", None) in {"activity.completed", "activity.failed"}
-                         and event.activityType == "result" and event.agentRunId != "review" and event.data.message is None]
-    assert len(completed_results) == 3
-    assert any(event.type == ("activity.completed" if mode == "repair" else "activity.failed") for event in completed_results)
-    assert any(getattr(event, "data", None) is not None and event.data.message == "evidence_inspected" for event in stream)
+    stream = jobs.events(job.job_id, owner='alice', limit=1000)
     assert all('Unsupported sibling' not in event.model_dump_json() for event in stream)
+    assert any(event.type == 'step_update' and event.payload.get('step_type') == 'agent_run' for event in stream)
     assert all(client.is_closed for client in clients)

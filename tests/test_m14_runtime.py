@@ -8,7 +8,6 @@ import pytest
 
 from devwatch.review.contracts import BalancedLimits, ModelTier
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession
 from tests.test_canonical_workflow import ReviewProvider, stores
 
@@ -35,14 +34,14 @@ class MultipleTasksProvider(ReviewProvider):
         return response.model_copy(update={"content": json.dumps(action)})
 
 
-def executor_for(layout, artifacts, jobs, events, provider):
-    return CanonicalReviewExecutor(layout, artifacts, RepoCache(layout.repo_cache), jobs, events,
+def executor_for(layout, artifacts, jobs, provider):
+    return CanonicalReviewExecutor(layout, artifacts, jobs,
                                    provider, models={tier: tier.value for tier in ModelTier})
 
 
 @pytest.mark.asyncio
 async def test_interruption_reuses_finished_worker_while_resuming_its_unfinished_sibling(tmp_path, monkeypatch):
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
     slow_entered, fast_saved = asyncio.Event(), asyncio.Event()
     loop = asyncio.get_running_loop()
 
@@ -54,14 +53,14 @@ async def test_interruption_reuses_finished_worker_while_resuming_its_unfinished
                 await asyncio.Event().wait()
             return await super().generate_completion(request)
 
-    first = executor_for(layout, artifacts, jobs, events, PausedProvider(["logic-fast", "logic-slow"]))
+    first = executor_for(layout, artifacts, jobs, PausedProvider(["logic-fast", "logic-slow"]))
     save = first.checkpoints.save
     def observed_save(thread_id, state, generation):
         save(thread_id, state, generation)
         if state["task"].task_id == "logic-fast" and state.get("output"):
             loop.call_soon_threadsafe(fast_saved.set)
     monkeypatch.setattr(first.checkpoints, "save", observed_save)
-    manager = DurableJobManager(jobs, events, first)
+    manager = DurableJobManager(jobs, first)
     try:
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="workers")
         await asyncio.wait_for(asyncio.gather(slow_entered.wait(), fast_saved.wait()), timeout=20)
@@ -71,7 +70,7 @@ async def test_interruption_reuses_finished_worker_while_resuming_its_unfinished
     assert interrupted.status == "interrupted" and not interrupted.ledger.inflight
 
     provider = MultipleTasksProvider(["logic-fast", "logic-slow"])
-    resumed = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, provider))
+    resumed = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, provider))
     try:
         await resumed.resume(job.job_id, owner="alice")
         done = await resumed.wait(job.job_id, owner="alice")
@@ -85,13 +84,11 @@ async def test_interruption_reuses_finished_worker_while_resuming_its_unfinished
     assert len(report['verification_audit']['decisions']) == 2
     assert {item['task_id'] for item in report['verification_audit']['provenance'].values()} == {'logic-fast', 'logic-slow'}
     assert not report["coverage"]["failed"]
-    timeline = events.replay(job.job_id, limit=1000)
-    assert sum(getattr(e, "type", None) == "activity.started" and e.data.message == "agent_reused" for e in timeline) == 1
 
 
 @pytest.mark.asyncio
 async def test_two_jobs_share_three_model_slots_and_keep_five_same_role_workers_isolated(tmp_path):
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
     ready, release = asyncio.Event(), asyncio.Event()
 
     class BarrierProvider(MultipleTasksProvider):
@@ -110,7 +107,7 @@ async def test_two_jobs_share_three_model_slots_and_keep_five_same_role_workers_
                 self.active -= 1
 
     provider = BarrierProvider(["logic-e", "logic-d", "logic-c", "logic-b", "logic-a"])
-    manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, provider),
+    manager = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, provider),
                                 concurrent_jobs=2)
     try:
         submitted = [await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id},
@@ -131,20 +128,22 @@ async def test_two_jobs_share_three_model_slots_and_keep_five_same_role_workers_
         assert len(report["uncertain_high_impact_candidates"]) == 1 and not report["coverage"]["failed"]
         assert len(report['verification_audit']['decisions']) == 5
         assert {item['task_id'] for item in report['verification_audit']['provenance'].values()} == set(provider.identities)
-        timeline = events.replay(job.job_id, limit=1000)
-        starts = [e.data.taskId for e in timeline if getattr(e, "type", None) == "activity.started" and e.activityType == "result" and e.data.agentId == "logic_correctness"]
+        timeline = jobs.events(job.job_id, owner="alice", limit=1000)
+        starts = [e.payload["render_info"]["subtitle"] for e in timeline if e.type == "step_update"
+                  and e.payload.get("step_type") == "agent_run" and e.payload.get("delta_seq") == 0
+                  and e.payload.get("agent_name") == "logic_correctness"]
         assert starts == ["logic-a", "logic-b", "logic-c", "logic-d", "logic-e"]
 
 
 @pytest.mark.asyncio
 async def test_invalid_worker_result_preserves_sibling_finding_through_finalization(tmp_path, monkeypatch):
-    layout, artifacts, snapshot, jobs, events = stores(tmp_path)
+    layout, artifacts, snapshot, jobs = stores(tmp_path)
     original = _ReviewSession.run_task
     async def missing_one(self, task, **kwargs):
         return None if task.task_id == "logic-bad" else await original(self, task, **kwargs)
     monkeypatch.setattr(_ReviewSession, "run_task", missing_one)
     provider = MultipleTasksProvider(["logic-good", "logic-bad"])
-    manager = DurableJobManager(jobs, events, executor_for(layout, artifacts, jobs, events, provider))
+    manager = DurableJobManager(jobs, executor_for(layout, artifacts, jobs, provider))
     try:
         job = await manager.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id},
                                    idempotency_key="partial")

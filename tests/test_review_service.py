@@ -5,7 +5,6 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
-from devwatch.review.activity_stream import ActivityStream
 
 from tests.test_canonical_workflow import ReviewProvider
 from tests.test_control_agents import MODELS
@@ -43,8 +42,8 @@ def completed(client, identity):
             return response.json()
         time.sleep(.01)
     history = client.get(f"/api/jobs/{identity}/events?limit=1000", headers=ALICE).json()
-    kinds = [event.get("kind") or event.get("type") for event in history.get("events", [])][-10:]
-    pytest.fail(f"durable job did not complete: status={response.json()['status']}; recent event kinds={kinds}")
+    kinds = [event["type"] for event in history.get("events", [])][-10:]
+    pytest.fail(f"durable job did not complete: status={response.json()['status']}; recent event types={kinds}")
 
 
 def test_submit_is_idempotent_and_reports_are_deterministic(tmp_path):
@@ -65,7 +64,7 @@ def test_submit_is_idempotent_and_reports_are_deterministic(tmp_path):
         assert "text/markdown" in markdown.headers["content-type"]
         assert "Uncertain" in markdown.text
         assert len(provider.requests) == 4
-        assert len(list((tmp_path / "runtime").glob("*.sqlite"))) == 4
+        assert sorted(p.name for p in (tmp_path / "runtime").glob("*.sqlite")) == ["checkpoints.sqlite", "devwatch.sqlite"]
 
 
 def test_owner_checks_cover_job_report_events_source_and_snapshot(tmp_path):
@@ -99,50 +98,17 @@ def test_sse_and_websocket_replay_identical_persisted_stream(tmp_path):
         completed(client, identity)
         page = client.get(f"/api/jobs/{identity}/events?after=1&limit=100", headers=ALICE).json()
         events = page["events"]
-        assert events and all(event["sequence"] > 1 for event in events)
+        assert events and all(event["seq"] > 1 for event in events)
         stream = client.get(f"/api/jobs/{identity}/stream", headers={**ALICE, "Last-Event-ID": "1"})
         assert stream.status_code == 200
         assert "text/event-stream" in stream.headers["content-type"]
         assert "id: 1\n" not in stream.text
         for event in events:
-            assert f"id: {event['sequence']}\n" in stream.text
-            assert f"event: {event.get('type', event.get('kind'))}\n" in stream.text
+            assert f"id: {event['seq']}\n" in stream.text
+            assert f"event: {event['type']}\n" in stream.text
         with client.websocket_connect(f"/api/jobs/{identity}/ws?after=1", headers=ALICE) as socket:
             replayed = [socket.receive_json() for _ in events]
             assert replayed == events
-
-
-def test_activity_uses_owned_sse_and_websocket_replay(tmp_path):
-    import asyncio
-    entered, release = threading.Event(), threading.Event()
-
-    class PausedProvider(ReviewProvider):
-        async def generate_completion(self, request):
-            entered.set()
-            while not release.is_set():
-                await asyncio.sleep(.01)
-            return await super().generate_completion(request)
-
-    with TestClient(app(tmp_path, PausedProvider())) as client:
-        identity, _ = submit(client)
-        assert entered.wait(3)
-        cursor = client.get(f"/api/jobs/{identity}/events?limit=1000", headers=ALICE).json()["next_cursor"]
-        owner = next(job.owner for job in client.app.state.jobs.running() if job.job_id == identity)
-        publisher = ActivityStream(identity, lambda event: client.app.state.jobs.publish_activity(identity, owner=owner, event=event))
-        publisher.begin_agent("agent-run")
-        activity = publisher.start("agent-run", "response", {})
-        publisher.delta(activity, {"text": "part"})
-        publisher.complete(activity, {"text": "complete"})
-        client.app.state.jobs.dispatch_events(client.app.state.events)
-        with client.websocket_connect(f"/api/jobs/{identity}/ws?after={cursor}", headers=ALICE) as socket:
-            messages = [socket.receive_json() for _ in range(3)]
-        assert [item["type"] for item in messages] == ["activity.started", "activity.delta", "activity.completed"]
-        assert [item["activityId"] for item in messages] == [activity] * 3
-        release.set()
-        completed(client, identity)
-        stream = client.get(f"/api/jobs/{identity}/stream?after={cursor}", headers=ALICE)
-        assert "event: activity.completed\n" in stream.text
-        assert f'"activityId":"{activity}"' in stream.text
 
 
 def test_websocket_disconnect_does_not_cancel_durable_job(tmp_path):
@@ -158,7 +124,7 @@ def test_websocket_disconnect_does_not_cancel_durable_job(tmp_path):
         identity, _ = submit(client)
         assert entered.wait(3)
         with client.websocket_connect(f"/api/jobs/{identity}/ws", headers=ALICE) as socket:
-            assert socket.receive_json()["kind"] == "job_queued"
+            assert socket.receive_json()["type"] == "job_queued"
         assert client.get(f"/api/jobs/{identity}", headers=ALICE).json()["status"] == "running"
         assert client.get(f"/api/jobs/{identity}/report?format=markdown", headers=ALICE).status_code == 409
         release.set()
@@ -216,7 +182,7 @@ def test_websocket_auth_is_header_or_first_message_never_url(tmp_path):
         completed(client, identity)
         with client.websocket_connect(f"/api/jobs/{identity}/ws") as socket:
             socket.send_json({"api_key": ALICE["X-API-Key"]})
-            assert socket.receive_json()["kind"] == "job_queued"
+            assert socket.receive_json()["type"] == "job_queued"
         with pytest.raises(WebSocketDisconnect):
             with client.websocket_connect(f"/api/jobs/{identity}/ws?api_key={ALICE['X-API-Key']}") as socket:
                 socket.receive_json()
@@ -236,11 +202,13 @@ def test_service_requires_explicit_model_tiers_and_production_auth(tmp_path, mon
         service.ServiceSettings(runtime_root=tmp_path, models={})
     with pytest.raises(ValueError):
         service.ServiceSettings(runtime_root=tmp_path, models=MODELS, production=True)
-    for tier in ("SMALL", "MEDIUM", "STRONG"):
-        monkeypatch.setenv(f"DEVWATCH_MODEL_{tier}", tier.lower() + "-configured")
+    monkeypatch.setenv("DEVWATCH_MODEL", "model-configured")
+    monkeypatch.setenv("DEVWATCH_MODEL_STRONG", "strong-configured")
     monkeypatch.setenv("DEVWATCH_ENV", "development")
     settings = service.ServiceSettings.from_env()
-    assert all(name.endswith("-configured") for name in settings.models.values())
+    assert settings.models["small"] == "model-configured"
+    assert settings.models["medium"] == "model-configured"
+    assert settings.models["strong"] == "strong-configured"
 
 
 def test_chunked_body_is_bounded_and_unicode_credentials_are_rejected(tmp_path):
@@ -252,11 +220,11 @@ def test_chunked_body_is_bounded_and_unicode_credentials_are_rejected(tmp_path):
         assert malformed.status_code == 401
 
 
-def test_event_store_rejects_oversized_cursor_before_sqlite_binding(tmp_path):
-    from devwatch.review.jobs import EventStore
-    store = EventStore(tmp_path / "events.sqlite")
+def test_job_store_rejects_oversized_cursor_before_sqlite_binding(tmp_path):
+    from devwatch.review.jobs import JobStore
+    store = JobStore(tmp_path / "devwatch.sqlite")
     with pytest.raises(ValueError):
-        store.replay("missing", after=2**63)
+        store.events("missing", owner="alice", after=2**63)
 
 
 def test_asgi_disconnect_drains_viewer_without_waiting_for_job(tmp_path):

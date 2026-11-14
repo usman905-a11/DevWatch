@@ -82,7 +82,7 @@ def _source_backed(finding, records):
     refs = finding.get("evidence_refs", [])
     if not refs or any(ref not in records or records[ref].get("snapshot_id") != location["snapshot_id"] for ref in refs):
         return False
-    return any(record.get("tool") == "read_source" and record.get("file_path") == location["file_path"]
+    return any(record.get("tool") == "read_file" and record.get("file_path") == location["file_path"]
                and record.get("start_line", 0) <= location["start_line"]
                and record.get("end_line", 0) >= location["end_line"] for record in (records[ref] for ref in refs))
 
@@ -217,9 +217,9 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     """
     from devwatch.review.budgets import BudgetManager
     from devwatch.review.contracts import AgentId, EvidenceProgress, ModelTier, ReviewTask
-    from devwatch.review.jobs import DurableJobManager, EventStore, JobStore
+    from devwatch.review.jobs import DurableJobManager, JobStore
     from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import ArtifactStore, RepoCache, StoreLayout
+    from devwatch.review.stores import ArtifactStore, StoreLayout
     from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession
 
     if mode not in {"specialist", "full"}:
@@ -228,20 +228,19 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         raise ValueError('provided evidence mode requires a specialist evaluation')
     public = review_input(case)
     layout = StoreLayout(Path(runtime_root))
-    if layout.jobs.exists():
+    if layout.app_db.exists():
         raise ValueError("evaluation requires a fresh runtime directory")
-    artifacts = ArtifactStore(layout.artifacts)
+    artifacts = ArtifactStore(layout.app_db)
     # Full Planner discovers the same public specification as every other file.
     files = {**public["files"], "REVIEW_CONTRACT.md": public["contract"] + "\n"}
     snapshot = artifacts.capture(owner="evaluation", files=files)
-    jobs, events = JobStore(layout.jobs), EventStore(layout.events)
-    cache = RepoCache(layout.repo_cache)
-    repository = RepositoryContext(artifacts, cache, snapshot.snapshot_id, owner="evaluation")
+    jobs = JobStore(layout.app_db)
+    repository = RepositoryContext(artifacts, snapshot.snapshot_id, owner="evaluation")
     meter = provider if isinstance(provider, MeasuredProvider) else MeasuredProvider(provider)
     usage_before = json.loads(json.dumps(meter.usage))
     unknown_before = meter.unknown_calls
     budget_refusals_before = meter.budget_refusals
-    executor = CanonicalReviewExecutor(layout, artifacts, cache, jobs, events, meter,
+    executor = CanonicalReviewExecutor(layout, artifacts, jobs, meter,
         models=models or {tier: tier.value + "-scripted" for tier in ModelTier})
 
     prefetched = []
@@ -252,13 +251,13 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         task = ReviewTask(task_id="individual", agent_id=AgentId(case["specialist"]),
                           files=sorted(public["files"]), focus=public["contract"])
         if evidence_mode=='provided':
-            prefetched.extend(repository._read_source({'file_path':path},task).evidence_ref for path in task.files)
+            prefetched.extend(repository._read_file({'file_path':path},task).evidence_ref for path in task.files)
             task=task.model_copy(update={'evidence_refs':list(prefetched)})
         result = await session.run_task_safely(task)
         return {"json": result.model_dump_json()}
 
     started = time.monotonic()
-    manager = DurableJobManager(jobs, events, executor if mode == "full" else individual)
+    manager = DurableJobManager(jobs, executor if mode == "full" else individual)
     try:
         job = await manager.submit(owner="evaluation", request={"snapshot_id": snapshot.snapshot_id, "context_files": ["REVIEW_CONTRACT.md"]},
                                    idempotency_key="evaluation")
@@ -286,7 +285,7 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
                     invalid_evidence += 1
             receipt = private.get("evidence_progress", {}).get(ref)
             if (receipt and EvidenceProgress.model_validate(receipt).fully_inspected()
-                    and records.get(ref, {}).get("tool") == "read_source"):
+                    and records.get(ref, {}).get("tool") == "read_file"):
                 inspected.add(records[ref]["file_path"])
     report = json.loads(finished.result["json"]) if finished.result and "json" in finished.result else {}
     findings = (sum((report.get(key, []) for key in ("confirmed_defects", "uncertain_high_impact_candidates", "advisories")), [])
@@ -297,27 +296,26 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     classified = [findings[match['finding_index']].get('kind') == expected_kinds[match['defect_id']]
         for match in score['matches'] if match['defect_id'] in expected_kinds]
     timeline, cursor = [], 0
-    while page := events.replay(job.job_id, after=cursor):
+    while page := jobs.events(job.job_id, owner="evaluation", after=cursor):
         timeline.extend(page)
-        cursor = page[-1].sequence
-    calls = [event for event in timeline if getattr(event, "type", None) in
-             {"activity.completed", "activity.failed"} and event.data.tool]
-    successes = sum(event.data.outcome == "succeeded" for event in calls)
+        cursor = page[-1].seq
+    calls = [event for event in timeline if event.type == "tool_result" and event.payload.get("tool")]
+    successes = sum(event.payload.get("outcome") == "succeeded" for event in calls)
     seen, repeated = set(), 0
     for event in calls:
-        payload = event.data
-        if payload.outcome == "succeeded" and payload.tool != "read_evidence":
-            identity = (payload.agentId, payload.taskId, payload.tool, payload.evidenceRef)
+        payload = event.payload
+        if payload.get("outcome") == "succeeded" and payload.get("tool") != "read_evidence":
+            identity = (payload.get("agent_id"), payload.get("task_id"), payload.get("tool"), payload.get("evidence_ref"))
             repeated += identity in seen
             seen.add(identity)
     usage = {model: {key: value - usage_before.get(model, {}).get(key, 0) for key, value in tokens.items()}
              for model, tokens in meter.usage.items()}
     categories = set()
-    if any(event.data.outcome == "failed" for event in calls) or invalid_evidence:
+    if any(event.payload.get("outcome") == "failed" for event in calls) or invalid_evidence:
         categories.add("tool_harness" if not invalid_evidence else "evidence_retrieval")
     missing = bool(score["false_negative"])
-    provider_errors = sorted({e.payload.error_code for e in timeline
-        if getattr(e, "kind", None) == "model_call_completed" and e.payload.error_code})
+    provider_errors = sorted({e.payload["error_code"] for e in timeline
+        if e.type == "model_call_completed" and e.payload.get("error_code")})
     local_refusal = meter.budget_refusals > budget_refusals_before
     if local_refusal:
         categories.add('evaluation_budget')
@@ -337,8 +335,8 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     if score["false_positive"]:
         categories.add("model_reasoning")
     if report.get("coverage", {}).get("failed", {}).get("__final") or any(
-            getattr(event, "kind", None) == "agent_completed"
-            and event.payload.stop_reason == "final_consistency_failure" for event in timeline):
+            event.type == "agent_completed"
+            and event.payload.get("stop_reason") == "final_consistency_failure" for event in timeline):
         categories.add("finalization")
     if finished.status != "completed" and not categories:
         categories.add("tool_harness")
@@ -354,8 +352,7 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         "prompt_tokens": sum(u["prompt_tokens"] for u in usage.values()),
         "completion_tokens": sum(u["completion_tokens"] for u in usage.values()),
         "ledger_total_tokens": finished.ledger.total_tokens,
-        "model_calls": sum(getattr(e, "type", None) == "activity.started"
-            and e.activityType == "response" and e.agentRunId != "review" for e in timeline),
+        "model_calls": sum(e.type == "model_call_started" for e in timeline),
         "unknown_provider_calls": meter.unknown_calls - unknown_before,
         "cost_guard_charged_usd": meter.charged_usd if live else None,
         "approximate_cost_usd": estimate_cost(usage, meter.rates) if live and meter.unknown_calls == unknown_before else None,
@@ -373,9 +370,9 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
         "failure_attribution": "trace-based triage; root cause requires inspection",
         "human_reviewed": judgments is not None and len(judgments) == len(findings),
         "live_model_accuracy": None,
-        "tool_observations": [{"operation_id": e.activityId, "agent_id": e.data.agentId,
-            "task_id": e.data.taskId, "tool": e.data.tool, "outcome": e.data.outcome,
-            "evidence_ref": e.data.evidenceRef} for e in calls],
+        "tool_observations": [{"operation_id": e.payload.get("operation_id"), "agent_id": e.payload.get("agent_id"),
+            "task_id": e.payload.get("task_id"), "tool": e.payload.get("tool"), "outcome": e.payload.get("outcome"),
+            "evidence_ref": e.payload.get("evidence_ref")} for e in calls],
         "findings": findings, "candidates": candidates, "quarantined_candidates": quarantined,
         "gold": case["gold"], "evidence": records,
         "coverage": report.get("coverage", {}), "snapshot_id": snapshot.snapshot_id}

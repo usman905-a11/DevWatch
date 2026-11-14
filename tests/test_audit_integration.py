@@ -5,7 +5,6 @@ import json
 
 from devwatch.review.contracts import AGENT_CONTRACTS, AgentPrivateState, ModelTier
 from devwatch.review.jobs import DurableJobManager
-from devwatch.review.stores import RepoCache
 from devwatch.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.verification_fixtures import reviewed
@@ -35,7 +34,7 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
                     action=dict(kind='call_tool',tool='read_evidence',arguments={'evidence_ref':ast,'offset':12000,'max_chars':1000})
                 elif step==2:
                     assert any(page['offset']==12000 for page in pages)
-                    action=dict(kind='call_tool',tool='read_source',arguments={'file_path':'service.py','start_line':1,'end_line':2})
+                    action=dict(kind='call_tool',tool='read_file',arguments={'file_path':'service.py','start_line':1,'end_line':2})
                 else:
                     action=dict(kind='submit_candidates',payload=dict(task_id='logic-1',agent_id=role,coverage={},stop_reason='evidence_complete',candidates=[
                         dict(category='logic',title='Empty input raises',description='Indexing empty input raises IndexError',impact='Request fails',confidence=.9,
@@ -45,7 +44,7 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
                     ast=next(page['evidence_ref'] for page in pages if page['next_offset'] is not None)
                     action=dict(kind='call_tool',tool='read_evidence',arguments={'evidence_ref':ast,'offset':12000})
                 elif step==1:
-                    action=dict(kind='call_tool',tool='read_source',arguments={'file_path':'service.py','start_line':2,'end_line':2})
+                    action=dict(kind='call_tool',tool='read_file',arguments={'file_path':'service.py','start_line':2,'end_line':2})
                 else:
                     own=private['evidence_refs'][-1]
                     action=dict(kind='submit_verification',payload={'decisions':[
@@ -59,11 +58,11 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
             return LLMResponse(finish_reason="stop", content=json.dumps(action),provider='scripted',model=request.model,latency_ms=0,
                                usage=LLMUsage(prompt_tokens=10,completion_tokens=5,total_tokens=15))
     async def run():
-        layout,artifacts,_,jobs,events=stores(tmp_path)
+        layout,artifacts,_,jobs=stores(tmp_path)
         snapshot=artifacts.capture(owner='alice',files={'service.py':'\n'.join(f'def first_{i}(items):\n    return items[0]\n' for i in range(400))})
         provider=Provider()
-        executor=CanonicalReviewExecutor(layout,artifacts,RepoCache(layout.repo_cache),jobs,events,provider,models={t:t.value for t in ModelTier})
-        manager=DurableJobManager(jobs,events,executor)
+        executor=CanonicalReviewExecutor(layout,artifacts,jobs,provider,models={t:t.value for t in ModelTier})
+        manager=DurableJobManager(jobs,executor)
         job=await manager.submit(owner='alice',request={'snapshot_id':snapshot.snapshot_id},idempotency_key='large-pipeline')
         done=await manager.wait(job.job_id,owner='alice')
         await manager.close()
@@ -84,9 +83,7 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
         assert specialist.evidence_progress[ast].provenance['agent_id']=='logic_correctness'
         assert done.ledger.total_tokens==15*len(provider.requests)
         assert len(AGENT_CONTRACTS)==7
-        assert all('items[0]' not in event.model_dump_json() for event in events.replay(job.job_id))
-        timeline = events.replay(job.job_id)
-        assert any(getattr(event, 'type', None) == 'activity.completed' and event.data.tool for event in timeline)
-        assert {'evidence_delivered', 'evidence_inspected', 'validation_passed'} <= {
-            event.data.message for event in timeline if getattr(event, 'type', None) == 'activity.started'}
+        timeline = jobs.events(job.job_id, owner='alice')
+        assert all('items[0]' not in event.model_dump_json() for event in timeline)
+        assert any(event.type == 'step_update' and event.payload.get('step_type') in {'read_file', 'parse_ast', 'read_evidence'} and event.payload.get('status') == 'DONE' for event in timeline)
     asyncio.run(run())

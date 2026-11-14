@@ -23,13 +23,14 @@ def test_nonplanner_response_reservation_fits_remaining_role_allowance(role):
     from devwatch.review.contracts import AGENT_CONTRACTS
     framing = len(AGENT_CONTRACTS[role].system_prompt.encode()) + 512
     required = len(prompt.encode()) + framing
-    ticket = budget.reserve_model(role, 50000-required-1024)
-    budget.record_model(ticket,prompt_tokens=50000-required-1024,completion_tokens=0)
+    limit = budget.limits.job_tokens
+    ticket = budget.reserve_model(role, limit-required-1024)
+    budget.record_model(ticket,prompt_tokens=limit-required-1024,completion_tokens=0)
     prompt, output = runtime._prepare_prompt(state, context, repair=False)
     assert output == 1024
     assert len(prompt.encode()) + framing + output <= budget.model_allowance(role)
     assert json.loads(prompt)['result_schema']['additionalProperties'] is False
-    assert budget.limits.specialist_tokens == budget.limits.final_agent_tokens == 50000
+    assert budget.model_allowance(AgentId.LOGIC_CORRECTNESS) == budget.model_allowance(AgentId.SYNTHESIZER_VERIFIER)
 
 
 @pytest.mark.parametrize('partial', [False, True])
@@ -37,10 +38,10 @@ def test_bounded_source_batch_completes_three_files_without_fabricating_inspecti
     import asyncio
     from devwatch.providers.base import LLMResponse, LLMUsage
     from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import ArtifactStore, RepoCache
+    from devwatch.review.stores import ArtifactStore
     artifacts = ArtifactStore(tmp_path/'artifacts')
     manifest = artifacts.capture(owner='alice',files={'a.py':('A = 1\n' if not partial else 'A = '+repr('x'*6000)+'\n'),'b.py':'B = 2\n','c.py':'C = 3\n'})
-    repo = RepositoryContext(artifacts,RepoCache(tmp_path/'cache.sqlite'),manifest.snapshot_id,owner='alice')
+    repo = RepositoryContext(artifacts,manifest.snapshot_id,owner='alice')
     task = ReviewTask(task_id='batch',agent_id=AgentId.LOGIC_CORRECTNESS,files=['a.py','b.py','c.py'],focus='Check constants')
     requests = []
     class Provider:
@@ -48,7 +49,7 @@ def test_bounded_source_batch_completes_three_files_without_fabricating_inspecti
             body = json.loads(request.prompt)
             requests.append(body)
             if len(requests)==1:
-                action = dict(kind='call_tool',tool='read_source',arguments=dict(file_path='a.py',additional_files=['b.py','c.py']))
+                action = dict(kind='call_tool',tool='read_file',arguments=dict(file_path='a.py',additional_files=['b.py','c.py']))
             else:
                 assert set(body['investigation']['remaining_files']) == {'a.py','b.py','c.py'}
                 pages = body['selected_context']['evidence']
@@ -75,10 +76,10 @@ def test_source_batch_denies_one_unassigned_path_before_calling_any_handler():
     async def handler(arguments,task):
         calls.append(arguments)
         return ToolObservation(evidence_ref='never')
-    tools.register('read_source',handler)
+    tools.register('read_file',handler)
     task = ReviewTask(task_id='batch',agent_id=AgentId.LOGIC_CORRECTNESS,files=['a.py'],focus='Check constants')
     with pytest.raises(PermissionError):
-        asyncio.run(tools.execute(task,AgentAction(kind='call_tool',tool='read_source',arguments={
+        asyncio.run(tools.execute(task,AgentAction(kind='call_tool',tool='read_file',arguments={
             'file_path':'a.py','additional_files':['private.py']})))
     assert calls == []
 
