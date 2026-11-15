@@ -17,7 +17,7 @@ from langsmith import tracing_context
 from pydantic import Field, ValidationError
 
 from devwatch.providers.base import LLMProvider, LLMRequest, LLMResponse
-from devwatch.providers.exceptions import (ProviderAuthenticationError, ProviderRateLimitError,
+from devwatch.providers.exceptions import (ProviderAuthenticationError, ProviderInvalidResponseError, ProviderRateLimitError,
     ProviderQuotaExhaustedError, ProviderTemporaryError, ProviderTimeoutError, ProviderBudgetRefusedError)
 from devwatch.review.budgets import BudgetExceeded, BudgetManager
 from devwatch.review.jobs import StepHandle, StepRenderInfo, StepType, TrajectoryStepTracker, UnknownToolCompletion, safe_stop_reason
@@ -694,7 +694,8 @@ class AgentSubgraphs:
                             "provider_quota" if isinstance(exc, ProviderQuotaExhaustedError) else
                             "provider_rate_limit" if isinstance(exc, ProviderRateLimitError) else
                             "provider_temporary" if isinstance(exc, ProviderTemporaryError) else
-                            "provider_timeout" if isinstance(exc, (TimeoutError, ProviderTimeoutError)) else "provider_failure")
+                            "provider_timeout" if isinstance(exc, (TimeoutError, ProviderTimeoutError)) else
+                            "provider_invalid" if isinstance(exc, ProviderInvalidResponseError) else "provider_failure")
                     await self._event("model_call_completed", state, operation_id=ticket, attempt=attempt,
                         outcome="cancelled" if isinstance(exc, asyncio.CancelledError) else "failed",
                         error_code=None if isinstance(exc, asyncio.CancelledError) else code,
@@ -920,8 +921,10 @@ class AgentSubgraphs:
                 state["retry_operation"] = None
                 return await self._call_model(state, repair=repair,
                     attempt=self.budget.ledger.operation_retries.get(operation, 0) + 1)
-            except (ProviderRateLimitError, ProviderTemporaryError) as exc:
+            except (ProviderRateLimitError, ProviderTemporaryError, ProviderInvalidResponseError) as exc:
                 if isinstance(exc, ProviderQuotaExhaustedError):
+                    raise
+                if isinstance(exc, ProviderInvalidResponseError) and exc.raw_error is not None:
                     raise
                 if exc.raw_error is not None:
                     status = getattr(exc.raw_error, "status_code", None)

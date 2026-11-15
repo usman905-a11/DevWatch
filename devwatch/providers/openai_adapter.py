@@ -217,6 +217,10 @@ class OpenAIProviderAdapter(LLMProvider):
                 first_choice = choices[0]
                 message = getattr(first_choice, "message", None)
                 if message is None or not hasattr(message, "content"):
+                    finish_reason = getattr(first_choice, "finish_reason", None)
+                    logger.warning(
+                        f"Provider '{self.provider_name}' returned malformed choice (finish_reason={finish_reason!r}, message_type={type(message).__name__})"
+                    )
                     raise ProviderInvalidResponseError("Provider returned a malformed choice without message content.", provider=self.provider_name)
 
                 content = getattr(message, "content", None) or ""

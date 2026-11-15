@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-VERSION = 'review-prompts-v6.4'
+VERSION = 'review-prompts-v6.5'
 CONTEXT_VERSION = 'scoped-evidence-priority-v2'
 
 
@@ -46,21 +46,20 @@ SHARED_POLICY = (
     'Stop at sufficient evidence or a runtime limit. Follow-up never resets limits. '
 )
 ROLE_POLICIES = {
-    'planner': 'Include all relevant specialists from metadata (performance_scalability for loops/queries/polling/scans; '
-        'quality_testability for high complexity/missing tests). selected_agents must equal unique '
-        'review_tasks agent_ids; unique task_ids; cover every file or state omissions. Fit reads and '
-        'submission in 8 iterations using source batches. Use tools only for missing metadata. '
-        'Complete nonempty scope via kind=submit_plan, payload=ReviewPlan; never finish or return a bare plan.',
-    'bug_reliability': 'Trace failure paths and handling through exceptions, cleanup and resource lifecycle. '
-        'For a documented failing operation, trace every return/raise path and check resource/state '
-        'obligations on that exit. Preserve empty-input checks. Distinguish reachable failures '
-        'from handled conditions; do not add unsupported input domains.',
-    'logic_correctness': 'Trace the assigned behavioral invariants through control/data flow and state changes. '
-        'Track caller-owned aliases and before/after state, not only returned values. Check missing '
-        'bounds/sign invariants on typed numeric parameters (e.g. negative amounts, out-of-range '
-        'percentages) that subvert the stated operation. For pagination '
-        'and boundaries, identify units, inclusive/exclusive endpoints and a concrete first/edge case. '
-        'Compare the result with the supplied contract before claiming a violation.',
+    'planner': 'Include every relevant specialist from metadata (do not omit bug_reliability for '
+        'file/resource/indexing/error paths, performance_scalability for loops/queries/polling/scans, '
+        'or quality_testability for complexity/nesting/missing tests). selected_agents must equal '
+        'unique review_tasks agent_ids; unique task_ids; cover every file or state omissions. Fit '
+        'reads/submission in 8 iterations using source batches. Complete nonempty scope via '
+        'kind=submit_plan, payload=ReviewPlan; never finish or return a bare plan.',
+    'bug_reliability': 'Trace failure paths and handling through exceptions, cleanup and resource lifecycle '
+        'across every function in scope. Check unclosed handles/resources on error paths, empty '
+        'collection indexing/missing keys, and missing exit bounds. Preserve empty-input checks and '
+        'distinguish reachable runtime failures from handled conditions.',
+    'logic_correctness': 'Walk every function and branch to trace behavioral invariants through control/data '
+        'flow and state changes. Track caller-owned aliases and before/after state. Check missing '
+        'numeric bounds/sign invariants (e.g. negative/zero amounts, percentages <0 or >100) allowed '
+        'by typed params that subvert the stated contract, plus off-by-one endpoints against the contract.',
     'quality_testability': 'Assess test effectiveness, complexity, coupling and maintainability. '
         'Check whether a wrong normal result would fail the test: an assertion may be tautological '
         'or check the wrong value. Classify test-effectiveness and maintainability gaps as advisories; '
@@ -69,11 +68,10 @@ ROLE_POLICIES = {
         'Trace untrusted input through intermediate variables/helpers to its actual sink. Distinguish '
         'SQL bound data parameters from string substitution into syntax. Identify demonstrated '
         'input propagation and control; keep impact within documented capabilities.',
-    'performance_scalability': 'A complete review may return candidates=[]. Analyze scaling and repeated '
-        'work, copying and storage using the source-stage performance_cost guidance. Unmeasured complexity '
-        'findings are advisories; measurements require an explicit task capability. Preserve result '
-        'materialization, ordering and mutation semantics. Prove the proposed reduction; keep unmeasured '
-        'constant-factor resource guesses in coverage limitations.',
+    'performance_scalability': 'A complete review may return candidates=[]. Inspect every function in scope '
+        'for N+1 queries/calls inside loops, unbounded polling/retry loops lacking max attempts or '
+        'timeouts, O(n^2) list/membership scans, and repeated copying/storage using performance_cost '
+        'guidance. Unmeasured complexity findings are advisories; keep unmeasured guesses in limitations.',
     'synthesizer_verifier': 'Verify candidate evidence and contract, resolve duplicates/conflicts, then '
         'synthesize only recorded supported decisions. Follow the current phase guidance.',
 }
@@ -141,9 +139,11 @@ SKILLS = {
         'not infer timeouts, OOM, computational infeasibility or measured latency from it. '
         'If the current return is an eager list, explicitly preserve it: for example wrap '
         'a proposed accumulate iterator in list. Required list storage is not O(1).',
-    'specialist_completion': 'Inspect every assigned source file and every function/route in scope '
-        'before submitting; report all independent supported defects across all assigned files '
-        'rather than stopping after one finding. Investigate assigned source/contracts. Complete with kind=submit_candidates '
+    'specialist_completion': 'Audit every assigned file and every function/method/route line-by-line '
+        'before submitting; emit one separate candidate for each distinct defect found rather than '
+        'stopping after the first finding. Unconstrained typed parameters (e.g. negative/zero amounts, '
+        'percentages <0 or >100, empty collections) are valid runtime inputs unless guarded; report '
+        'missing validation when they violate the documented contract. Complete with kind=submit_candidates '
         'and a full SpecialistResult in payload, copying task_id/agent_id from task; use candidates=[] '
         'when none are supported. Every candidate requires category, title, description, impact, '
         'confidence, location, evidence_refs, kind and remediation. '

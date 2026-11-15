@@ -5,8 +5,8 @@ import json
 import pytest
 
 from devwatch.providers.exceptions import (
-    ProviderAuthenticationError, ProviderQuotaExhaustedError, ProviderRateLimitError,
-    ProviderTemporaryError, ProviderTimeoutError,
+    ProviderAuthenticationError, ProviderInvalidResponseError, ProviderQuotaExhaustedError,
+    ProviderRateLimitError, ProviderTemporaryError, ProviderTimeoutError,
 )
 from devwatch.review.budgets import BudgetManager
 from devwatch.review.subgraphs import AgentSubgraphs, PermissionedTools
@@ -24,7 +24,7 @@ class FailingProvider(ScriptedProvider):
         return await super().generate_completion(request)
 
 
-@pytest.mark.parametrize("error", [ProviderRateLimitError, ProviderTemporaryError])
+@pytest.mark.parametrize("error", [ProviderRateLimitError, ProviderTemporaryError, ProviderInvalidResponseError])
 def test_two_safe_retries_are_persisted_before_next_attempt(error):
     async def scenario():
         provider = FailingProvider([error("secret upstream details"), error("secret"),
