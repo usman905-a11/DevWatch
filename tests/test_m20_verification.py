@@ -55,7 +55,12 @@ def test_review_cannot_omit_fields_replay_another_claim_or_invent_evidence(tmp_p
 
 
 def test_advisory_requires_verifier_source_inspection_too(tmp_path):
-    repo, task, ref, claim = setup(tmp_path)
+    from devwatch.review.repository import RepositoryContext
+    _, artifacts, _, _, task = setup_repository(tmp_path)
+    snapshot = artifacts.capture(owner='alice', files={'service.py': 'def first(items):\n    return items[0]\n# ' + 'x' * 20000 + '\n'})
+    repo = RepositoryContext(artifacts, snapshot.snapshot_id, owner='alice')
+    ref = repo._read_file({'file_path': 'service.py', 'start_line': 1, 'end_line': 5}, task).evidence_ref
+    claim = candidate(repo, ref)
     state = run(repo, task, ref, claim, decision(claim, [ref], verdict='advisory'), acknowledge=False)
     assert state['verification'] is None
     assert state['private_state'].stop_reason == 'invalid_schema'

@@ -64,11 +64,11 @@ def test_requested_offset_stays_first_without_acknowledging_or_widening_scope(tm
 async def test_new_processed_tool_result_is_delivered_before_crowded_source(tmp_path):
     from devwatch.review.repository import RepositoryContext
     _,artifacts,_,original,task=setup_repository(tmp_path)
-    source=''.join('value_%d = %r\n' % (i,'x'*80) for i in range(300))
+    source=''.join('value_%d = %r\n' % (i,'x'*220) for i in range(300))
     snapshot=artifacts.capture(owner='alice',files={'service.py':source})
     repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
-    refs=[repo._read_file({'file_path':'service.py','start_line':line,'end_line':line+79},task).evidence_ref
-          for line in (1,81,161)]
+    refs=[repo._read_file({'file_path':'service.py','start_line':line,'end_line':line+59},task).evidence_ref
+          for line in (1,61,121,181,241)]
     observed=await repo.tools().execute(task,AgentAction(kind='call_tool',tool='parse_ast',arguments={'file_path':'service.py'}))
     refs.append(observed.evidence_ref)
     private=AgentPrivateState(evidence_refs=refs,

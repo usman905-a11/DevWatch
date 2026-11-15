@@ -35,6 +35,11 @@ SPECIALISTS = frozenset({
     AgentId.PERFORMANCE_SCALABILITY,
 })
 COMMON_TOOLS = frozenset({"read_file", "read_evidence"})
+# One evidence page normally carries an entire read_file excerpt (up to 200 lines),
+# so a specialist sees a whole file in a single turn instead of paging.
+EVIDENCE_PAGE_CHARS = 12000
+MAX_EVIDENCE_PAGE_CHARS = 24000
+MAX_EVIDENCE_PAGE_BYTES = 16000
 
 
 class ModelTier(str, Enum):
@@ -46,7 +51,8 @@ class ModelTier(str, Enum):
 class BalancedLimits(ContractModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     review_seconds: int = Field(default=600, ge=1, le=600)
-    job_tokens: int = Field(default=250_000, ge=1, le=250_000)
+    # None disables the per-scan token cap (time, iteration and tool limits still apply).
+    job_tokens: int | None = Field(default=None, ge=1)
     planner_output_tokens: int = Field(default=4096, ge=512, le=8192)
     concurrent_model_calls: int = Field(default=3, ge=1, le=3)
     iterations_per_task: int = Field(default=8, ge=1, le=8)
@@ -54,9 +60,9 @@ class BalancedLimits(ContractModel):
     review_rounds: int = Field(default=2, ge=1, le=2)
     transient_retries: int = Field(default=2, ge=0, le=2)
     schema_repairs_per_task: int = Field(default=1, ge=0, le=1)
-    provider_timeout_seconds: int = Field(default=30, ge=1, le=30)
+    provider_timeout_seconds: int = Field(default=90, ge=1, le=120)
     command_timeout_seconds: int = Field(default=120, ge=1, le=120)
-    model_context_tokens: int = Field(default=32768, ge=4096, le=131072)
+    model_context_tokens: int = Field(default=131072, ge=4096, le=131072)
 
 
 class TokenUsage(ContractModel):

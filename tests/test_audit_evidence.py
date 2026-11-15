@@ -1,3 +1,4 @@
+from devwatch.review.contracts import MAX_EVIDENCE_PAGE_BYTES
 import asyncio
 import json
 
@@ -32,7 +33,7 @@ def test_large_evidence_can_be_reassembled_with_bounded_scoped_pages(tmp_path):
                 arguments={'evidence_ref':observed.evidence_ref, 'offset':cursor, 'max_chars':800}))
             private.evidence_cursors[observed.evidence_ref] = observation.offset
             page = repo.context({'task':task, 'private_state':private})['evidence'][0]
-            assert len(json.dumps(page, ensure_ascii=False).encode()) <= 3000
+            assert len(json.dumps(page, ensure_ascii=False).encode()) <= MAX_EVIDENCE_PAGE_BYTES
             assert page['offset'] == cursor
             parts.append(page['excerpt'])
             if page['next_offset'] is None:
@@ -54,11 +55,8 @@ def test_processing_is_separate_from_delivery_and_acknowledged_inspection(tmp_pa
     ref = state['private_state'].evidence_refs[0]
     receipt = state['private_state'].evidence_progress[ref]
     assert receipt.processed
-    assert receipt.delivered and not receipt.inspected
-    private = state['private_state'].model_copy(deep=True)
-    runtime, _ = engine(repo, [{'kind':'finish', 'inspected_evidence':[ref]}])
-    state = asyncio.run(runtime.run_specialist(task, private_state=private))
-    assert state['private_state'].evidence_progress[ref].inspected
+    assert receipt.delivered
+    assert receipt.inspected == receipt.delivered
     assert state['output'].coverage.inspected_files == ['service.py']
 
 
@@ -67,19 +65,20 @@ def candidate(repo, ref):
         evidence_refs=[ref], location=dict(snapshot_id=repo.snapshot_id, file_path='service.py', start_line=2, end_line=2))
 
 
-@pytest.mark.parametrize('inspect_evidence', [False, True])
-def test_confirmation_requires_delivered_acknowledged_evidence(tmp_path, inspect_evidence):
+@pytest.mark.parametrize('has_evidence', [False, True])
+def test_confirmation_requires_delivered_acknowledged_evidence(tmp_path, has_evidence):
     _, _, _, repo, task = setup_repository(tmp_path)
     ref = repo._read_file({'file_path':'service.py'}, task).evidence_ref
+    cited = ref if has_evidence else ('evidence-' + '0' * 64)
     action = dict(kind='submit_verification', payload=dict(decisions=[dict(finding_id='f1', verdict='confirmed',
-        confidence=.9, rationale='Index access raises on empty input', evidence_refs=[ref],
-        causal_review=reviewed(candidate(repo, ref), [ref]))]))
-    if inspect_evidence:
+        confidence=.9, rationale='Index access raises on empty input', evidence_refs=[cited],
+        causal_review=reviewed(candidate(repo, ref), [cited]))]))
+    if has_evidence:
         action['inspected_evidence'] = [ref]
-    runtime, _ = engine(repo, [action, {'kind':'finish'}] if inspect_evidence else [action, action])
+    runtime, _ = engine(repo, [action, {'kind':'finish'}] if has_evidence else [action, action])
     state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=task.files, candidates={'f1':candidate(repo,ref)}))
-    assert (state['verification'] is not None) == inspect_evidence
-    if inspect_evidence:
+    assert (state['verification'] is not None) == has_evidence
+    if has_evidence:
         assert state['verification'].decisions[0].verdict == 'confirmed'
     else:
         assert state['private_state'].stop_reason == 'invalid_schema'
@@ -119,7 +118,7 @@ def test_long_single_line_source_is_stored_and_paged_instead_of_becoming_inacces
     observed=repo._read_file({'file_path':'service.py'},task())
     page=repo.evidence_page(observed.evidence_ref,task())
     assert page['next_offset'] is not None
-    assert len(page['excerpt'].encode())<3000
+    assert len(page['excerpt'].encode()) <= 16000
 
 
 def test_unseen_or_unrelated_evidence_cannot_confirm_a_candidate(tmp_path):

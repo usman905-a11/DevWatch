@@ -217,7 +217,9 @@ async def run_seeded_scan(
         finally:
             await manager.close()
         if finished.status != "completed" or not finished.result or "json" not in finished.result:
-            raise RuntimeError(f"Seeded scan ended with status={finished.status!r}: {finished.error}")
+            errors = [ev.payload for ev in jobs.events(job.job_id, owner="baseline") if ev.type == "error_occurred"]
+            detail = errors[-1] if errors else "no error event recorded"
+            raise RuntimeError(f"Seeded scan ended with status={finished.status!r}: {detail}")
         report = json.loads(finished.result["json"])
         summary = match_seeded_issues(issues, report)
         summary["job_status"] = finished.status

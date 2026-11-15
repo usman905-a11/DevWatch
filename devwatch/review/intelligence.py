@@ -23,7 +23,8 @@ MAX_NODES = 100_000
 
 def analyze_source(path: str, source: str):
     if len(source.encode("utf-8")) > 500_000:
-        raise ValueError("Source exceeds parser input bound")
+        return {"status": "parse_failed", "symbols": [], "imports": [], "calls": [], "branch_count": 0,
+                "limitations": ["Source exceeds parser input bound"]}
     request = json.dumps({"path": path, "source": source}, ensure_ascii=False).encode("utf-8")
     environment = {key: value for key, value in os.environ.items() if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP"}}
     try:

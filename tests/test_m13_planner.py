@@ -22,7 +22,7 @@ async def test_planner_output_allowance_is_configurable_without_raising_total_bu
     state = await engine.run_planner(snapshot_id="snapshot", files=["service.py"])
     assert state["output"] is not None
     assert provider.requests[0].max_tokens == 2048
-    assert engine.budget.limits.job_tokens == 250000
+    assert engine.budget.limits.job_tokens is None  # token cap disabled by default
 
 
 @pytest.mark.asyncio

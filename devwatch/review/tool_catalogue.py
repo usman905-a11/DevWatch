@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from devwatch.review.contracts import ContractModel, SourceLocation
+from devwatch.review.contracts import EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_CHARS, ContractModel, SourceLocation
 from devwatch.review.prompts import response_schema
 
 
@@ -46,7 +46,7 @@ class SourceArguments(FileArguments):
 class EvidenceArguments(Arguments):
     evidence_ref: str = Field(pattern=r"^evidence-[0-9a-f]{64}$")
     offset: int = Field(default=0, ge=0, description="Character offset in canonical evidence JSON")
-    max_chars: int = Field(default=1500, ge=1, le=3000)
+    max_chars: int = Field(default=EVIDENCE_PAGE_CHARS, ge=1, le=MAX_EVIDENCE_PAGE_CHARS)
 
 
 class SymbolArguments(FileArguments):

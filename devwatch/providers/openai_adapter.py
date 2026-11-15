@@ -1,7 +1,9 @@
 import os
+import re
 import time
 import asyncio
 import logging
+import traceback
 import httpx
 from typing import Optional, Dict, Any
 
@@ -66,7 +68,7 @@ class OpenAIProviderAdapter(LLMProvider):
 
         return httpx.AsyncClient(
             verify=verify_ssl,
-            timeout=httpx.Timeout(60.0, connect=10.0),
+            timeout=httpx.Timeout(90.0, connect=10.0),
             limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
         )
 
@@ -117,8 +119,11 @@ class OpenAIProviderAdapter(LLMProvider):
         if status_code is None and hasattr(err, "response") and getattr(err, "response") is not None:
             status_code = getattr(err.response, "status_code", None)
 
+        safe_detail = re.sub(r"(?i)(AIza[0-9A-Za-z_-]{10,}|sk-[0-9A-Za-z_-]{10,}|bearer\s+\S+)", "[REDACTED]", str(err))[:300]
+        tb_frames = traceback.extract_tb(err.__traceback__) if err.__traceback__ else []
+        location = f" at {os.path.basename(tb_frames[-1].filename)}:{tb_frames[-1].lineno} in {tb_frames[-1].name}" if tb_frames else ""
         logger.error(
-            f"Provider Error [{err_type}] HTTP Status: {status_code or 'N/A'} for provider '{self.provider_name}'"
+            f"Provider Error [{err_type}] HTTP Status: {status_code or 'N/A'} for provider '{self.provider_name}'{location}: {safe_detail}"
         )
 
         if status_code == 401 or "authenticationerror" in err_type.lower() or "invalid api key" in err_str or "unauthorized" in err_str:
@@ -205,19 +210,26 @@ class OpenAIProviderAdapter(LLMProvider):
 
                 latency_ms = (time.time() - start_time) * 1000
 
-                if not response.choices:
+                choices = getattr(response, "choices", None)
+                if not choices:
                     raise ProviderInvalidResponseError("Provider returned an empty completion response.", provider=self.provider_name)
 
-                content = response.choices[0].message.content or ""
+                first_choice = choices[0]
+                message = getattr(first_choice, "message", None)
+                if message is None or not hasattr(message, "content"):
+                    raise ProviderInvalidResponseError("Provider returned a malformed choice without message content.", provider=self.provider_name)
+
+                content = getattr(message, "content", None) or ""
                 usage = LLMUsage()
-                if hasattr(response, "usage") and response.usage:
+                raw_usage = getattr(response, "usage", None)
+                if raw_usage:
                     usage = LLMUsage(
-                        prompt_tokens=getattr(response.usage, "prompt_tokens", 0) or 0,
-                        completion_tokens=getattr(response.usage, "completion_tokens", 0) or 0,
-                        total_tokens=getattr(response.usage, "total_tokens", 0) or 0,
-                        reasoning_tokens=getattr(getattr(response.usage, "completion_tokens_details", None),
+                        prompt_tokens=getattr(raw_usage, "prompt_tokens", 0) or 0,
+                        completion_tokens=getattr(raw_usage, "completion_tokens", 0) or 0,
+                        total_tokens=getattr(raw_usage, "total_tokens", 0) or 0,
+                        reasoning_tokens=getattr(getattr(raw_usage, "completion_tokens_details", None),
                                                  "reasoning_tokens", None),
-                        cached_prompt_tokens=getattr(getattr(response.usage, "prompt_tokens_details", None),
+                        cached_prompt_tokens=getattr(getattr(raw_usage, "prompt_tokens_details", None),
                                                      "cached_tokens", None),
                     )
 
@@ -229,8 +241,8 @@ class OpenAIProviderAdapter(LLMProvider):
                     latency_ms=latency_ms,
                     usage=usage,
                     request_id=req_id,
-                    finish_reason=response.choices[0].finish_reason or "unknown",
-                    refusal=bool(getattr(response.choices[0].message, "refusal", None)),
+                    finish_reason=getattr(first_choice, "finish_reason", None) or "unknown",
+                    refusal=bool(getattr(message, "refusal", None)),
                 )
             except ProviderError:
                 raise

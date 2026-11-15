@@ -76,7 +76,7 @@ def test_incomplete_provider_output_is_not_accepted_or_retried_with_same_limits(
 
 def test_irreducible_prompt_is_rejected_before_provider_dispatch(tmp_path):
     _,_,_,repo,task=setup_repository(tmp_path)
-    task.focus='x'*100000
+    task.focus='x'*600000
     provider=ScriptedProvider([dict(kind='finish')])
     runtime=AgentSubgraphs(provider,repo.tools(),BudgetManager(),repo.context,models={t:t.value for t in ModelTier})
     state=asyncio.run(runtime.run_specialist(task))

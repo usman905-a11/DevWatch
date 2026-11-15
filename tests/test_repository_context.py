@@ -105,3 +105,13 @@ def test_context_request_is_bounded_and_does_not_widen_scope(tmp_path):
         kind="request_context", arguments={"file_path": "service.py", "start_line": 2, "end_line": 2})})
     assert observation.inspected == ["service.py"]
     assert repo.evidence(observation.evidence_ref)["end_line"] == 2
+
+
+def test_oversized_source_intelligence_returns_parse_failed():
+    from devwatch.review.intelligence import analyze_source
+
+    oversized = "# " + ("x" * 600_000)
+    analysis = analyze_source("big.py", oversized)
+    assert analysis["status"] == "parse_failed"
+    assert analysis["symbols"] == []
+    assert analysis["limitations"] == ["Source exceeds parser input bound"]

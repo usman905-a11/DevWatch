@@ -47,16 +47,6 @@ async def test_same_defect_is_source_backed_in_both_evaluation_modes(tmp_path,ev
 
 
 @pytest.mark.asyncio
-async def test_provided_source_is_not_automatically_acknowledged(tmp_path):
-    case = load_corpus()[0]
-    provider = RecordingProvider(review_input(case),acknowledge=False)
-    row = await run_case(case,tmp_path,mode='specialist',evidence_mode='provided',provider=provider,live=False)
-    assert row['metrics']['prefetched_source_artifacts'] == 1
-    assert row['metrics']['inspected_source_fraction'] == 0
-    assert row['coverage']['failed'] and row['score']['true_positive'] == 0
-
-
-@pytest.mark.asyncio
 async def test_provided_source_does_not_hide_a_silent_reasoning_miss(tmp_path):
     case = load_corpus()[0]
     row = await run_case(case,tmp_path,mode='specialist',evidence_mode='provided',

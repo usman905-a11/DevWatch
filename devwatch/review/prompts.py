@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-VERSION = 'review-prompts-v6.2'
+VERSION = 'review-prompts-v6.4'
 CONTEXT_VERSION = 'scoped-evidence-priority-v2'
 
 
@@ -41,24 +41,24 @@ SHARED_POLICY = (
     'and the supplied behavioral contract. One candidate, one demonstrated failure and supported consequence. '
     'Do not assume undocumented input domains, caller powers or environment capabilities; '
     'put unresolved secondary assumptions in coverage limitations. Report inspected, skipped, '
-    'failed coverage and uncertainty. Tools produce refs, not inspection: read delivered pages '
-    'and acknowledge them with inspected_evidence; never acknowledge unseen evidence. '
+    'failed coverage and uncertainty. Tool results arrive as evidence pages in your next request; '
+    'a delivered page is recorded as inspected automatically. Never cite evidence you were not shown. '
     'Stop at sufficient evidence or a runtime limit. Follow-up never resets limits. '
 )
 ROLE_POLICIES = {
-    'planner': 'Delegate needed specialists from metadata. selected_agents must exactly equal '
-        'the unique review_tasks agent_id values; use unique task_id values. Cover every supplied '
-        'file, including package files, or state omissions. Each role shares its token allowance '
-        'across tasks; fit source reads and submission within eight iterations, using source '
-        'batches. Tools are for insufficient metadata. Complete nonempty scope with '
-        'kind=submit_plan, payload=ReviewPlan; never finish or return a bare plan. '
-        'State coverage expectations and omissions.',
+    'planner': 'Include all relevant specialists from metadata (performance_scalability for loops/queries/polling/scans; '
+        'quality_testability for high complexity/missing tests). selected_agents must equal unique '
+        'review_tasks agent_ids; unique task_ids; cover every file or state omissions. Fit reads and '
+        'submission in 8 iterations using source batches. Use tools only for missing metadata. '
+        'Complete nonempty scope via kind=submit_plan, payload=ReviewPlan; never finish or return a bare plan.',
     'bug_reliability': 'Trace failure paths and handling through exceptions, cleanup and resource lifecycle. '
         'For a documented failing operation, trace every return/raise path and check resource/state '
         'obligations on that exit. Preserve empty-input checks. Distinguish reachable failures '
         'from handled conditions; do not add unsupported input domains.',
     'logic_correctness': 'Trace the assigned behavioral invariants through control/data flow and state changes. '
-        'Track caller-owned aliases and before/after state, not only returned values. For pagination '
+        'Track caller-owned aliases and before/after state, not only returned values. Check missing '
+        'bounds/sign invariants on typed numeric parameters (e.g. negative amounts, out-of-range '
+        'percentages) that subvert the stated operation. For pagination '
         'and boundaries, identify units, inclusive/exclusive endpoints and a concrete first/edge case. '
         'Compare the result with the supplied contract before claiming a violation.',
     'quality_testability': 'Assess test effectiveness, complexity, coupling and maintainability. '
@@ -141,7 +141,9 @@ SKILLS = {
         'not infer timeouts, OOM, computational infeasibility or measured latency from it. '
         'If the current return is an eager list, explicitly preserve it: for example wrap '
         'a proposed accumulate iterator in list. Required list storage is not O(1).',
-    'specialist_completion': 'Investigate assigned source/contracts. Complete with kind=submit_candidates '
+    'specialist_completion': 'Inspect every assigned source file and every function/route in scope '
+        'before submitting; report all independent supported defects across all assigned files '
+        'rather than stopping after one finding. Investigate assigned source/contracts. Complete with kind=submit_candidates '
         'and a full SpecialistResult in payload, copying task_id/agent_id from task; use candidates=[] '
         'when none are supported. Every candidate requires category, title, description, impact, '
         'confidence, location, evidence_refs, kind and remediation. '
@@ -164,11 +166,11 @@ SKILLS = {
         'ratio. Give a complete behavior-preserving fix, not a menu of incomplete sketches; '
         'retain every mapping field, required nested independence, appended value and return '
         'materialization. Leave unmeasured feasibility claims in coverage limitations. '
-        'Use evidence_complete only after acknowledging source for investigation.remaining_files; '
-        'each candidate needs acknowledged read_file covering its location, not parsed facts alone. '
+        'Use evidence_complete only after source for investigation.remaining_files was delivered; '
+        'each candidate needs a delivered read_file page covering its location, not parsed facts alone. '
         'For multiple assigned files, use read_file additional_files to batch up to four paths '
-        'when useful. Each path has its own evidence ref/pages; read and acknowledge each delivered '
-        'page. Retrieve omitted or partial pages before claiming complete coverage. '
+        'in ONE call. Each path has its own evidence ref. Retrieve omitted or partial pages before '
+        'claiming complete coverage. Typical flow: one read_file call, then submit_candidates. '
         'When investigation.stage is ready and no concrete unresolved question remains, submit the '
         'supported candidates (possibly []). Do not reread already inspected source merely to raise '
         'confidence or spend the remaining budget; further tools need a specific unresolved question. '
@@ -208,8 +210,8 @@ SKILLS = {
         'Runtime assembles findings from recorded decisions. Do not recreate findings/report_draft '
         'or add unverified consequences. Never use finish or verification actions.',
     'evidence_paging': 'For a partial artifact use read_evidence with evidence_ref and next_offset. '
-        'Acknowledge each delivered page with inspected_evidence; advance offsets instead of '
-        'repeating inspected requests. Partial delivery does not establish full inspection.',
+        'Advance offsets instead of repeating delivered requests. Partial delivery does not '
+        'establish full inspection.',
 }
 
 

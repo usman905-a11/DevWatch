@@ -53,7 +53,7 @@ async def test_real_role_requests_are_compact_versioned_and_checkpointed(tmp_pat
 async def test_paging_guidance_loads_only_for_partial_evidence_and_keeps_completion(tmp_path):
     _,artifacts,_,original,task=setup_repository(tmp_path)
     from devwatch.review.repository import RepositoryContext
-    snapshot=artifacts.capture(owner='alice',files={'service.py':'# '+ 'x'*4000+'\n'})
+    snapshot=artifacts.capture(owner='alice',files={'service.py':'# '+ 'x'*20000+'\n'})
     repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
     class Provider(ScriptedProvider):
         async def generate_completion(self,request):

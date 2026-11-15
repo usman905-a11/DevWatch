@@ -81,7 +81,7 @@ class BudgetManager:
             if len(self.ledger.inflight) >= self.limits.concurrent_model_calls:
                 raise BudgetExceeded("concurrent model call limit reached")
             reserved = sum(item.tokens for item in self.ledger.inflight.values())
-            if self.ledger.total_tokens + reserved + tokens > self.limits.job_tokens:
+            if self.limits.job_tokens is not None and self.ledger.total_tokens + reserved + tokens > self.limits.job_tokens:
                 raise BudgetExceeded("job token cap exceeded")
             ticket = uuid4().hex
             self.ledger.inflight[ticket] = reservation
@@ -99,10 +99,12 @@ class BudgetManager:
             if usage.total_tokens > reservation.tokens:
                 raise BudgetExceeded("provider usage exceeded reservation")
 
-    def model_allowance(self, agent: AgentId) -> int:
-        """Remaining tokens under the single per-scan token cap."""
+    def model_allowance(self, agent: AgentId) -> int | None:
+        """Remaining tokens under the per-scan token cap, or None when uncapped."""
         with self._lock:
             self._ensure_time()
+            if self.limits.job_tokens is None:
+                return None
             reserved = sum(item.tokens for item in self.ledger.inflight.values())
             return max(0, self.limits.job_tokens - self.ledger.total_tokens - reserved)
 

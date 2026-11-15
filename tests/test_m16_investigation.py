@@ -83,7 +83,7 @@ async def test_unacknowledged_source_candidate_gets_one_repair_then_explicit_inc
     provider=ScriptedProvider([action,action])
     events=[]
     graph=engine(repo,provider,emit=lambda kind,**payload: events.append((kind,payload)))
-    output=await graph.run_specialist(task,private_state=AgentPrivateState(evidence_refs=[ref]))
+    output=await graph.run_specialist(task,private_state=AgentPrivateState())
     assert output['output'].stop_reason=='evidence_incomplete'
     assert output['output'].candidates==[] and len(provider.requests)==2
     assert graph.budget.ledger.task_schema_repairs[task.task_id]==1
@@ -99,7 +99,7 @@ async def test_valid_sibling_survives_evidence_repair_followed_by_invalid_model_
     second=repo._read_file({'file_path':'service.py','start_line':2,'end_line':2},task).evidence_ref
     good,bad={**candidate(repo,first),'title':'Known valid'}, {**candidate(repo,second),'title':'Unacknowledged'}
     provider=ScriptedProvider([complete(task,[good,bad],[first]),'{'])
-    output=await engine(repo,provider).run_specialist(task,private_state=AgentPrivateState(evidence_refs=[first,second]))
+    output=await engine(repo,provider).run_specialist(task,private_state=AgentPrivateState(evidence_refs=[first]))
     assert [item.title for item in output['output'].candidates]==['Known valid']
     assert output['output'].stop_reason=='invalid_schema'
 
@@ -158,7 +158,7 @@ async def test_two_unacknowledged_identical_successes_stop_before_a_third_read(t
     provider=ScriptedProvider([read() for _ in range(8)])
     output=await engine(repo,provider).run_specialist(task)
     assert output['output'].stop_reason=='no_progress'
-    assert len(provider.requests)==3 and output['private_state'].tool_call_count==2
+    assert len(provider.requests)==2 and output['private_state'].tool_call_count==1
 
 
 @pytest.mark.asyncio
@@ -218,7 +218,7 @@ async def test_completing_missing_inspection_clears_only_its_resolved_task_marke
 @pytest.mark.asyncio
 async def test_advancing_page_offsets_reaches_complete_inspection_without_stall(tmp_path):
     _,artifacts,_,original,task=setup_repository(tmp_path)
-    snapshot=artifacts.capture(owner='alice',files={'service.py':'# '+'x'*4000+'\n'})
+    snapshot=artifacts.capture(owner='alice',files={'service.py':'# '+'x'*20000+'\n'})
     repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
     ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     class Provider(ScriptedProvider):

@@ -31,7 +31,7 @@ export interface ArithmeticReceipt {
 
 export interface BalancedLimits {
   review_seconds: number
-  job_tokens: number
+  job_tokens?: number | null
   planner_output_tokens: number
   concurrent_model_calls: number
   iterations_per_task: number

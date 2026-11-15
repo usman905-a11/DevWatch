@@ -26,7 +26,7 @@ from devwatch.review.tool_errors import ToolFailure, diagnose, failure_identity,
 from devwatch.review import investigation, tool_selection, prompts
 from devwatch.review import verification as semantic_verification
 from devwatch.review.contracts import (
-    AGENT_CONTRACTS, SPECIALISTS, AgentAction, AgentId, AgentPrivateState, AgentWorkItem,
+    AGENT_CONTRACTS, EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_CHARS, SPECIALISTS, AgentAction, AgentId, AgentPrivateState, AgentWorkItem,
     ContractModel, EvidenceProgress, ModelTier, ReviewPlan, ReviewTask, SpecialistResult, TokenUsage,
     SynthesisSummary, VerificationPhaseResult, VerificationSynthesisResult,
     VerificationDecision, CausalReview, ClaimAssessment, DuplicateReview, Disagreement, FindingCandidate, SourceLocation,
@@ -38,7 +38,7 @@ class ToolObservation(ContractModel):
     evidence_ref: str = Field(min_length=1)
     inspected: list[str] = Field(default_factory=list)
     offset: int = Field(default=0, ge=0)
-    max_chars: int = Field(default=1500, ge=1, le=3000)
+    max_chars: int = Field(default=EVIDENCE_PAGE_CHARS, ge=1, le=MAX_EVIDENCE_PAGE_CHARS)
     render_info: StepRenderInfo | None = None
 
 
@@ -586,7 +586,7 @@ class AgentSubgraphs:
                 # Retrieved pages must be deliverable before acknowledgment.
                 # Fit the response reservation first; it is a ceiling, not a
                 # reason to discard evidence that fits the actual context.
-                headroom = min(self.budget.limits.model_context_tokens, allowance) - input_bound
+                headroom = min(self.budget.limits.model_context_tokens, allowance if allowance is not None else self.budget.limits.model_context_tokens) - input_bound
                 if task.agent_id != AgentId.PLANNER and headroom >= 512:
                     return prompt, min(max_output, headroom)
                 if state.get('phase') == 'verification' and len(active) > 1:
@@ -607,12 +607,12 @@ class AgentSubgraphs:
                 # Optional context is already removed. A response reservation
                 # is a ceiling, not a minimum: retain mandatory schemas/claims
                 # and fit output to the remaining context without raising limits.
-                headroom = min(self.budget.limits.model_context_tokens, allowance) - input_bound
+                headroom = min(self.budget.limits.model_context_tokens, allowance if allowance is not None else self.budget.limits.model_context_tokens) - input_bound
                 if task.agent_id != AgentId.PLANNER and headroom >= 512:
                     return prompt, min(max_output, headroom)
                 if input_bound >= self.budget.limits.model_context_tokens:
                     raise PromptContextLimit("required request fields exceed model context")
-                if allowance <= input_bound:
+                if allowance is not None and allowance <= input_bound:
                     raise BudgetExceeded("remaining agent budget cannot admit the required prompt")
                 raise PromptContextLimit("required request fields exceed model context")
 
@@ -741,8 +741,21 @@ class AgentSubgraphs:
                             receipt.source_file = page["source_file"]
                         receipt.provenance = page.get("provenance", {})
                         receipt.total_chars = page["total_chars"]
+                        # A page delivered in a completed model call counts as inspected:
+                        # the model has seen it. This removes a separate acknowledgment turn.
+                        if span not in receipt.inspected:
+                            receipt.inspected.append(span)
+                        if receipt.source_file is not None and receipt.fully_inspected():
+                            if receipt.source_file not in private.coverage.inspected_files:
+                                private.coverage.inspected_files.append(receipt.source_file)
+                            if receipt.source_file not in private.inspected_files_and_symbols:
+                                private.inspected_files_and_symbols.append(receipt.source_file)
+                            if private.coverage.skipped.get(receipt.source_file) == "not_inspected":
+                                private.coverage.skipped.pop(receipt.source_file)
                         await self._event("evidence_delivered", state, evidence_ref=page["evidence_ref"],
                                           operation_id=ticket, offset=span[0], end_offset=span[1])
+                if private.investigation is not None:
+                    investigation.refresh(private)
                 await self._save(state)
                 if response.finish_reason != "stop" or response.refusal:
                     raise IncompleteCompletion("provider_truncated" if response.finish_reason == "length" else "provider_incomplete",

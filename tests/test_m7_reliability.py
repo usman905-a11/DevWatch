@@ -8,7 +8,7 @@ import pytest
 
 from devwatch.providers.base import LLMResponse, LLMUsage
 from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentId, AgentPrivateState, FindingCandidate, TokenUsage
+from devwatch.review.contracts import AgentId, AgentPrivateState, BalancedLimits, FindingCandidate, TokenUsage
 from devwatch.review.jobs import DurableJobManager, JobConflict
 from devwatch.review.subgraphs import AgentSubgraphs, PermissionedTools, ToolObservation
 from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession, _serializable
@@ -241,7 +241,7 @@ def test_exhausted_budget_retains_saved_findings_and_cumulative_usage(limit):
             impact="Request failure", confidence=.7, evidence_refs=["source-1"],
             location={"snapshot_id": "snapshot", "file_path": "service.py", "start_line": 2, "end_line": 2})
         private = AgentPrivateState(current_task="t1", local_findings=[candidate])
-        budget = BudgetManager()
+        budget = BudgetManager(BalancedLimits(job_tokens=250_000))
         if limit == "iterations":
             budget.ledger.task_iterations["t1"] = 8
         elif limit == "tokens":

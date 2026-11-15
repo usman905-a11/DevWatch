@@ -301,7 +301,7 @@ class CompletionAssessment:
         if (max(round_number, ledger.review_round) >= limits.review_rounds
                 or ledger.elapsed_seconds >= limits.review_seconds):
             return None
-        if ledger.total_tokens >= limits.job_tokens:
+        if limits.job_tokens is not None and ledger.total_tokens >= limits.job_tokens:
             return None
         for request in sorted(result.followup_requests, key=lambda request: (request.task_id, request.question)):
             task = self.tasks.get(request.task_id)

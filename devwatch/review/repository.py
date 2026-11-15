@@ -19,6 +19,7 @@ from devwatch.review.jobs import StepRenderInfo
 from devwatch.review.stores import ArtifactStore, validate_source_path
 from devwatch.review.subgraphs import PermissionedTools, ToolObservation
 from devwatch.review.tool_errors import ToolFailure
+from devwatch.review.contracts import EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_BYTES
 from devwatch.review.intelligence import analyze_source
 from devwatch.review.workspace import WorkspaceError, WorkspaceManager, WorkspaceNotFoundError, build_workspace_manifest
 
@@ -28,7 +29,7 @@ def _json(value: Any) -> str:
 
 
 class RepositoryContext:
-    CONTEXT_BYTES = 6000
+    CONTEXT_BYTES = 48000
 
     def __init__(
         self,
@@ -174,7 +175,7 @@ class RepositoryContext:
             'additional_evidence_refs':[item.evidence_ref for item in observations[1:]],
             'render_info': StepRenderInfo(files=paths[:25], evidence_ref=observations[0].evidence_ref)})
 
-    def evidence_page(self, identity, work, *, offset=0, max_chars=1500):
+    def evidence_page(self, identity, work, *, offset=0, max_chars=EVIDENCE_PAGE_CHARS):
         record = self.scoped_evidence(identity, work)
         encoded = _json(record)
         if type(offset) is not int or not 0 <= offset < len(encoded):
@@ -187,7 +188,7 @@ class RepositoryContext:
                 "source_scope": record["source_scope"] if len(_json(record["source_scope"]).encode("utf-8")) <= 512 else [],
                 "scope_count": len(record["source_scope"]), "provenance": record.get("provenance", {}),
                 "excerpt": encoded[offset:end]}
-        while len(_json(page).encode("utf-8")) > 2800:
+        while len(_json(page).encode("utf-8")) > MAX_EVIDENCE_PAGE_BYTES:
             end = offset + (end - offset) // 2
             if end <= offset:
                 raise ValueError("evidence scope metadata exceeds page budget")
@@ -199,7 +200,7 @@ class RepositoryContext:
         if action is not None and action.kind == "request_context":
             return self._read_files(action.arguments, work)
         pages = [self.evidence_page(identity, work, offset=private.evidence_cursors.get(identity, 0),
-                                   max_chars=private.evidence_page_sizes.get(identity, 1500))
+                                   max_chars=private.evidence_page_sizes.get(identity, EVIDENCE_PAGE_CHARS))
                  for identity in reversed(list(dict.fromkeys(work.evidence_refs + private.evidence_refs)))]
         def priority(page):
             identity = page['evidence_ref']
@@ -252,8 +253,8 @@ class RepositoryContext:
         async def read_evidence(arguments, work):
             identity = arguments["evidence_ref"]
             offset = arguments.get("offset", 0)
-            self.evidence_page(identity, work, offset=offset, max_chars=arguments.get("max_chars", 1500))
-            return ToolObservation(evidence_ref=identity, offset=offset, max_chars=arguments.get("max_chars", 1500),
+            self.evidence_page(identity, work, offset=offset, max_chars=arguments.get("max_chars", EVIDENCE_PAGE_CHARS))
+            return ToolObservation(evidence_ref=identity, offset=offset, max_chars=arguments.get("max_chars", EVIDENCE_PAGE_CHARS),
                                    render_info=StepRenderInfo(evidence_ref=identity))
         async def facts(name, arguments, work):
             allowed = {"file_path", "symbol"} if name == "symbol_lookup" else {"file_path"}

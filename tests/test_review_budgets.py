@@ -84,5 +84,5 @@ def test_execution_clock_counts_wall_time_once_and_resumes_from_spent_time():
     resumed = api.BudgetManager(ledger=saved, clock=lambda: now[0])
     resumed.begin_execution()
     now[0] += 5
-    assert resumed.timeout_for("provider") == 30
+    assert resumed.timeout_for("provider") == 90
     assert resumed.ledger.elapsed_seconds == 15

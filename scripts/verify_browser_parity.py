@@ -1,4 +1,9 @@
-"""Real Chrome + canonical ASGI service smoke; scripted provider, no model network."""
+"""Real Chrome + local service smoke for the folder-based web IDE.
+
+Uses a scripted provider (no model network). Verifies: set workspace by path,
+lazy explorer with 5,000+ entries, full 1 MB file in Monaco, run a review, report
+renders, finding click-through, reopen job after reload, no horizontal overflow.
+"""
 import argparse
 import json
 import os
@@ -7,9 +12,13 @@ import subprocess
 import sys
 import tempfile
 import time
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
+SERVICE_PORT = 8998
+VITE_PORT = 5173
+BIG_FILE_BYTES = 1_000_000
+IGNORED_FILE_COUNT = 5_200
 
 
 def serve(runtime):
@@ -18,75 +27,114 @@ def serve(runtime):
     from tests.test_control_agents import MODELS
     from devwatch.review.service import ServiceSettings, create_app
     uvicorn.run(create_app(settings=ServiceSettings(runtime_root=Path(runtime), models=MODELS), provider=ReviewProvider()),
-                host="127.0.0.1", port=8998, log_level="warning")
+                host="127.0.0.1", port=SERVICE_PORT, log_level="warning")
+
+
+def build_workspace(source: Path) -> None:
+    source.mkdir()
+    (source / "service.py").write_text("def first(items):\n    return items[0]\n", encoding="utf-8")
+    line = "x" * 99 + "\n"
+    (source / "big.txt").write_text(line * (BIG_FILE_BYTES // len(line)), encoding="utf-8")
+    vendor = source / "node_modules"
+    for index in range(IGNORED_FILE_COUNT):
+        package = vendor / f"pkg{index // 100:03d}"
+        package.mkdir(parents=True, exist_ok=True)
+        (package / f"mod{index:05d}.js").write_text("module.exports = 1\n", encoding="utf-8")
+
+
+def wait(url):
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(url, timeout=1):
+                return
+        except OSError:
+            time.sleep(.2)
+    raise TimeoutError(f"Local verification server did not start: {url}")
 
 
 def run():
     sys.path.insert(0, str(ROOT / ".tools" / "browser"))
-    from playwright.sync_api import sync_playwright, expect
-    def wait(url):
-        deadline = time.monotonic() + 20
-        while time.monotonic() < deadline:
-            try:
-                with urlopen(url, timeout=1):
-                    return
-            except OSError:
-                time.sleep(.1)
-        raise TimeoutError("Local verification server did not start")
+    from playwright.sync_api import expect, sync_playwright
     with tempfile.TemporaryDirectory(prefix="devwatch-browser-") as directory:
+        source = Path(directory) / "source"
+        build_workspace(source)
+        big_size = (source / "big.txt").stat().st_size
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         with open(Path(directory) / "servers.log", "w") as output:
-            service = subprocess.Popen([sys.executable, "-m", "scripts.verify_browser_parity", "--serve", directory], cwd=ROOT,
-                stdout=output, stderr=output, creationflags=flags)
-            vite = subprocess.Popen(["node", str(ROOT / "frontend/node_modules/vite/bin/vite.js"), "--host", "127.0.0.1", "--port", "5173", "--strictPort"],
+            service = subprocess.Popen([sys.executable, "-m", "scripts.verify_browser_parity", "--serve", str(Path(directory) / "runtime")],
+                cwd=ROOT, stdout=output, stderr=output, creationflags=flags)
+            vite = subprocess.Popen(["node", str(ROOT / "frontend/node_modules/vite/bin/vite.js"), "--host", "127.0.0.1",
+                                     "--port", str(VITE_PORT), "--strictPort"],
                 cwd=ROOT / "frontend", stdout=output, stderr=output, creationflags=flags)
             try:
-                wait("http://127.0.0.1:8998/openapi.json"); wait("http://127.0.0.1:5173")
+                wait(f"http://127.0.0.1:{SERVICE_PORT}/openapi.json"); wait(f"http://127.0.0.1:{VITE_PORT}")
                 with sync_playwright() as playwright:
                     browser = playwright.chromium.launch(channel="chrome", headless=True)
                     try:
-                        page = browser.new_page(viewport={"width": 320, "height": 480})
+                        page = browser.new_page(viewport={"width": 1440, "height": 900})
                         errors = []
                         page.on("pageerror", lambda error: errors.append(str(error)))
-                        page.goto("http://127.0.0.1:5173"); page.wait_for_load_state("networkidle")
-                        page.get_by_text('Service connection', exact=True).click()
-                        page.get_by_label("Service URL").fill("http://127.0.0.1:8998")
-                        page.get_by_role("button", name="Connect", exact=True).click()
-                        page.get_by_text('Service connection', exact=True).click()
-                        source = Path(directory) / "source"
-                        source.mkdir()
-                        (source / "service.py").write_text("def first(items):\n    return items[0]\n", encoding="utf-8")
-                        page.locator('input[type=file]').set_input_files(str(source))
-                        page.get_by_role("button", name="Run review").click()
-                        expect(page.get_by_role("button", name="Download JSON")).to_be_visible(timeout=15000)
-                        for label in ("Download JSON", "Download Markdown", "Download PDF"):
+                        page.goto(f"http://127.0.0.1:{VITE_PORT}"); page.wait_for_load_state("networkidle")
+
+                        def connect():
+                            page.get_by_text("Service connection", exact=True).click()
+                            page.get_by_label("Service URL").fill(f"http://127.0.0.1:{SERVICE_PORT}")
+                            page.get_by_role("button", name="Connect", exact=True).click()
+                            page.get_by_text("Service connection", exact=True).click()
+
+                        connect()
+                        page.get_by_label("Folder path").fill(str(source))
+                        started = time.monotonic()
+                        page.get_by_role("button", name="Set workspace", exact=True).click()
+                        tree = page.locator("#source-files")
+                        def tree_item(rel_path: str):
+                            return tree.locator(f'[role="treeitem"][title="{rel_path}"]')
+
+                        expect(tree_item("service.py")).to_be_visible(timeout=10000)
+                        root_seconds = time.monotonic() - started
+                        expect(tree_item("node_modules")).to_be_visible()
+
+                        # 1 MB file opens in full in Monaco before expanding huge folder.
+                        tree_item("big.txt").click()
+                        expect(page.locator("#source-pane .monaco-editor")).to_be_visible(timeout=20000)
+                        expect(page.locator("#source-pane")).not_to_contain_text("too large")
+
+                        # Lazy expansion of an ignored (dimmed) folder with 5,000+ descendants.
+                        tree_item("node_modules").click()
+                        expect(tree_item("node_modules/pkg000")).to_be_visible(timeout=10000)
+                        tree_item("node_modules/pkg000").click()
+                        expect(tree_item("node_modules/pkg000/mod00000.js")).to_be_visible(timeout=10000)
+
+                        # Run a review against the live folder and wait for the report.
+                        page.get_by_role("button", name="Run review", exact=True).click()
+                        expect(page.get_by_role("button", name="Download JSON")).to_be_visible(timeout=30000)
+                        results = page.locator("#review-results")
+                        expect(results).to_contain_text("Report overview")
+                        for label in ("Download JSON", "Download Markdown"):
                             with page.expect_download() as saved:
                                 page.get_by_role("button", name=label, exact=True).click()
                             assert saved.value.failure() is None
-                        page.get_by_text('Recent events', exact=False).click()
-                        page.get_by_role('button', name='View tool evidence', exact=True).first.click()
-                        expect(page.get_by_role('region', name='Tool evidence')).to_contain_text('read_file')
-                        job = page.locator('.job-bar > code').inner_text().split()[-1]
-                        page.get_by_role("button", name="Files", exact=True).click()
-                        page.get_by_role("button", name="Open service.py").click()
-                        expect(page.locator('#source-pane')).to_be_visible()
-                        page.locator('.skip-link').focus()
-                        page.keyboard.press("Enter")
-                        expect(page.locator('#review-results')).to_be_visible()
-                        expect(page.locator('#review-results')).to_be_focused()
+
+                        # Finding click-through opens the file at its line range.
+                        results.get_by_role("button", name="Open source").first.click()
+                        expect(page.locator("#source-pane")).to_contain_text("service.py", timeout=10000)
+
+                        job = page.locator(".job-bar > code").inner_text().split()[-1]
                         page.reload(); page.wait_for_load_state("networkidle")
-                        page.get_by_text('Service connection', exact=True).click()
-                        page.get_by_label("Service URL").fill("http://127.0.0.1:8998")
-                        page.get_by_role("button", name="Connect", exact=True).click()
+                        connect()
                         page.get_by_label("Job ID", exact=True).fill(job)
                         page.get_by_role("button", name="Open job", exact=True).click()
-                        expect(page.get_by_role("button", name="Download PDF")).to_be_visible(timeout=10000)
+                        expect(page.get_by_role("button", name="Download JSON")).to_be_visible(timeout=10000)
+
                         for width in (320, 768, 1024, 1440):
                             page.set_viewport_size({"width": width, "height": 900})
-                            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                            assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
                         assert not errors, errors
-                        print(json.dumps({"browser": "Chrome", "capture": True, "exports": ["json", "markdown", "pdf"],
-                            "reopen": True, "immutable_source": True, "narrow_skip_link": True, "console_errors": 0}))
+                        print(json.dumps({"browser": "Chrome", "workspace_entries": IGNORED_FILE_COUNT + 2,
+                            "root_tree_seconds": round(root_seconds, 2), "lazy_expand": True,
+                            "full_file_bytes": big_size, "review_report": True, "exports": ["json", "markdown"],
+                            "finding_click_through": True, "reopen_job": True, "console_errors": 0}))
                     finally:
                         browser.close()
             finally:

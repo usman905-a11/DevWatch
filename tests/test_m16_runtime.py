@@ -26,7 +26,7 @@ async def test_sdk_investigation_repair_and_stops_reach_honest_accepted_reports(
         action = json.loads(response.content)
         if prompt['task']['agent_id'] == 'logic_correctness' and action['kind'] == 'submit_candidates':
             if mode == 'repair' and not prompt.get('repair'):
-                action['inspected_evidence'] = []
+                action['payload']['candidates'][0]['evidence_refs'] = ['missing']
             elif mode == 'partial_siblings':
                 candidate = action['payload']['candidates'][0]
                 action['payload']['candidates'].append({**candidate, 'title': 'Unsupported sibling', 'evidence_refs': ['missing']})

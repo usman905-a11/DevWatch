@@ -11,7 +11,8 @@ from tests.test_iterative_agents import ScriptedProvider
 
 @pytest.mark.parametrize('role', [AgentId.LOGIC_CORRECTNESS, AgentId.SYNTHESIZER_VERIFIER])
 def test_nonplanner_response_reservation_fits_remaining_role_allowance(role):
-    budget = BudgetManager()
+    from devwatch.review.contracts import BalancedLimits
+    budget = BudgetManager(BalancedLimits(job_tokens=250_000))
     runtime = AgentSubgraphs(ScriptedProvider([]), PermissionedTools(), budget, lambda state: {},
                             models={tier:tier.value for tier in ModelTier})
     work = AgentWorkItem if role == AgentId.SYNTHESIZER_VERIFIER else ReviewTask
@@ -40,7 +41,7 @@ def test_bounded_source_batch_completes_three_files_without_fabricating_inspecti
     from devwatch.review.repository import RepositoryContext
     from devwatch.review.stores import ArtifactStore
     artifacts = ArtifactStore(tmp_path/'artifacts')
-    manifest = artifacts.capture(owner='alice',files={'a.py':('A = 1\n' if not partial else 'A = '+repr('x'*6000)+'\n'),'b.py':'B = 2\n','c.py':'C = 3\n'})
+    manifest = artifacts.capture(owner='alice',files={'a.py':('A = 1\n' if not partial else 'A = '+repr('x'*20000)+'\n'),'b.py':'B = 2\n','c.py':'C = 3\n'})
     repo = RepositoryContext(artifacts,manifest.snapshot_id,owner='alice')
     task = ReviewTask(task_id='batch',agent_id=AgentId.LOGIC_CORRECTNESS,files=['a.py','b.py','c.py'],focus='Check constants')
     requests = []
