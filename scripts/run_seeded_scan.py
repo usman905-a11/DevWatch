@@ -14,6 +14,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+from dotenv import load_dotenv
+from devwatch.review.contracts import ModelTier
 from devwatch.review.jobs import DurableJobManager, JobStore
 from devwatch.review.service import ServiceSettings
 from devwatch.review.stores import ArtifactStore, StoreLayout
@@ -106,25 +108,50 @@ def match_seeded_issues(manifest_issues: list[dict[str, Any]], report: dict[str,
             "title": finding.get("title"),
         })
 
+    audit = report.get("verification_audit") or {}
+    decisions = audit.get("decisions") or []
+    rejected_count = sum(1 for item in decisions if item.get("verdict") == "rejected")
+
     return {
         "seeded_total": len(manifest_issues),
         "found_count": len(found),
         "missed_count": len(missed),
         "false_positive_count": len(false_positives),
+        "rejected_count": rejected_count,
         "found": found,
         "missed": missed,
         "false_positives": false_positives,
+        "report_summary": report.get("summary", ""),
+        "limitations": report.get("limitations", []),
         "coverage": report.get("coverage", {}),
     }
 
 
 def format_baseline_summary(summary: dict[str, Any]) -> str:
+    coverage = summary.get("coverage") or {}
+    failed = coverage.get("failed") or {}
+    inspected = coverage.get("inspected_files") or []
     lines = [
         f"Seeded baseline: {summary['found_count']}/{summary['seeded_total']} found, "
         f"{summary['missed_count']} missed, {summary['false_positive_count']} false positive(s).",
+    ]
+    if "total_tokens" in summary or inspected or failed or summary.get("rejected_count"):
+        tokens = summary.get("total_tokens", "n/a")
+        rejected = summary.get("rejected_count", 0)
+        lines.append(
+            f"Run stats: status={summary.get('job_status', 'n/a')}, tokens={tokens}, "
+            f"inspected_files={len(inspected)}, rejected_candidates={rejected}, failed={list(failed.keys()) or 'none'}"
+        )
+    if failed:
+        for stage, reason in failed.items():
+            lines.append(f"  failure[{stage}]: {reason}")
+    if summary.get("limitations"):
+        for note in summary["limitations"]:
+            lines.append(f"  limitation: {note}")
+    lines.extend([
         "",
         "Found:",
-    ]
+    ])
     if not summary["found"]:
         lines.append("  (none)")
     for item in summary["found"]:
@@ -159,10 +186,12 @@ async def run_seeded_scan(
     models: dict[Any, str] | None = None,
 ) -> dict[str, Any]:
     if provider is None:
+        load_dotenv(REPO_ROOT / ".env", override=False)
         settings = ServiceSettings.from_env()
-        provider_name = os.getenv("DEVWATCH_PROVIDER", "openai").strip().lower() or "openai"
+        default_provider = "gemini" if settings.models[ModelTier.SMALL].startswith("gemini-") else "openai"
+        provider_name = (os.getenv("DEVWATCH_PROVIDER") or default_provider).strip().lower() or default_provider
         provider = OpenAIProviderAdapter(provider_name=provider_name, max_concurrency=3)
-        if not provider.is_configured():
+        if not provider.is_available():
             raise RuntimeError(
                 "No configured LLM provider credentials found. Set DEVWATCH_MODEL and a matching "
                 "API key (OPENAI_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY) before running."

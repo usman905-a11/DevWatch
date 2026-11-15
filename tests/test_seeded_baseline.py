@@ -3,6 +3,8 @@
 import asyncio
 import json
 
+import pytest
+
 from devwatch.providers.base import LLMResponse, LLMUsage
 from devwatch.review.contracts import ModelTier
 from scripts.run_seeded_scan import (
@@ -208,3 +210,12 @@ def test_run_seeded_scan_executes_against_seeded_repo_with_scripted_provider(tmp
     assert summary["found_count"] == 1
     assert summary["found"][0]["id"] == "SEED-05"
     assert summary["found"][0]["found_by"] == ["architecture_security"]
+
+
+def test_run_seeded_scan_reports_missing_provider_credentials(monkeypatch, tmp_path):
+    monkeypatch.setattr("scripts.run_seeded_scan.load_dotenv", lambda *args, **kwargs: False)
+    for key in ("OPENAI_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "DEVWATCH_MODEL", "DEVWATCH_MODEL_MEDIUM"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("DEVWATCH_MODEL", "gpt-4o-mini")
+    with pytest.raises(RuntimeError, match="No configured LLM provider credentials"):
+        asyncio.run(run_seeded_scan(DEFAULT_REPO, DEFAULT_MANIFEST, runtime_dir=tmp_path / "runtime"))
