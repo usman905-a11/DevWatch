@@ -41,6 +41,10 @@ def test_workspace_set_and_get(tmp_path: Path):
         assert Path(ok.json()["path"]).resolve() == repo.resolve()
         assert Path(client.get("/workspace").json()["path"]).resolve() == repo.resolve()
 
+        quoted = client.post("/workspace", json={"path": f'"{repo}"'})
+        assert quoted.status_code == 200
+        assert Path(quoted.json()["path"]).resolve() == repo.resolve()
+
 
 def test_fs_list_sorting_ignored_and_never_truncated(tmp_path: Path):
     repo = tmp_path / "repo"

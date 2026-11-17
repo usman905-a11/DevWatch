@@ -176,6 +176,7 @@ class AgentExecutionState(TypedDict, total=False):
     review_tasks: list[str]
     retry_operation: str | None
     batch_ids: list[str]
+    verification_batch_limit: int
     validation_error: str
     last_tool_error: dict[str, str] | None
     run_id: str
@@ -622,8 +623,9 @@ class AgentSubgraphs:
         if state.get("phase") == "verification":
             decided = {decision.finding_id for decision in state["verification"].decisions} if state.get("verification") else set()
             pending = state.get('provisional_verification')
-            state["batch_ids"] = ([item.finding_id for item in pending.decisions] if pending is not None
-                else [key for key in state["candidates"] if key not in decided])[:8]
+            batch_limit = state.get("verification_batch_limit", 8)
+            state["batch_ids"] = ([item.finding_id for item in pending.decisions[:batch_limit]] if pending is not None
+                else [key for key in state["candidates"] if key not in decided][:batch_limit])
             task = task.model_copy(update={"evidence_refs": list(dict.fromkeys(ref for key in state["batch_ids"]
                                              for ref in state["candidates"][key]["evidence_refs"]))})
         try:
@@ -836,6 +838,17 @@ class AgentSubgraphs:
                 try:
                     raw = await self._call_with_retries(state, repair=repair)
                 except IncompleteCompletion as exc:
+                    if (task.agent_id == AgentId.SYNTHESIZER_VERIFIER and state.get("phase") == "verification"
+                            and str(exc) == "provider_truncated" and len(state.get("batch_ids", [])) > 1):
+                        try:
+                            self.budget.consume_schema_repair(task.task_id)
+                        except BudgetExceeded:
+                            return self._stop(state, str(exc))
+                        state["verification_batch_limit"] = max(1, len(state["batch_ids"]) // 2)
+                        await self._save(state)
+                        await self._event("retry_started", state, attempt=2, stop_reason=str(exc))
+                        repair = False
+                        continue
                     if task.agent_id != AgentId.PLANNER or not exc.recoverable:
                         raise
                     try:

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CodeEditor, LineRange, OpenTab } from '../components/CodeEditor'
 import { FileExplorer } from '../components/FileExplorer'
-import { DurableReviewClient } from './durable-client'
+import { DurableReviewClient, ServiceError } from './durable-client'
 import { JobActivity } from './JobActivity'
 import { ReportPanel } from './ReportPanel'
 import { useReviewSession } from './useReviewSession'
@@ -12,6 +12,7 @@ export function DurableApp() {
   const { session, state } = useReviewSession(client)
   const [serviceUrl, setServiceUrl] = useState(client.serviceUrl)
   const [apiKey, setApiKey] = useState('')
+  const [connectionOpen, setConnectionOpen] = useState(false)
   const [jobId, setJobId] = useState('')
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
   const [pathInput, setPathInput] = useState('')
@@ -33,13 +34,19 @@ export function DurableApp() {
     let cancelled = false
     client.getWorkspace()
       .then(res => {
-        if (!cancelled && res.path) {
-          setWorkspacePath(res.path)
-          setPathInput(res.path)
+        if (!cancelled) {
+          setLocalError(null)
+          if (res.path) {
+            setWorkspacePath(res.path)
+            setPathInput(res.path)
+          }
         }
       })
-      .catch(() => {
-        // Service may not be started yet; ignore initial probe failure.
+      .catch(err => {
+        if (!cancelled && err instanceof ServiceError && err.status === 401) {
+          setConnectionOpen(true)
+          setLocalError('Service requires an API key. Enter it under Service connection and click Connect.')
+        }
       })
     return () => { cancelled = true }
   }, [client])
@@ -68,6 +75,14 @@ export function DurableApp() {
     setLocalError(null)
   }
 
+  function normalizeWorkspaceInput(raw: string): string {
+    const trimmed = raw.trim()
+    if (trimmed.length >= 2 && trimmed[0] === trimmed[trimmed.length - 1] && (trimmed[0] === '"' || trimmed[0] === "'")) {
+      return trimmed.slice(1, -1).trim()
+    }
+    return trimmed
+  }
+
   async function pickWorkspaceFolder() {
     if (!canChangeInput()) return
     setFolderBusy(true)
@@ -79,8 +94,13 @@ export function DurableApp() {
       } else if (res.error) {
         setLocalError('Native folder picker unavailable. Enter the folder path below.')
       }
-    } catch {
-      setLocalError('Could not open folder picker. Enter the folder path below.')
+    } catch (err) {
+      if (err instanceof ServiceError && err.status === 401) {
+        setConnectionOpen(true)
+        setLocalError('Service requires an API key. Enter it under Service connection and click Connect.')
+      } else {
+        setLocalError('Could not open folder picker. Check service connection or enter the folder path below.')
+      }
     } finally {
       setFolderBusy(false)
     }
@@ -89,15 +109,20 @@ export function DurableApp() {
   async function submitWorkspacePath(event: React.FormEvent) {
     event.preventDefault()
     if (!canChangeInput()) return
-    const trimmed = pathInput.trim()
-    if (!trimmed) return
+    const cleaned = normalizeWorkspaceInput(pathInput)
+    if (!cleaned) return
     setFolderBusy(true)
     setLocalError(null)
     try {
-      const res = await client.setWorkspace(trimmed)
+      const res = await client.setWorkspace(cleaned)
       if (res.path) applyWorkspace(res.path)
-    } catch {
-      setLocalError('Workspace path could not be opened. Check that the directory exists.')
+    } catch (err) {
+      if (err instanceof ServiceError && err.status === 401) {
+        setConnectionOpen(true)
+        setLocalError('Service requires an API key. Enter it under Service connection and click Connect.')
+      } else {
+        setLocalError('Workspace path could not be opened. Check that the directory exists.')
+      }
     } finally {
       setFolderBusy(false)
     }
@@ -107,7 +132,8 @@ export function DurableApp() {
     event.preventDefault()
     if (!canChangeInput()) return
     try {
-      setClient(new DurableReviewClient(serviceUrl, apiKey))
+      setClient(new DurableReviewClient(serviceUrl, apiKey.trim()))
+      setConnectionOpen(false)
       setLocalError(null)
     } catch {
       setLocalError('Enter a valid HTTP service address and API key.')
@@ -227,7 +253,7 @@ export function DurableApp() {
       </button>
     </header>
     <section className="source-bar" aria-label="Review connection and workspace">
-      <details><summary>Service connection</summary><form className="connection-controls" onSubmit={configure}>
+      <details open={connectionOpen} onToggle={event => setConnectionOpen(event.currentTarget.open)}><summary>Service connection</summary><form className="connection-controls" onSubmit={configure}>
         <label>Service URL<input type="url" value={serviceUrl} autoComplete="off" onChange={event => setServiceUrl(event.target.value)} required /></label>
         <label>API key<input type="password" value={apiKey} autoComplete="off" onChange={event => setApiKey(event.target.value)} /></label>
         <button className="header-button" disabled={inputLocked}>Connect</button>

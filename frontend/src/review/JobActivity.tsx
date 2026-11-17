@@ -134,7 +134,7 @@ export function JobActivity({
       const activity = [...events].reverse().find(event => (event.payload as Record<string, any>).agent_id === id)
       return <li key={id}>{label}: {activity?.type ?? 'No activity recorded in this window'}</li>
     })}</ul></details>
-    <p>Total tokens: {tokens.toLocaleString()} / {job?.limits?.job_tokens ?? 250000} · Recorded duration: {(job?.ledger?.elapsed_seconds ?? 0).toFixed(1)}s</p>
+    <p>Total tokens: {tokens.toLocaleString()}{job?.limits?.job_tokens != null ? ` / ${job.limits.job_tokens.toLocaleString()}` : ' (uncapped)'} · Recorded duration: {(job?.ledger?.elapsed_seconds ?? 0).toFixed(1)}s</p>
     <details><summary>Recent events ({events.length}; up to 200 retained here)</summary><ol>{events.map(event => {
       const p = event.payload as Record<string, any>
       const agentId = p.agent_id as AgentId | undefined

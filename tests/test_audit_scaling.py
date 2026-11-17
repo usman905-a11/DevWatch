@@ -97,3 +97,34 @@ def test_recoverable_tool_error_can_be_followed_by_a_successful_scoped_read(tmp_
     assert len(state['private_state'].evidence_refs)==1
     assert state['private_state'].tool_call_count==2
     assert state['output'].coverage.failed
+
+
+def test_verification_truncation_shrinks_batch_and_completes(tmp_path):
+    from tests.test_audit_evidence import candidate
+    from tests.verification_fixtures import decision
+    _, _, _, repo, task = setup_repository(tmp_path)
+    ref = repo._read_file({'file_path': 'service.py'}, task).evidence_ref
+    claims = {f'f{i}': candidate(repo, ref) | {'title': f'Defect {i}'} for i in range(4)}
+
+    class ShrinkProvider(ScriptedProvider):
+        async def generate_completion(self, request):
+            body = json.loads(request.prompt)
+            batch = body['candidates']
+            if len(batch) > 2:
+                self.requests.append(request)
+                from devwatch.providers.base import LLMResponse, LLMUsage
+                return LLMResponse(content='{"partial":', provider='scripted', model=request.model,
+                    latency_ms=1, usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+                    finish_reason='length')
+            self.responses = iter([dict(kind='submit_verification', inspected_evidence=[ref],
+                payload=dict(decisions=[decision(c, [ref], identity=cid, verdict='uncertain', confidence=0.5,
+                    statuses={'impact': 'uncertain'}) for cid, c in batch.items()]))])
+            return await super().generate_completion(request)
+
+    provider = ShrinkProvider([dict(kind='finish')])
+    runtime = AgentSubgraphs(provider, repo.tools(), BudgetManager(), repo.context, models={t: t.value for t in ModelTier})
+    state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=task.files, candidates=claims))
+    assert state['output'] is not None
+    assert state['private_state'].stop_reason == 'evidence_complete'
+    assert {d.finding_id for d in state['verification'].decisions} == set(claims)
+    assert len(provider.requests) == 3  # 1 truncated batch of 4 + 2 batches of 2

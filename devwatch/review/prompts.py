@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-VERSION = 'review-prompts-v6.5'
+VERSION = 'review-prompts-v6.6'
 CONTEXT_VERSION = 'scoped-evidence-priority-v2'
 
 
@@ -46,24 +46,23 @@ SHARED_POLICY = (
     'Stop at sufficient evidence or a runtime limit. Follow-up never resets limits. '
 )
 ROLE_POLICIES = {
-    'planner': 'Include every relevant specialist from metadata (do not omit bug_reliability for '
-        'file/resource/indexing/error paths, performance_scalability for loops/queries/polling/scans, '
-        'or quality_testability for complexity/nesting/missing tests). selected_agents must equal '
-        'unique review_tasks agent_ids; unique task_ids; cover every file or state omissions. Fit '
-        'reads/submission in 8 iterations using source batches. Complete nonempty scope via '
-        'kind=submit_plan, payload=ReviewPlan; never finish or return a bare plan.',
-    'bug_reliability': 'Trace failure paths and handling through exceptions, cleanup and resource lifecycle '
-        'across every function in scope. Check unclosed handles/resources on error paths, empty '
-        'collection indexing/missing keys, and missing exit bounds. Preserve empty-input checks and '
-        'distinguish reachable runtime failures from handled conditions.',
-    'logic_correctness': 'Walk every function and branch to trace behavioral invariants through control/data '
-        'flow and state changes. Track caller-owned aliases and before/after state. Check missing '
-        'numeric bounds/sign invariants (e.g. negative/zero amounts, percentages <0 or >100) allowed '
-        'by typed params that subvert the stated contract, plus off-by-one endpoints against the contract.',
-    'quality_testability': 'Assess test effectiveness, complexity, coupling and maintainability. '
-        'Check whether a wrong normal result would fail the test: an assertion may be tautological '
-        'or check the wrong value. Classify test-effectiveness and maintainability gaps as advisories; '
-        'claim product runtime defects only for demonstrated runtime contract violations.',
+    'planner': 'Include all 5 specialists when code fits their domain (bug_reliability: cleanup/errors, '
+        'logic_correctness: invariants/bounds, architecture_security: auth/SQL/paths, performance_scalability: '
+        'loops/queries/polling, quality_testability: high branch_count/nesting/missing tests); give '
+        'each a specialty-scoped focus. selected_agents must equal unique review_tasks agent_ids; unique '
+        'task_ids; cover all files. Complete nonempty scope via kind=submit_plan, payload=ReviewPlan; never finish.',
+    'bug_reliability': 'Trace failure paths, exceptions, cleanup and resource lifecycle top-to-bottom across '
+        'every function in scope. Check unclosed handles/resources on error paths, empty-collection '
+        'indexing/missing keys, and missing exit bounds. Report only reliability/crash defects; leave pure '
+        'math bounds or style issues to other specialists.',
+    'logic_correctness': 'Walk every function and branch top-to-bottom to trace invariants through control/data '
+        'flow and state changes. Track caller-owned aliases and before/after state. Check missing numeric '
+        'bounds/sign checks (negative/zero amounts, percentages <0 or >100) on typed params that subvert '
+        'the contract, plus off-by-one endpoints. Report only logic/invariant defects in your scope.',
+    'quality_testability': 'Assess test effectiveness, high complexity/deep nesting and maintainability across '
+        'all assigned files. Check whether wrong normal results fail tests. Classify test/maintainability '
+        'gaps as advisories. Do not report missing type annotations, missing docstrings, or extra input '
+        'validation outside the contract on clean code.',
     'architecture_security': 'Inspect dependencies, configuration and trust boundaries. '
         'Trace untrusted input through intermediate variables/helpers to its actual sink. Distinguish '
         'SQL bound data parameters from string substitution into syntax. Identify demonstrated '
@@ -124,7 +123,8 @@ SKILLS = {
         'every current candidate once. Duplicate groups require matching duplicate_reviews '
         'and equivalent whole claims; never group a rejected overclaim with its supported '
         'core. Disagreements require inspected evidence, with unresolved positions uncertain '
-        'or rejected. Never finish or synthesize during this phase.',
+        'Unresolved disagreements remain uncertain. Never finish or synthesize during this phase. '
+        'Keep causal_basis and each assessment explanation concise (one short sentence per field).',
     'performance_cost': 'Judge the actual source with a brief cost comparison in description. Compare '
         'old and proposed operations, allocations and overlapping lifetimes under identical return '
         'materialization, ordering and mutation semantics. Required O(n) output and seen-state are '
@@ -139,11 +139,13 @@ SKILLS = {
         'not infer timeouts, OOM, computational infeasibility or measured latency from it. '
         'If the current return is an eager list, explicitly preserve it: for example wrap '
         'a proposed accumulate iterator in list. Required list storage is not O(1).',
-    'specialist_completion': 'Audit every assigned file and every function/method/route line-by-line '
-        'before submitting; emit one separate candidate for each distinct defect found rather than '
-        'stopping after the first finding. Unconstrained typed parameters (e.g. negative/zero amounts, '
-        'percentages <0 or >100, empty collections) are valid runtime inputs unless guarded; report '
-        'missing validation when they violate the documented contract. Complete with kind=submit_candidates '
+    'specialist_completion': 'Audit every assigned file and every function/method/route top-to-bottom '
+        '(first through last) before submitting; emit one separate candidate for each distinct defect '
+        'within YOUR agent role rather than duplicating other specialist roles or stopping after one '
+        'finding. Unconstrained typed parameters (e.g. negative/zero amounts, percentages <0 or >100, '
+        'empty collections) are valid runtime inputs unless guarded; report missing validation only '
+        'when it subverts the documented contract. Never report missing docstrings, type annotations, or '
+        'caller validation outside the contract on clean code. Complete with kind=submit_candidates '
         'and a full SpecialistResult in payload, copying task_id/agent_id from task; use candidates=[] '
         'when none are supported. Every candidate requires category, title, description, impact, '
         'confidence, location, evidence_refs, kind and remediation. '
@@ -205,7 +207,8 @@ SKILLS = {
         'incompatible candidates in disagreements (finding_ids, resolution, rationale, evidence_refs). '
         'Resolved disagreements retain one supported position and reject alternatives; unresolved '
         'ones remain uncertain, never confirmed or merged away. Cite inspected decision evidence '
-        'for every field/group/disagreement. Never use finish.',
+        'for every field/group/disagreement. Keep causal_basis and each assessment explanation concise '
+        '(one short sentence per field). Never use finish.',
     'synthesis': 'Return kind=submit_synthesis with SynthesisSummary in payload: summary and limitations. '
         'Runtime assembles findings from recorded decisions. Do not recreate findings/report_draft '
         'or add unverified consequences. Never use finish or verification actions.',

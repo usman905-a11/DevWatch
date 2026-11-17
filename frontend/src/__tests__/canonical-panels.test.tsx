@@ -15,6 +15,7 @@ describe('canonical review presentation', () => {
     expect(html).toContain('Node: execute_action')
     expect(html).toContain('Outcome: succeeded')
     expect(html).toContain('Task: logic-1')
+    expect(html).toContain('(uncapped)')
   })
   it('keeps confirmed, uncertain and advisory outputs separate with explicit coverage', () => {
     const candidate = fixture.report.uncertain_high_impact_candidates[0]

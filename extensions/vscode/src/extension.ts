@@ -64,7 +64,7 @@ export async function activate(context: vscode.ExtensionContext) {
         while (documents.size > 50) documents.delete(documents.keys().next().value!)
         await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), { preview: true })
       })
-      if (data.kind === 'export' && ['json', 'markdown', 'pdf'].includes(String(data.format))) await action(async () => {
+      if (data.kind === 'export' && ['json', 'markdown'].includes(String(data.format))) await action(async () => {
         const jobId = controller.load().jobId
         if (!jobId) throw Error('Open a finalized job first')
         const format = String(data.format), extension = format === 'markdown' ? 'md' : format
@@ -104,7 +104,7 @@ function html(nonce: string) {
 <style nonce="${nonce}">body{font:var(--vscode-font-size) var(--vscode-font-family);color:var(--vscode-foreground);padding:16px}button{margin:4px;padding:6px}pre{white-space:pre-wrap;overflow-wrap:anywhere}section{border-top:1px solid var(--vscode-panel-border);padding-top:12px}li{margin:8px 0}</style>
 <h1>DevWatch review</h1><p id="status" role="status">Connecting to durable review service…</p>
 <button data-action="reconnect">Reconnect</button><button data-action="cancel">Cancel review</button><button data-action="resume">Resume interrupted review</button>
-<button data-format="json">Export JSON</button><button data-format="markdown">Export Markdown</button><button data-format="pdf">Export PDF</button>
+<button data-format="json">Export JSON</button><button data-format="markdown">Export Markdown</button>
 <p id="error" role="alert"></p><pre id="intent"></pre><h2>Agent activity</h2><ol id="events"></ol><div id="report"></div>
 <script nonce="${nonce}">const host=acquireVsCodeApi();const byId=id=>document.getElementById(id);
 document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>host.postMessage({kind:button.dataset.action}));

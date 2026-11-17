@@ -1,39 +1,98 @@
-import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { Rpc } from './session'
 
-/** The executable is operator-configured, argv is fixed, credentials use stdin. */
-export function bridge(python: string, cwd: string, serviceUrl: string, apiKey: string, signal: AbortSignal): Rpc {
-  return request => new Promise((resolve, reject) => {
-    const environment: NodeJS.ProcessEnv = {}
-    for (const [name, value] of Object.entries(process.env)) if (['PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP'].includes(name.toUpperCase())) environment[name] = value
-    environment.PYTHONUTF8 = '1'
-    const child = spawn(python, ['-I', '-m', 'devwatch.ide_bridge'], { cwd, env: environment, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] })
-    const chunks: Buffer[] = []
-    let size = 0, settled = false
-    const finish = (error?: Error, result?: unknown) => {
-      if (settled) return
-      settled = true; clearTimeout(timer); signal.removeEventListener('abort', abort)
-      if (error && child.exitCode === null) child.kill()
-      error ? reject(error) : resolve(result)
-    }
-    const abort = () => { child.kill(); finish(Error('View detached; submitted jobs keep running')) }
-    const timer = setTimeout(() => { child.kill(); finish(Error('Bridge timeout; recover an unresolved submission with its original intent')) }, 30000)
+/** Direct HTTP RPC adapter to the local canonical DevWatch FastAPI service. */
+export function bridge(_python: string, _cwd: string, serviceUrl: string, apiKey: string, signal: AbortSignal): Rpc {
+  const base = serviceUrl.replace(/\/+$/, '')
+
+  async function requestJson(path: string, init: RequestInit = {}): Promise<any> {
+    const headers = new Headers(init.headers)
+    if (apiKey) headers.set('X-API-Key', apiKey)
+    if (init.body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+    const controller = new AbortController()
+    const abort = () => controller.abort()
     signal.addEventListener('abort', abort, { once: true })
-    child.on('error', () => finish(Error('Install DevWatch into the configured trusted Python interpreter')))
-    child.stdout.on('data', (chunk: Buffer) => {
-      size += chunk.length
-      if (size > 15000000) { child.kill(); finish(Error('Bridge response limit exceeded')) } else chunks.push(chunk)
-    })
-    child.stdin.on('error', () => finish(Error('Bridge input failed')))
-    child.on('close', code => {
-      if (code !== 0) return finish(Error('Service operation failed; check configuration or recover the original intent'))
-      try {
-        const reply = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-        if (reply.version !== 1 || reply.ok !== true || !reply.result || typeof reply.result !== 'object') throw Error()
-        finish(undefined, reply.result)
-      } catch { finish(Error('Invalid bridge response')) }
-    })
-    child.stdin.end(JSON.stringify({ version: 1, ...request, service_url: serviceUrl, api_key: apiKey || null }))
-    if (signal.aborted) abort()
-  })
+    const timer = setTimeout(abort, 30000)
+    try {
+      const response = await fetch(`${base}${path}`, { ...init, headers, signal: controller.signal })
+      if (!response.ok) throw Error(`Service operation failed (HTTP ${response.status})`)
+      return await response.json()
+    } finally {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', abort)
+    }
+  }
+
+  async function requestText(path: string): Promise<string> {
+    const headers = new Headers()
+    if (apiKey) headers.set('X-API-Key', apiKey)
+    const response = await fetch(`${base}${path}`, { headers, signal })
+    if (!response.ok) throw Error(`Service operation failed (HTTP ${response.status})`)
+    return response.text()
+  }
+
+  async function collectWorkspaceFiles(root: string): Promise<Record<string, string>> {
+    await requestJson('/workspace', { method: 'POST', body: JSON.stringify({ path: root }) })
+    const files: Record<string, string> = {}
+    const queue = ['']
+    let totalBytes = 0
+    while (queue.length > 0 && Object.keys(files).length < 100) {
+      const dir = queue.shift()!
+      const listed = await requestJson(`/fs/list?path=${encodeURIComponent(dir)}`)
+      for (const entry of listed.entries ?? []) {
+        if (entry.ignored || entry.isSymlink) continue
+        if (entry.type === 'dir') {
+          queue.push(entry.path)
+        } else if (entry.type === 'file' && entry.size <= 500_000 && totalBytes + entry.size <= 10_000_000) {
+          const read = await requestJson(`/fs/read?path=${encodeURIComponent(entry.path)}`)
+          if (!read.binary && !read.tooLarge && typeof read.content === 'string') {
+            files[entry.path] = read.content
+            totalBytes += entry.size
+          }
+        }
+        if (Object.keys(files).length >= 100) break
+      }
+    }
+    return files
+  }
+
+  return async request => {
+    const action = request.action
+    if (action === 'capture') {
+      const files = await collectWorkspaceFiles(String(request.root ?? ''))
+      const snap = await requestJson('/api/snapshots', { method: 'POST', body: JSON.stringify({ files }) })
+      return { intent: { snapshot_id: snap.snapshot_id, idempotency_key: randomUUID().replace(/-/g, '') } }
+    }
+    if (action === 'submit') {
+      const intent = request.intent as { snapshot_id: string; changed_files?: string[] | null; idempotency_key: string }
+      return requestJson('/api/jobs', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': intent.idempotency_key },
+        body: JSON.stringify({ snapshot_id: intent.snapshot_id, ...(intent.changed_files ? { changed_files: intent.changed_files } : {}) }),
+      })
+    }
+    const jobId = String(request.job_id ?? '')
+    if (action === 'status') return requestJson(`/api/jobs/${encodeURIComponent(jobId)}`)
+    if (action === 'cancel' || action === 'resume') return requestJson(`/api/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST' })
+    if (action === 'events') {
+      const page = await requestJson(`/api/jobs/${encodeURIComponent(jobId)}/events?after=${Number(request.after ?? 0)}`)
+      return {
+        ...page,
+        events: (page.events ?? []).map((event: any) => ({ ...event, sequence: event.sequence ?? event.seq, kind: event.kind ?? event.type })),
+      }
+    }
+    if (action === 'report') {
+      const format = String(request.format ?? 'json')
+      return { text: await requestText(`/api/jobs/${encodeURIComponent(jobId)}/report?format=${encodeURIComponent(format)}`) }
+    }
+    if (action === 'source') {
+      const params = new URLSearchParams({
+        file_path: String(request.file_path ?? ''),
+        start_line: String(request.start_line ?? 1),
+        end_line: String(request.end_line ?? 1),
+      })
+      return requestJson(`/api/jobs/${encodeURIComponent(jobId)}/source?${params.toString()}`)
+    }
+    throw Error(`Unsupported IDE RPC action: ${action}`)
+  }
 }

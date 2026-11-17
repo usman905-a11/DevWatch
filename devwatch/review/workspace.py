@@ -213,6 +213,8 @@ class WorkspaceManager:
 
     def set_root(self, path: str | Path) -> Path:
         raw = str(path).strip()
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ('"', "'"):
+            raw = raw[1:-1].strip()
         if not raw:
             raise WorkspaceError("workspace path must not be empty")
         resolved = Path(os.path.realpath(raw))

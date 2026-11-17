@@ -61,9 +61,9 @@ async def execute(args, provider, models, stream):
                 os.fsync(stream.fileno())
                 print(json.dumps({"case_id": case["case_id"], "mode": mode, "status": row["status"],
                                   "score": row["score"], "metrics": row["metrics"]}), flush=True)
-                if args.live and row["metrics"]["unknown_provider_calls"]:
+                if args.live and row["status"] != "completed" and (row["metrics"]["unknown_provider_calls"] or row["metrics"]["local_budget_refusals"]):
                     # Preserve observed results; do not repeat an unavailable or
-                    # uncertain paid-provider run throughout the remaining corpus.
+                    # failed uncertain paid-provider run throughout the remaining corpus.
                     return document
     return document
 
