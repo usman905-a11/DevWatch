@@ -19,9 +19,13 @@ def _parser_version():
 
 PARSER_VERSION = _parser_version()
 MAX_NODES = 100_000
+SUPPORTED_EXTENSIONS = frozenset({".py", ".js", ".jsx", ".ts", ".tsx"})
 
 
 def analyze_source(path: str, source: str):
+    if PurePosixPath(path).suffix.lower() not in SUPPORTED_EXTENSIONS:
+        return {"status": "parser_unavailable", "symbols": [], "imports": [], "calls": [],
+                "branch_count": 0, "limitations": ["AST parser unavailable for this language"]}
     if len(source.encode("utf-8")) > 500_000:
         return {"status": "parse_failed", "symbols": [], "imports": [], "calls": [], "branch_count": 0,
                 "limitations": ["Source exceeds parser input bound"]}

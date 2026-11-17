@@ -63,6 +63,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const [height, setHeight] = useState(500)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const treeRef = useRef<TreeApi<TreeNodeData> | null>(null)
+  const inFlightRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     const el = containerRef.current
@@ -114,8 +115,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         return undefined
       }
       const target = findNode(data)
-      if (!target || target.type !== 'dir' || target.loaded || target.loading) return
+      if (!target || target.type !== 'dir' || target.loaded || target.loading || inFlightRef.current.has(id)) return
 
+      inFlightRef.current.add(id)
       setData(prev => updateNodeInTree(prev, id, n => ({ ...n, loading: true })))
       try {
         const entries = await loadDir(target.path)
@@ -130,6 +132,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       } catch (err) {
         setData(prev => updateNodeInTree(prev, id, n => ({ ...n, loading: false })))
         setError(err instanceof Error ? err.message : 'Failed to expand folder')
+      } finally {
+        inFlightRef.current.delete(id)
       }
     },
     [data, loadDir],
@@ -145,7 +149,6 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         aria-selected={isSelected}
         onClick={() => {
           if (isDir) {
-            void handleToggle(node.data.id)
             node.toggle()
           } else {
             onSelectFile(node.data.path)

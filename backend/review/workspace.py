@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
+from devwatch.config import Config
 from .capture import EXCLUDED_DIRECTORIES, EXCLUDED_PATTERNS
 from .stores import (
     CaptureCoverage,
@@ -159,8 +160,11 @@ def is_ignored_entry(rel_posix: str, name: str, is_dir: bool, gitignore_patterns
     if name in IGNORED_DIR_NAMES:
         return True
     if not is_dir:
-        for pat in EXCLUDED_PATTERNS:
-            if fnmatch.fnmatch(name, pat):
+        lower_name = name.lower()
+        if lower_name in Config.BLOCKED_FILENAMES or lower_name.startswith(".env."):
+            return True
+        for pat in (*EXCLUDED_PATTERNS, *Config.BLOCKED_PATTERNS):
+            if fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(lower_name, pat):
                 return True
     parts = [part for part in rel_posix.split("/") if part]
     if any(part in IGNORED_DIR_NAMES for part in parts):
@@ -324,6 +328,7 @@ def build_workspace_manifest(
     root: str | Path,
     *,
     max_file_bytes: int = DEFAULT_SCAN_MAX_BYTES,
+    max_total_bytes: int = Config.MAX_REPO_TOTAL_BYTES,
 ) -> SnapshotManifest:
     """Build a lightweight manifest of analyzable files directly from a live workspace."""
     root_real = Path(os.path.realpath(str(root)))
@@ -333,6 +338,7 @@ def build_workspace_manifest(
     patterns = _load_gitignore_patterns(root_real)
     entries: dict[str, SourceEntry] = {}
     skipped_reasons: dict[str, str] = {}
+    total_bytes = 0
 
     for dirpath, dirnames, filenames in os.walk(root_real, followlinks=False):
         rel_dir = Path(dirpath).relative_to(root_real).as_posix()
@@ -354,6 +360,11 @@ def build_workspace_manifest(
         for fname in sorted(filenames):
             f_rel = f"{rel_dir}/{fname}" if rel_dir else fname
             if is_ignored_entry(f_rel, fname, False, patterns):
+                lower_name = fname.lower()
+                if lower_name in Config.BLOCKED_FILENAMES or lower_name.startswith(".env.") or any(
+                    fnmatch.fnmatch(lower_name, pat) for pat in Config.BLOCKED_PATTERNS
+                ):
+                    skipped_reasons[f_rel] = "excluded_secret"
                 continue
             try:
                 resolved, norm_rel = _resolve_within_root(root_real, f_rel, allow_root=False)
@@ -370,6 +381,9 @@ def build_workspace_manifest(
             if size > max_file_bytes:
                 skipped_reasons[norm_rel] = "too_large"
                 continue
+            if total_bytes + size > max_total_bytes:
+                skipped_reasons[norm_rel] = "total_size_limit"
+                continue
             try:
                 raw = resolved.read_bytes()
             except OSError:
@@ -381,6 +395,7 @@ def build_workspace_manifest(
 
             text = raw.decode("utf-8")
             digest = hashlib.sha256(raw).hexdigest()
+            total_bytes += len(raw)
             entries[norm_rel] = SourceEntry(
                 content_hash=digest,
                 byte_count=len(raw),

@@ -165,8 +165,30 @@ export function DurableApp() {
         return [...prev, { path: filePath, loading: true, error: null, file: null }]
       })
 
+      const job = state.job
+      const snapshotId = job?.snapshot_id ?? state.report?.snapshot_id
       try {
-        const file = await client.readFile(filePath)
+        let file = workspacePath ? await client.readFile(filePath).catch(() => null) : null
+        if (!file && job && snapshotId) {
+          const reqStart = range && range.endLine > 200 ? Math.max(1, range.startLine - 40) : 1
+          const reqEnd = reqStart === 1 ? Math.max(200, range?.endLine ?? 200) : reqStart + 199
+          const clampedEnd = Math.min(reqStart + 199, reqEnd)
+          const excerpt = await client.source(job.job_id, snapshotId, filePath, reqStart, clampedEnd)
+          const prefix = excerpt.start_line > 1 ? '\n'.repeat(excerpt.start_line - 1) : ''
+          const content = prefix + excerpt.data
+          file = {
+            path: filePath,
+            size: excerpt.data.length,
+            binary: false,
+            tooLarge: false,
+            maxBytes: 2_000_000,
+            lineCount: content.split('\n').length,
+            content,
+          }
+        }
+        if (!file) {
+          file = await client.readFile(filePath)
+        }
         setTabs(prev =>
           prev.map(t => (t.path === filePath ? { ...t, loading: false, error: null, file } : t)),
         )
@@ -177,7 +199,7 @@ export function DurableApp() {
         )
       }
     },
-    [client, tabs],
+    [client, state.job, state.report, tabs, workspacePath],
   )
 
   const closeTab = useCallback(

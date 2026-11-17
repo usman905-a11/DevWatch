@@ -273,19 +273,26 @@ class _ReviewSession:
         if self.declared_context is not None:
             selected['declared_context'] = self.declared_context
         if state["task"].agent_id == AgentId.PLANNER:
+            from devwatch.review.intelligence import SUPPORTED_EXTENSIONS
+            prioritized = sorted(
+                self.changed,
+                key=lambda path: (PurePosixPath(path).suffix.lower() not in SUPPORTED_EXTENSIONS, path),
+            )
             selected["repository_metadata"] = {
                 "snapshot_id": self.repository.snapshot_id,
                 "file_count": len(self.repository.manifest.entries),
                 "selected_file_count": len(self.changed),
                 "file_extensions": sorted({PurePosixPath(path).suffix.lower() for path in self.repository.manifest.entries}),
             }
-            selected["changes"] = self.changed
+            selected["changes"] = list(prioritized)
+            analyzed = self.repository.analyze()
             selected["intelligence"] = {path: {
                 "status": facts["status"], "symbol_count": len(facts["symbols"]),
                 "selected_symbols": facts["symbols"][:3], "call_count": len(facts["calls"]),
                 "branches": facts["branch_count"], "limitations": facts["limitations"],
-            } for path in self.changed for facts in [self.repository.analyze()[path]]}
+            } for path in prioritized for facts in [analyzed[path]]}
             omitted = 0
+            omitted_changes = 0
             while len(json.dumps(selected, ensure_ascii=False).encode("utf-8")) > self.repository.CONTEXT_BYTES:
                 if selected["intelligence"]:
                     selected["intelligence"].pop(next(reversed(selected["intelligence"])))
@@ -294,6 +301,10 @@ class _ReviewSession:
                 elif selected["evidence"]:
                     selected["evidence"].pop()
                     selected["omitted_evidence_count"] += 1
+                elif len(selected["changes"]) > 1:
+                    selected["changes"].pop()
+                    omitted_changes += 1
+                    selected["omitted_changes_count"] = omitted_changes
                 else:
                     raise ReviewExecutionError("scope metadata exceeds the selective context limit")
         if state["task"].agent_id == AgentId.SYNTHESIZER_VERIFIER:

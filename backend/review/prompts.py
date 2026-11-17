@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-VERSION = 'review-prompts-v6.6'
+VERSION = 'review-prompts-v6.7'
 CONTEXT_VERSION = 'scoped-evidence-priority-v2'
 
 
@@ -70,7 +70,8 @@ ROLE_POLICIES = {
     'performance_scalability': 'A complete review may return candidates=[]. Inspect every function in scope '
         'for N+1 queries/calls inside loops, unbounded polling/retry loops lacking max attempts or '
         'timeouts, O(n^2) list/membership scans, and repeated copying/storage using performance_cost '
-        'guidance. Unmeasured complexity findings are advisories; keep unmeasured guesses in limitations.',
+        'guidance. Standard O(n) list+seen-set deduplication with eager list output is acceptable; return '
+        'candidates=[] when clean.',
     'synthesizer_verifier': 'Verify candidate evidence and contract, resolve duplicates/conflicts, then '
         'synthesize only recorded supported decisions. Follow the current phase guidance.',
 }

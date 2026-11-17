@@ -70,7 +70,7 @@ TOOL_ARGUMENTS: dict[str, type[Arguments]] = {
 }
 DESCRIPTIONS = {
     "read_file": "Read immutable source lines (1-based, <=200). EOF clamps; empty accepts start=1.",
-    "read_evidence": "Page scoped evidence JSON by character offset; follow next_offset. Acknowledge delivered pages with inspected_evidence.",
+    "read_evidence": "Page scoped evidence JSON by character offset; follow next_offset. Delivered pages are recorded as inspected.",
     "repo_map": "List captured file metadata in the assigned scope.",
     "code_search": "Search assigned immutable files for a literal string; at most 20 matches, each truncated to 500 characters.",
     "symbol_lookup": "List parsed symbols in an assigned file, optionally matching an exact symbol name; no runtime resolution.",
@@ -83,4 +83,4 @@ def describe_tool(name: str, model: type[Arguments]) -> dict[str, Any]:
     description = DESCRIPTIONS[name]
     return {"name": name, "description": description,
         "arguments": response_schema(model),
-        "output": "Evidence reference (processed), retrievable via read_evidence/context pages. Processing does not imply delivery or inspection."}
+        "output": "Evidence reference (processed), delivered as paged context in your next turn (automatically inspected once delivered)."}

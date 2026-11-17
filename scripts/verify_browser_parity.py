@@ -126,6 +126,8 @@ def run():
                         page.get_by_label("Job ID", exact=True).fill(job)
                         page.get_by_role("button", name="Open job", exact=True).click()
                         expect(page.get_by_role("button", name="Download JSON")).to_be_visible(timeout=10000)
+                        results.get_by_role("button", name="Open source").first.click()
+                        expect(page.locator("#source-pane .monaco-editor")).to_be_visible(timeout=10000)
 
                         for width in (320, 768, 1024, 1440):
                             page.set_viewport_size({"width": width, "height": 900})

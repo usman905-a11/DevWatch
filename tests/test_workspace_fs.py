@@ -178,3 +178,49 @@ def test_repository_context_reads_live_workspace_without_snapshot_copy(tmp_path:
     assert list(ctx.manifest.entries.keys()) == ["app.py"]
     assert ctx._source("app.py") == "def greet():\n    return 'hi'\n"
     assert not (tmp_path / "runtime" / "artifacts" / "snapshots").exists()
+
+
+def test_build_workspace_manifest_excludes_secrets_and_enforces_total_size(tmp_path: Path):
+    from devwatch.review.workspace import build_workspace_manifest
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "main.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / ".env").write_text("SECRET=123\n", encoding="utf-8")
+    (repo / ".env.local").write_text("LOCAL=123\n", encoding="utf-8")
+    (repo / "private.key").write_text("KEYDATA\n", encoding="utf-8")
+    (repo / "big_extra.py").write_text("y = 2\n" * 50, encoding="utf-8")
+
+    manifest = build_workspace_manifest(repo, max_total_bytes=200)
+    assert "main.py" in manifest.entries
+    assert ".env" not in manifest.entries
+    assert ".env.local" not in manifest.entries
+    assert "private.key" not in manifest.entries
+    assert manifest.capture_coverage.skipped[".env"] == "excluded_secret"
+    assert manifest.capture_coverage.skipped[".env.local"] == "excluded_secret"
+    assert manifest.capture_coverage.skipped["private.key"] == "excluded_secret"
+    assert manifest.capture_coverage.skipped["big_extra.py"] == "total_size_limit"
+
+
+def test_planner_context_gracefully_prunes_huge_change_list(tmp_path: Path):
+    from devwatch.review.budgets import BudgetManager
+    from devwatch.review.contracts import AgentId, AgentPrivateState, AgentWorkItem
+    from devwatch.review.jobs import JobRecord, JobStore
+    from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession
+
+    repo = tmp_path / "many"
+    repo.mkdir()
+    for i in range(600):
+        (repo / f"module_with_a_fairly_long_filename_number_{i:04d}_service_helper.py").write_text("x = 1\n", encoding="utf-8")
+    layout = StoreLayout(tmp_path / "runtime")
+    artifacts = ArtifactStore(layout.app_db)
+    jobs = JobStore(layout.app_db)
+    ctx = RepositoryContext(artifacts, owner="local", workspace_root=repo)
+    executor = CanonicalReviewExecutor(layout, artifacts, jobs, provider=object(),
+        models={t: t.value for t in ModelTier})
+    job = JobRecord(job_id="a" * 32, owner="local", status="queued", request={"workspace_path": str(repo)}, created_at=1, updated_at=1)
+    session = _ReviewSession(executor, job, ctx, BudgetManager(), sorted(ctx.manifest.entries))
+    work = AgentWorkItem(task_id="__planner", agent_id=AgentId.PLANNER, files=sorted(ctx.manifest.entries), focus="Plan")
+    selected = session.context({"task": work, "private_state": AgentPrivateState(), "action": None})
+    assert len(selected["changes"]) < len(ctx.manifest.entries)
+    assert selected["omitted_changes_count"] > 0

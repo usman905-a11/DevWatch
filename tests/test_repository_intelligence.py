@@ -46,3 +46,38 @@ def test_call_and_symbol_tools_have_distinct_scoped_outputs(tmp_path):
         symbol = await tools.execute(work, AgentAction(kind="call_tool", tool="symbol_lookup", arguments={"file_path": "helper.py", "symbol": "double"}))
         assert repo.evidence(symbol.evidence_ref)["data"] == [{"name": "double", "start_line": 1, "end_line": 2}]
     asyncio.run(scenario())
+
+
+def test_non_ast_extensions_skip_subprocess_and_parallel_analyze_is_deterministic(tmp_path, monkeypatch):
+    from devwatch.review import intelligence
+    calls = []
+    real_analyze = intelligence.analyze_source
+
+    def wrapped(path, source):
+        calls.append(path)
+        return real_analyze(path, source)
+
+    monkeypatch.setattr("devwatch.review.repository.analyze_source", wrapped)
+    artifacts = ArtifactStore(tmp_path / "devwatch.sqlite")
+    snap = artifacts.capture(owner="alice", files={
+        "notes.md": "# doc\n",
+        "config.json": '{"a": 1}\n',
+        "style.css": "body { color: red; }\n",
+        "a.py": "def f():\n    return 1\n",
+        "b.ts": "export const g = () => 2;\n",
+    })
+    orig_run = intelligence.subprocess.run
+    spawned = []
+
+    def tracked_run(cmd, **kw):
+        payload = json.loads(kw["input"].decode("utf-8"))
+        spawned.append(payload["path"])
+        return orig_run(cmd, **kw)
+
+    monkeypatch.setattr(intelligence.subprocess, "run", tracked_run)
+    facts = RepositoryContext(artifacts, snap.snapshot_id, owner="alice").analyze()
+    assert facts["notes.md"]["status"] == "parser_unavailable"
+    assert facts["config.json"]["status"] == "parser_unavailable"
+    assert facts["style.css"]["status"] == "parser_unavailable"
+    assert facts["a.py"]["status"] == "parsed" and facts["b.ts"]["status"] == "parsed"
+    assert sorted(spawned) == ["a.py", "b.ts"]

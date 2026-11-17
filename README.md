@@ -242,10 +242,12 @@ e:\dewatch\.venv\Scripts\python.exe -m scripts.run_agent_evaluation --live --rat
 
 ## IDE Integrations
 
-Experimental extension sources are located under [`extensions/vscode/`](extensions/vscode/) and [`extensions/jetbrains/`](extensions/jetbrains/). Note that the VS Code extension tests (`cd extensions/vscode && npm install && npm test`) and JetBrains Gradle build target the `/api/jobs` HTTP service and should be updated alongside any client contract changes.
+- **VS Code ([`extensions/vscode/`](extensions/vscode/)):** Connects directly via HTTP to the local DevWatch FastAPI service (`/workspace`, `/fs/*`, `/api/snapshots`, `/api/jobs/*`) and supports JSON/Markdown exports (`cd extensions/vscode && npm test`).
+- **JetBrains ([`extensions/jetbrains/`](extensions/jetbrains/)):** Experimental Kotlin/Java test scaffold (`ReviewSessionTest.java` and `plugin.xml`); full IDE plugin actions are not yet implemented.
 
 ## Project Documentation
 
 - [`docs/migration.md`](docs/migration.md) - canonical migration and cutover notes.
 - [`docs/decisions/001-local-job-recovery.md`](docs/decisions/001-local-job-recovery.md) - local recovery architecture.
 - [`tasks/migration-inventory.md`](tasks/migration-inventory.md) - current implementation mapping.
+@

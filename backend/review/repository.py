@@ -6,10 +6,11 @@ Only this runtime creates evidence artifacts. Agents receive references, not
 destinations or access to another task's private state.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import sha256
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 from typing import Any
 
@@ -20,7 +21,7 @@ from devwatch.review.stores import ArtifactStore, validate_source_path
 from devwatch.review.subgraphs import PermissionedTools, ToolObservation
 from devwatch.review.tool_errors import ToolFailure
 from devwatch.review.contracts import EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_BYTES
-from devwatch.review.intelligence import analyze_source
+from devwatch.review.intelligence import SUPPORTED_EXTENSIONS, analyze_source
 from devwatch.review.workspace import WorkspaceError, WorkspaceManager, WorkspaceNotFoundError, build_workspace_manifest
 
 
@@ -81,10 +82,23 @@ class RepositoryContext:
     def analyze(self) -> dict[str, Any]:
         if self._analysis is not None:
             return self._analysis
-        result = {
-            path: analyze_source(path, self._source(path))
-            for path in sorted(self.manifest.entries)
-        }
+        paths = sorted(self.manifest.entries)
+        parseable = [path for path in paths if PurePosixPath(path).suffix.lower() in SUPPORTED_EXTENSIONS]
+        if len(parseable) > 1:
+            sources = {path: self._source(path) for path in parseable}
+            with ThreadPoolExecutor(max_workers=min(8, len(parseable))) as pool:
+                parsed = dict(zip(parseable, pool.map(lambda p: analyze_source(p, sources[p]), parseable)))
+            result = {
+                path: parsed[path] if path in parsed else analyze_source(path, "")
+                for path in paths
+            }
+        else:
+            result = {
+                path: analyze_source(path, self._source(path))
+                if PurePosixPath(path).suffix.lower() in SUPPORTED_EXTENSIONS
+                else analyze_source(path, "")
+                for path in paths
+            }
         self._analysis = result
         return result
 
