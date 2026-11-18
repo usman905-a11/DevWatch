@@ -1,105 +1,36 @@
 {
   "events": [
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "status": "queued"
       },
       "seq": 1,
-      "timestamp": 1794674461.7960992,
+      "timestamp": 1794931803.2048845,
       "type": "job_queued"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "status": "running"
       },
       "seq": 2,
-      "timestamp": 1794674461.8016322,
+      "timestamp": 1794931803.2198865,
       "type": "job_running"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "graph_scope": "review",
-        "node": "repository_intelligence",
+        "node": "planner",
         "operation_id": "[redacted]"
       },
       "seq": 3,
-      "timestamp": 1794674461.8339121,
+      "timestamp": 1794931803.268403,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "repository_intelligence",
-        "operation_id": "[redacted]",
-        "outcome": "succeeded"
-      },
-      "seq": 4,
-      "timestamp": 1794674462.3757381,
-      "type": "graph_node_completed"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "deterministic_analysis",
-        "operation_id": "[redacted]"
-      },
-      "seq": 5,
-      "timestamp": 1794674462.380162,
-      "type": "graph_node_started"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "deterministic_analysis",
-        "operation_id": "[redacted]",
-        "outcome": "succeeded"
-      },
-      "seq": 6,
-      "timestamp": 1794674462.3855276,
-      "type": "graph_node_completed"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "change_analyzer",
-        "operation_id": "[redacted]"
-      },
-      "seq": 7,
-      "timestamp": 1794674462.3965554,
-      "type": "graph_node_started"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "change_analyzer",
-        "operation_id": "[redacted]",
-        "outcome": "succeeded"
-      },
-      "seq": 8,
-      "timestamp": 1794674462.4016826,
-      "type": "graph_node_completed"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "planner_agent",
-        "operation_id": "[redacted]"
-      },
-      "seq": 9,
-      "timestamp": 1794674462.408154,
-      "type": "graph_node_started"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "iteration": 0,
@@ -107,12 +38,12 @@
         "run_id": "[redacted]",
         "task_id": "__planner"
       },
-      "seq": 10,
-      "timestamp": 1794674462.4237618,
+      "seq": 4,
+      "timestamp": 1794931803.2887053,
       "type": "agent_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "agent_name": "planner",
@@ -136,12 +67,12 @@
         "step_type": "agent_run",
         "task_id": "__planner"
       },
-      "seq": 11,
-      "timestamp": 1794674462.4283364,
+      "seq": 5,
+      "timestamp": 1794931803.294705,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "graph_scope": "agent",
@@ -152,12 +83,12 @@
         "run_id": "[redacted]",
         "task_id": "__planner"
       },
-      "seq": 12,
-      "timestamp": 1794674462.4333432,
+      "seq": 6,
+      "timestamp": 1794931803.2997048,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "iteration": 1,
@@ -165,12 +96,12 @@
         "run_id": "[redacted]",
         "task_id": "__planner"
       },
-      "seq": 13,
-      "timestamp": 1794674462.4391663,
+      "seq": 7,
+      "timestamp": 1794931803.304706,
       "type": "iteration_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "attempt": 1,
@@ -180,12 +111,12 @@
         "run_id": "[redacted]",
         "task_id": "__planner"
       },
-      "seq": 14,
-      "timestamp": 1794674462.485159,
+      "seq": 8,
+      "timestamp": 1794931803.6012392,
       "type": "model_call_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "agent_name": "planner",
@@ -204,16 +135,16 @@
         "step_type": "planner",
         "task_id": "__planner"
       },
-      "seq": 15,
-      "timestamp": 1794674462.4904535,
+      "seq": 9,
+      "timestamp": 1794931803.6064618,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "attempt": 1,
-        "duration_seconds": 0.015000000000100044,
+        "duration_seconds": 0.016000000000531145,
         "finish_reason": "stop",
         "iteration": 1,
         "operation_id": "[redacted]",
@@ -223,22 +154,22 @@
         "task_id": "__planner",
         "total_tokens": 15
       },
-      "seq": 16,
-      "timestamp": 1794674462.4944932,
+      "seq": 10,
+      "timestamp": 1794931803.6124763,
       "type": "model_call_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
-        "duration_seconds": 0.6870000000001255,
+        "duration_seconds": 0.375,
         "total_tokens": 15
       },
-      "seq": 17,
-      "timestamp": 1794674462.4944932,
+      "seq": 11,
+      "timestamp": 1794931803.6124763,
       "type": "budget_updated"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "agent_name": "planner",
@@ -246,7 +177,7 @@
         "error_details": null,
         "parent_step_idx": 0,
         "render_info": {
-          "duration_ms": 30,
+          "duration_ms": 32,
           "title": "Planned action: submit_plan"
         },
         "run_id": "[redacted]",
@@ -256,12 +187,12 @@
         "step_type": "planner",
         "task_id": "__planner"
       },
-      "seq": 18,
-      "timestamp": 1794674462.5215323,
+      "seq": 12,
+      "timestamp": 1794931803.6314747,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "graph_scope": "agent",
@@ -273,12 +204,12 @@
         "run_id": "[redacted]",
         "task_id": "__planner"
       },
-      "seq": 19,
-      "timestamp": 1794674462.5484993,
+      "seq": 13,
+      "timestamp": 1794931803.6581016,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "graph_scope": "agent",
@@ -289,12 +220,12 @@
         "run_id": "[redacted]",
         "task_id": "__planner"
       },
-      "seq": 20,
-      "timestamp": 1794674462.5527954,
+      "seq": 14,
+      "timestamp": 1794931803.6631746,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "graph_scope": "agent",
@@ -306,12 +237,12 @@
         "run_id": "[redacted]",
         "task_id": "__planner"
       },
-      "seq": 21,
-      "timestamp": 1794674462.5837529,
+      "seq": 15,
+      "timestamp": 1794931803.6889033,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
         "agent_name": "planner",
@@ -319,7 +250,7 @@
         "error_details": null,
         "parent_step_idx": null,
         "render_info": {
-          "duration_ms": 172,
+          "duration_ms": 390,
           "title": "Running planner (__planner)"
         },
         "run_id": "[redacted]",
@@ -329,15 +260,15 @@
         "step_type": "agent_run",
         "task_id": "__planner"
       },
-      "seq": 22,
-      "timestamp": 1794674462.5887513,
+      "seq": 16,
+      "timestamp": 1794931803.6951447,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "planner",
-        "duration_seconds": 0.17200000000002547,
+        "duration_seconds": 0.40599999999994907,
         "iteration": 1,
         "outcome": "succeeded",
         "phase": "planning",
@@ -346,104 +277,35 @@
         "task_id": "__planner",
         "total_tokens": 15
       },
-      "seq": 23,
-      "timestamp": 1794674462.592789,
+      "seq": 17,
+      "timestamp": 1794931803.700503,
       "type": "agent_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "graph_scope": "review",
-        "node": "planner_agent",
+        "node": "planner",
         "operation_id": "[redacted]",
         "outcome": "succeeded"
       },
-      "seq": 24,
-      "timestamp": 1794674462.5975966,
+      "seq": 18,
+      "timestamp": 1794931803.7123504,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "graph_scope": "review",
-        "node": "context_manager",
+        "node": "logic_correctness",
         "operation_id": "[redacted]"
       },
-      "seq": 25,
-      "timestamp": 1794674462.602869,
+      "seq": 19,
+      "timestamp": 1794931803.7265186,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "context_manager",
-        "operation_id": "[redacted]",
-        "outcome": "succeeded"
-      },
-      "seq": 26,
-      "timestamp": 1794674462.6194556,
-      "type": "graph_node_completed"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "budget_manager",
-        "operation_id": "[redacted]"
-      },
-      "seq": 27,
-      "timestamp": 1794674462.6194556,
-      "type": "graph_node_started"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "budget_manager",
-        "operation_id": "[redacted]",
-        "outcome": "succeeded"
-      },
-      "seq": 28,
-      "timestamp": 1794674462.6460955,
-      "type": "graph_node_completed"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "deterministic_router",
-        "operation_id": "[redacted]"
-      },
-      "seq": 29,
-      "timestamp": 1794674462.657494,
-      "type": "graph_node_started"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "deterministic_router",
-        "operation_id": "[redacted]",
-        "outcome": "succeeded"
-      },
-      "seq": 30,
-      "timestamp": 1794674462.662498,
-      "type": "graph_node_completed"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "specialist_subgraphs",
-        "operation_id": "[redacted]"
-      },
-      "seq": 31,
-      "timestamp": 1794674462.6668067,
-      "type": "graph_node_started"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "iteration": 0,
@@ -451,12 +313,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 32,
-      "timestamp": 1794674462.678511,
+      "seq": 20,
+      "timestamp": 1794931803.7360268,
       "type": "agent_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -478,12 +340,12 @@
         "step_type": "agent_run",
         "task_id": "logic-1"
       },
-      "seq": 33,
-      "timestamp": 1794674462.678511,
+      "seq": 21,
+      "timestamp": 1794931803.7410264,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -494,12 +356,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 34,
-      "timestamp": 1794674462.6890888,
+      "seq": 22,
+      "timestamp": 1794931803.7460265,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "iteration": 1,
@@ -507,12 +369,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 35,
-      "timestamp": 1794674462.6928704,
+      "seq": 23,
+      "timestamp": 1794931803.750027,
       "type": "iteration_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
@@ -522,12 +384,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 36,
-      "timestamp": 1794674462.7235806,
+      "seq": 24,
+      "timestamp": 1794931803.7889235,
       "type": "model_call_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -546,16 +408,16 @@
         "step_type": "planner",
         "task_id": "logic-1"
       },
-      "seq": 37,
-      "timestamp": 1794674462.7275395,
+      "seq": 25,
+      "timestamp": 1794931803.7956438,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
-        "duration_seconds": 0.015999999999849024,
+        "duration_seconds": 0.015000000000327418,
         "finish_reason": "stop",
         "iteration": 1,
         "operation_id": "[redacted]",
@@ -565,22 +427,22 @@
         "task_id": "logic-1",
         "total_tokens": 15
       },
-      "seq": 38,
-      "timestamp": 1794674462.7310946,
+      "seq": 26,
+      "timestamp": 1794931803.801643,
       "type": "model_call_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
-        "duration_seconds": 0.9220000000000255,
+        "duration_seconds": 0.5619999999998981,
         "total_tokens": 30
       },
-      "seq": 39,
-      "timestamp": 1794674462.7310946,
+      "seq": 27,
+      "timestamp": 1794931803.801643,
       "type": "budget_updated"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -588,7 +450,7 @@
         "error_details": null,
         "parent_step_idx": 2,
         "render_info": {
-          "duration_ms": 30,
+          "duration_ms": 32,
           "title": "Selected tool: read_file"
         },
         "run_id": "[redacted]",
@@ -598,12 +460,12 @@
         "step_type": "planner",
         "task_id": "logic-1"
       },
-      "seq": 40,
-      "timestamp": 1794674462.756558,
+      "seq": 28,
+      "timestamp": 1794931803.8381696,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -615,12 +477,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 41,
-      "timestamp": 1794674462.7714179,
+      "seq": 29,
+      "timestamp": 1794931803.8686934,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -631,22 +493,22 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 42,
-      "timestamp": 1794674462.7806873,
+      "seq": 30,
+      "timestamp": 1794931803.8746915,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
-        "duration_seconds": 0.9690000000000509,
+        "duration_seconds": 0.6409999999996217,
         "total_tokens": 30
       },
-      "seq": 43,
-      "timestamp": 1794674462.7887022,
+      "seq": 31,
+      "timestamp": 1794931803.8792114,
       "type": "budget_updated"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "iteration": 1,
@@ -656,12 +518,12 @@
         "task_id": "logic-1",
         "tool": "read_file"
       },
-      "seq": 44,
-      "timestamp": 1794674462.8121617,
+      "seq": 32,
+      "timestamp": 1794931803.9018924,
       "type": "tool_called"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -682,12 +544,12 @@
         "step_type": "read_file",
         "task_id": "logic-1"
       },
-      "seq": 45,
-      "timestamp": 1794674462.8171606,
+      "seq": 33,
+      "timestamp": 1794931803.908405,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -695,7 +557,7 @@
         "error_details": null,
         "parent_step_idx": 2,
         "render_info": {
-          "duration_ms": 16,
+          "duration_ms": 15,
           "evidence_ref": "[redacted]",
           "files": [
             "service.py"
@@ -709,12 +571,12 @@
         "step_type": "read_file",
         "task_id": "logic-1"
       },
-      "seq": 46,
-      "timestamp": 1794674462.8253498,
+      "seq": 34,
+      "timestamp": 1794931803.922475,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "evidence_ref": "[redacted]",
@@ -726,15 +588,15 @@
         "task_id": "logic-1",
         "tool": "read_file"
       },
-      "seq": 47,
-      "timestamp": 1794674462.833807,
+      "seq": 35,
+      "timestamp": 1794931803.9277165,
       "type": "evidence_retrieved"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
-        "duration_seconds": 0.016000000000076398,
+        "duration_seconds": 0.015000000000327418,
         "error_code": null,
         "evidence_ref": "[redacted]",
         "iteration": 1,
@@ -746,12 +608,12 @@
         "task_id": "logic-1",
         "tool": "read_file"
       },
-      "seq": 48,
-      "timestamp": 1794674462.833807,
+      "seq": 36,
+      "timestamp": 1794931803.9321547,
       "type": "tool_result"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -763,12 +625,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 49,
-      "timestamp": 1794674462.8548248,
+      "seq": 37,
+      "timestamp": 1794931803.9492767,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -779,12 +641,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 50,
-      "timestamp": 1794674462.8625376,
+      "seq": 38,
+      "timestamp": 1794931803.955195,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "iteration": 2,
@@ -792,12 +654,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 51,
-      "timestamp": 1794674462.8679233,
+      "seq": 39,
+      "timestamp": 1794931803.95972,
       "type": "iteration_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
@@ -807,12 +669,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 52,
-      "timestamp": 1794674462.9280543,
+      "seq": 40,
+      "timestamp": 1794931804.0170324,
       "type": "model_call_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -831,16 +693,16 @@
         "step_type": "planner",
         "task_id": "logic-1"
       },
-      "seq": 53,
-      "timestamp": 1794674462.932054,
+      "seq": 41,
+      "timestamp": 1794931804.0210543,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
-        "duration_seconds": 0.015999999999849024,
+        "duration_seconds": 0.0,
         "finish_reason": "stop",
         "iteration": 2,
         "operation_id": "[redacted]",
@@ -850,22 +712,22 @@
         "task_id": "logic-1",
         "total_tokens": 15
       },
-      "seq": 54,
-      "timestamp": 1794674462.936053,
+      "seq": 42,
+      "timestamp": 1794931804.0271666,
       "type": "model_call_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
-        "duration_seconds": 1.125,
+        "duration_seconds": 0.7809999999999491,
         "total_tokens": 45
       },
-      "seq": 55,
-      "timestamp": 1794674462.936053,
+      "seq": 43,
+      "timestamp": 1794931804.028171,
       "type": "budget_updated"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "end_offset": 431,
@@ -877,12 +739,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 56,
-      "timestamp": 1794674462.936053,
+      "seq": 44,
+      "timestamp": 1794931804.0321705,
       "type": "evidence_delivered"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -890,7 +752,7 @@
         "error_details": null,
         "parent_step_idx": 2,
         "render_info": {
-          "duration_ms": 31,
+          "duration_ms": 30,
           "title": "Planned action: submit_candidates"
         },
         "run_id": "[redacted]",
@@ -900,28 +762,12 @@
         "step_type": "planner",
         "task_id": "logic-1"
       },
-      "seq": 57,
-      "timestamp": 1794674462.9599319,
+      "seq": 45,
+      "timestamp": 1794931804.05715,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "agent_id": "logic_correctness",
-        "end_offset": 431,
-        "evidence_ref": "[redacted]",
-        "iteration": 2,
-        "offset": 0,
-        "phase": "investigation",
-        "run_id": "[redacted]",
-        "task_id": "logic-1"
-      },
-      "seq": 58,
-      "timestamp": 1794674462.9729006,
-      "type": "evidence_inspected"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -933,12 +779,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 59,
-      "timestamp": 1794674462.9906895,
+      "seq": 46,
+      "timestamp": 1794931804.0888472,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -949,12 +795,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 60,
-      "timestamp": 1794674462.9958398,
+      "seq": 47,
+      "timestamp": 1794931804.094457,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "count": 1,
@@ -963,12 +809,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 61,
-      "timestamp": 1794674462.999815,
+      "seq": 48,
+      "timestamp": 1794931804.098457,
       "type": "candidate_submitted"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -980,12 +826,12 @@
         "run_id": "[redacted]",
         "task_id": "logic-1"
       },
-      "seq": 62,
-      "timestamp": 1794674463.0261962,
+      "seq": 49,
+      "timestamp": 1794931804.1160378,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -993,7 +839,7 @@
         "error_details": null,
         "parent_step_idx": null,
         "render_info": {
-          "duration_ms": 359,
+          "duration_ms": 375,
           "title": "Running logic_correctness (logic-1)"
         },
         "run_id": "[redacted]",
@@ -1003,15 +849,15 @@
         "step_type": "agent_run",
         "task_id": "logic-1"
       },
-      "seq": 63,
-      "timestamp": 1794674463.0311947,
+      "seq": 50,
+      "timestamp": 1794931804.1216815,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
-        "duration_seconds": 0.35999999999989996,
+        "duration_seconds": 0.39099999999962165,
         "iteration": 2,
         "outcome": "succeeded",
         "phase": "investigation",
@@ -1020,35 +866,35 @@
         "task_id": "logic-1",
         "total_tokens": 30
       },
-      "seq": 64,
-      "timestamp": 1794674463.036393,
+      "seq": 51,
+      "timestamp": 1794931804.1267595,
       "type": "agent_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "graph_scope": "review",
-        "node": "specialist_subgraphs",
+        "node": "logic_correctness",
         "operation_id": "[redacted]",
         "outcome": "succeeded"
       },
-      "seq": 65,
-      "timestamp": 1794674463.0413935,
+      "seq": 52,
+      "timestamp": 1794931804.130694,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "graph_scope": "review",
-        "node": "shared_blackboard",
+        "node": "join",
         "operation_id": "[redacted]"
       },
-      "seq": 66,
-      "timestamp": 1794674463.0463932,
+      "seq": 53,
+      "timestamp": 1794931804.1358204,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "logic_correctness",
         "count": 1,
@@ -1056,78 +902,55 @@
         "phase": "structural_gate",
         "task_id": "logic-1"
       },
-      "seq": 67,
-      "timestamp": 1794674463.0805867,
+      "seq": 54,
+      "timestamp": 1794931804.150753,
       "type": "finding_created"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "shared_blackboard",
-        "operation_id": "[redacted]",
-        "outcome": "succeeded"
-      },
-      "seq": 68,
-      "timestamp": 1794674463.0835161,
-      "type": "graph_node_completed"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "graph_scope": "review",
-        "node": "[redacted]",
-        "operation_id": "[redacted]"
-      },
-      "seq": 69,
-      "timestamp": 1794674463.0972269,
-      "type": "graph_node_started"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "count": 1,
         "outcome": "succeeded",
         "phase": "structural_gate"
       },
-      "seq": 70,
-      "timestamp": 1794674463.1022265,
+      "seq": 55,
+      "timestamp": 1794931804.159472,
       "type": "validation_passed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "graph_scope": "review",
-        "node": "[redacted]",
+        "node": "join",
         "operation_id": "[redacted]",
         "outcome": "succeeded"
       },
-      "seq": 71,
-      "timestamp": 1794674463.1052291,
+      "seq": 56,
+      "timestamp": 1794931804.1728225,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "graph_scope": "review",
-        "node": "completion_workflow",
+        "node": "synthesizer_verifier",
         "operation_id": "[redacted]"
       },
-      "seq": 72,
-      "timestamp": 1794674463.1172597,
+      "seq": 57,
+      "timestamp": 1794931804.1773806,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "phase": "finalization"
       },
-      "seq": 73,
-      "timestamp": 1794674463.1252599,
+      "seq": 58,
+      "timestamp": 1794931804.1845045,
       "type": "finalization_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "iteration": 0,
@@ -1135,12 +958,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 74,
-      "timestamp": 1794674463.1352873,
+      "seq": 59,
+      "timestamp": 1794931804.1988232,
       "type": "agent_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "agent_name": "synthesizer_verifier",
@@ -1164,12 +987,12 @@
         "step_type": "agent_run",
         "task_id": "__final"
       },
-      "seq": 75,
-      "timestamp": 1794674463.1414952,
+      "seq": 60,
+      "timestamp": 1794931804.2037146,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1180,12 +1003,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 76,
-      "timestamp": 1794674463.1414952,
+      "seq": 61,
+      "timestamp": 1794931804.2097204,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "iteration": 1,
@@ -1193,12 +1016,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 77,
-      "timestamp": 1794674463.1414952,
+      "seq": 62,
+      "timestamp": 1794931804.214783,
       "type": "iteration_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": 1,
@@ -1208,12 +1031,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 78,
-      "timestamp": 1794674463.193019,
+      "seq": 63,
+      "timestamp": 1794931804.2615223,
       "type": "model_call_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "agent_name": "synthesizer_verifier",
@@ -1232,16 +1055,16 @@
         "step_type": "planner",
         "task_id": "__final"
       },
-      "seq": 79,
-      "timestamp": 1794674463.1972804,
+      "seq": 64,
+      "timestamp": 1794931804.2903404,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": 1,
-        "duration_seconds": 0.016000000000076398,
+        "duration_seconds": 0.125,
         "finish_reason": "stop",
         "iteration": 1,
         "operation_id": "[redacted]",
@@ -1251,22 +1074,22 @@
         "task_id": "__final",
         "total_tokens": 15
       },
-      "seq": 80,
-      "timestamp": 1794674463.203359,
+      "seq": 65,
+      "timestamp": 1794931804.374806,
       "type": "model_call_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
-        "duration_seconds": 1.3910000000000764,
+        "duration_seconds": 1.1409999999996217,
         "total_tokens": 60
       },
-      "seq": 81,
-      "timestamp": 1794674463.203359,
+      "seq": 66,
+      "timestamp": 1794931804.374806,
       "type": "budget_updated"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "end_offset": 431,
@@ -1278,12 +1101,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 82,
-      "timestamp": 1794674463.2073576,
+      "seq": 67,
+      "timestamp": 1794931804.3788054,
       "type": "evidence_delivered"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "agent_name": "synthesizer_verifier",
@@ -1291,7 +1114,7 @@
         "error_details": null,
         "parent_step_idx": 6,
         "render_info": {
-          "duration_ms": 47,
+          "duration_ms": 140,
           "title": "Planned action: submit_verification"
         },
         "run_id": "[redacted]",
@@ -1301,28 +1124,12 @@
         "step_type": "planner",
         "task_id": "__final"
       },
-      "seq": 83,
-      "timestamp": 1794674463.23222,
+      "seq": 68,
+      "timestamp": 1794931804.4072735,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
-      "payload": {
-        "agent_id": "synthesizer_verifier",
-        "end_offset": 431,
-        "evidence_ref": "[redacted]",
-        "iteration": 1,
-        "offset": 0,
-        "phase": "verification",
-        "run_id": "[redacted]",
-        "task_id": "__final"
-      },
-      "seq": 84,
-      "timestamp": 1794674463.244643,
-      "type": "evidence_inspected"
-    },
-    {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1334,12 +1141,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 85,
-      "timestamp": 1794674463.2687154,
+      "seq": 69,
+      "timestamp": 1794931804.432836,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1350,12 +1157,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 86,
-      "timestamp": 1794674463.2737963,
+      "seq": 70,
+      "timestamp": 1794931804.4378414,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "count": 1,
@@ -1366,12 +1173,12 @@
         "task_id": "__final",
         "verdict": "uncertain"
       },
-      "seq": 87,
-      "timestamp": 1794674463.2737963,
+      "seq": 71,
+      "timestamp": 1794931804.4423711,
       "type": "verification_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1383,12 +1190,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 88,
-      "timestamp": 1794674463.2919052,
+      "seq": 72,
+      "timestamp": 1794931804.4709713,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1399,12 +1206,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 89,
-      "timestamp": 1794674463.296906,
+      "seq": 73,
+      "timestamp": 1794931804.4769728,
       "type": "graph_node_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1416,12 +1223,12 @@
         "run_id": "[redacted]",
         "task_id": "__final"
       },
-      "seq": 90,
-      "timestamp": 1794674463.3562725,
+      "seq": 74,
+      "timestamp": 1794931804.5384195,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "agent_name": "synthesizer_verifier",
@@ -1429,7 +1236,7 @@
         "error_details": null,
         "parent_step_idx": null,
         "render_info": {
-          "duration_ms": 219,
+          "duration_ms": 342,
           "title": "Running synthesizer_verifier (__final)"
         },
         "run_id": "[redacted]",
@@ -1439,15 +1246,15 @@
         "step_type": "agent_run",
         "task_id": "__final"
       },
-      "seq": 91,
-      "timestamp": 1794674463.3653207,
+      "seq": 75,
+      "timestamp": 1794931804.5484207,
       "type": "step_update"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "duration_seconds": 0.23400000000015098,
+        "duration_seconds": 0.35900000000037835,
         "iteration": 1,
         "outcome": "succeeded",
         "phase": "synthesis",
@@ -1456,70 +1263,70 @@
         "task_id": "__final",
         "total_tokens": 15
       },
-      "seq": 92,
-      "timestamp": 1794674463.3735476,
+      "seq": 76,
+      "timestamp": 1794931804.5534296,
       "type": "agent_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "outcome": "succeeded",
         "phase": "acceptance"
       },
-      "seq": 93,
-      "timestamp": 1794674463.4091551,
+      "seq": 77,
+      "timestamp": 1794931804.5984917,
       "type": "validation_passed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "phase": "rendering"
       },
-      "seq": 94,
-      "timestamp": 1794674463.4185221,
+      "seq": 78,
+      "timestamp": 1794931804.610038,
       "type": "report_render_started"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
-        "duration_seconds": 0.015000000000100044,
+        "duration_seconds": 0.0,
         "outcome": "succeeded",
         "phase": "rendering"
       },
-      "seq": 95,
-      "timestamp": 1794674463.4251785,
+      "seq": 79,
+      "timestamp": 1794931804.61716,
       "type": "report_render_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
-        "duration_seconds": 0.29700000000002547,
+        "duration_seconds": 0.43800000000010186,
         "outcome": "succeeded",
         "phase": "finalization"
       },
-      "seq": 96,
-      "timestamp": 1794674463.4327576,
+      "seq": 80,
+      "timestamp": 1794931804.6337054,
       "type": "finalization_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "graph_scope": "review",
-        "node": "completion_workflow",
+        "node": "synthesizer_verifier",
         "operation_id": "[redacted]",
         "outcome": "succeeded"
       },
-      "seq": 97,
-      "timestamp": 1794674463.440781,
+      "seq": 81,
+      "timestamp": 1794931804.6397147,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "abc329936e0345989a42d28267484d47",
+      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
       "payload": {
         "status": "completed"
       },
-      "seq": 98,
-      "timestamp": 1794674463.465131,
+      "seq": 82,
+      "timestamp": 1794931804.669641,
       "type": "job_completed"
     }
   ],
@@ -1548,27 +1355,28 @@
     "limitations": [
       "Independent arithmetic checks cover only explicit predicates on their declared integer domains. Source relevance and other prose remain model judgments, not independently proven facts."
     ],
-    "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
+    "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
     "summary": "Partial review: 0 confirmed defect(s), 1 uncertain candidate(s), 0 advisory finding(s). 1 captured source file(s) inspected; 3 skipped and 0 failed coverage entry/entries. Coverage applies only to the captured source and recorded evidence.",
     "uncertain_high_impact_candidates": [
       {
         "arithmetic_claims": [],
         "category": "logic",
-        "confidence": 0.5,
+        "confidence": 0.7,
         "description": "The first item is indexed without an empty check",
         "evidence_refs": [
-          "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+          "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
         ],
-        "finding_id": "finding-98dcfcfe228732d134bc71ae",
+        "finding_id": "finding-0aa3a8896e8cf7b7d490ef0d",
         "impact": "Request can fail",
         "kind": "high_impact_candidate",
         "location": {
           "end_line": 2,
           "file_path": "service.py",
-          "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
+          "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
           "start_line": 2
         },
         "remediation": "",
+        "severity": "medium",
         "title": "Empty input raises",
         "verification_rationale": "Boundary failure follows syntactically; caller contract is unknown"
       }
@@ -1583,7 +1391,7 @@
             "assessments": [
               {
                 "evidence_refs": [
-                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "title",
@@ -1591,7 +1399,7 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "description",
@@ -1599,7 +1407,7 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "impact",
@@ -1607,21 +1415,21 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
                 ],
                 "explanation": "No additional remediation claim.",
                 "field": "remediation",
                 "status": "supported"
               }
             ],
-            "candidate_digest": "9daa62f3d110a236ec96fffedd3238168b9efd07c948ba65e4188e9d2687ce2c",
+            "candidate_digest": "dfed3aa0f580d713b139095ef4c0e7d13042180adddba43cb7878882ade0fb8f",
             "causal_basis": "For items=[], indexing element zero raises IndexError before a value can be returned."
           },
-          "confidence": 0.5,
+          "confidence": 0.7,
           "evidence_refs": [
-            "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+            "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
           ],
-          "finding_id": "finding-98dcfcfe228732d134bc71ae",
+          "finding_id": "finding-0aa3a8896e8cf7b7d490ef0d",
           "rationale": "Boundary failure follows syntactically; caller contract is unknown",
           "verdict": "uncertain"
         }
@@ -1631,7 +1439,7 @@
       "duplicate_reviews": [],
       "followup_requests": [],
       "provenance": {
-        "finding-98dcfcfe228732d134bc71ae": {
+        "finding-0aa3a8896e8cf7b7d490ef0d": {
           "agent_id": "logic_correctness",
           "task_id": "logic-1"
         }
@@ -1645,8 +1453,8 @@
     "\ud83d\ude00.py": "pass\n"
   },
   "job": {
-    "created_at": 1794674461.7946491,
-    "job_id": "abc329936e0345989a42d28267484d47",
+    "created_at": 1794931803.2038844,
+    "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
     "ledger": {
       "agent_usage": {
         "logic_correctness": {
@@ -1662,7 +1470,7 @@
           "prompt_tokens": 10
         }
       },
-      "elapsed_seconds": 1.6720000000000255,
+      "elapsed_seconds": 1.4530000000004293,
       "inflight": {},
       "operation_retries": {},
       "review_round": 1,
@@ -1680,19 +1488,19 @@
       "command_timeout_seconds": 120,
       "concurrent_model_calls": 3,
       "iterations_per_task": 8,
-      "job_tokens": 250000,
-      "model_context_tokens": 32768,
+      "job_tokens": null,
+      "model_context_tokens": 131072,
       "planner_output_tokens": 4096,
-      "provider_timeout_seconds": 30,
+      "provider_timeout_seconds": 90,
       "review_rounds": 2,
       "review_seconds": 600,
       "schema_repairs_per_task": 1,
       "tool_calls_per_task": 12,
       "transient_retries": 2
     },
-    "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
+    "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
     "status": "completed",
-    "updated_at": 1794674463.4719315,
+    "updated_at": 1794931804.6786659,
     "workflow_version": "seven-agent-v1",
     "workspace_path": null
   },
@@ -1718,27 +1526,28 @@
     "limitations": [
       "Independent arithmetic checks cover only explicit predicates on their declared integer domains. Source relevance and other prose remain model judgments, not independently proven facts."
     ],
-    "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
+    "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
     "summary": "Partial review: 0 confirmed defect(s), 1 uncertain candidate(s), 0 advisory finding(s). 1 captured source file(s) inspected; 3 skipped and 0 failed coverage entry/entries. Coverage applies only to the captured source and recorded evidence.",
     "uncertain_high_impact_candidates": [
       {
         "arithmetic_claims": [],
         "category": "logic",
-        "confidence": 0.5,
+        "confidence": 0.7,
         "description": "The first item is indexed without an empty check",
         "evidence_refs": [
-          "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+          "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
         ],
-        "finding_id": "finding-98dcfcfe228732d134bc71ae",
+        "finding_id": "finding-0aa3a8896e8cf7b7d490ef0d",
         "impact": "Request can fail",
         "kind": "high_impact_candidate",
         "location": {
           "end_line": 2,
           "file_path": "service.py",
-          "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
+          "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
           "start_line": 2
         },
         "remediation": "",
+        "severity": "medium",
         "title": "Empty input raises",
         "verification_rationale": "Boundary failure follows syntactically; caller contract is unknown"
       }
@@ -1753,7 +1562,7 @@
             "assessments": [
               {
                 "evidence_refs": [
-                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "title",
@@ -1761,7 +1570,7 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "description",
@@ -1769,7 +1578,7 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "impact",
@@ -1777,21 +1586,21 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
                 ],
                 "explanation": "No additional remediation claim.",
                 "field": "remediation",
                 "status": "supported"
               }
             ],
-            "candidate_digest": "9daa62f3d110a236ec96fffedd3238168b9efd07c948ba65e4188e9d2687ce2c",
+            "candidate_digest": "dfed3aa0f580d713b139095ef4c0e7d13042180adddba43cb7878882ade0fb8f",
             "causal_basis": "For items=[], indexing element zero raises IndexError before a value can be returned."
           },
-          "confidence": 0.5,
+          "confidence": 0.7,
           "evidence_refs": [
-            "evidence-858513276d02fdf4a4c78382efcbb6aea1e8cab7ef725b1eda2cee1b4c639073"
+            "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
           ],
-          "finding_id": "finding-98dcfcfe228732d134bc71ae",
+          "finding_id": "finding-0aa3a8896e8cf7b7d490ef0d",
           "rationale": "Boundary failure follows syntactically; caller contract is unknown",
           "verdict": "uncertain"
         }
@@ -1801,7 +1610,7 @@
       "duplicate_reviews": [],
       "followup_requests": [],
       "provenance": {
-        "finding-98dcfcfe228732d134bc71ae": {
+        "finding-0aa3a8896e8cf7b7d490ef0d": {
           "agent_id": "logic_correctness",
           "task_id": "logic-1"
         }
@@ -1845,7 +1654,7 @@
       "limitations": []
     },
     "owner": "key-091d54677e472013d98d39c7312be93228f8cf198a5dc893cdb44ff6cb48a599",
-    "snapshot_id": "8849cff83f4148cebb44bcca64863e86"
+    "snapshot_id": "4582a78be5f14b549ad4de730c88a136"
   },
   "source": {
     "content_hash": "c9f28bea98a2738fd61db45b1a927b35357a4a9a22303e1343450814dea7c632",
@@ -1853,7 +1662,7 @@
     "end_line": 2,
     "file_path": "service.py",
     "snapshot_hash": "a92a5277e19fe4acd1488a7778fa3a0a6f409f8687f2caf403c2be1e04457f52",
-    "snapshot_id": "8849cff83f4148cebb44bcca64863e86",
+    "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
     "source_scope": [
       "service.py"
     ],
@@ -1861,7 +1670,7 @@
     "tool": "read_file"
   },
   "unicode_event": {
-    "job_id": "abc329936e0345989a42d28267484d47",
+    "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
     "payload": {
       "agent_id": "logic_correctness",
       "task_id": "\u4efb\u52a1.\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00"

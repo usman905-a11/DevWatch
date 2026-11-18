@@ -79,8 +79,8 @@ def main(argv=None):
     if args.live:
         if not args.rates or args.max_cost_usd is None:
             arguments.error("live runs require --rates and --max-cost-usd")
-        from devwatch.providers.openai_adapter import OpenAIProviderAdapter
-        from devwatch.review.service import ServiceSettings
+        from backend.providers.openai_adapter import OpenAIProviderAdapter
+        from backend.review.service import ServiceSettings
         models = ServiceSettings.from_env().models
         configured = OpenAIProviderAdapter(provider_name=os.getenv("DEVWATCH_PROVIDER", "openai"), request_delay=0)
         if not configured.is_available():

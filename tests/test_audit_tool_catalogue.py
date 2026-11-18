@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-from devwatch.review.contracts import AGENT_CONTRACTS, AgentAction, AgentId, AgentWorkItem, ModelTier, ReviewTask
-from devwatch.review.subgraphs import AgentSubgraphs
-from devwatch.review.budgets import BudgetManager
+from backend.review.contracts import AGENT_CONTRACTS, AgentAction, AgentId, AgentWorkItem, ModelTier, ReviewTask
+from backend.review.subgraphs import AgentSubgraphs
+from backend.review.budgets import BudgetManager
 from tests.test_repository_context import setup_repository
 from tests.test_iterative_agents import ScriptedProvider
 

@@ -1,4 +1,4 @@
-"""Canonical local job API. Run with uvicorn devwatch.review.service:create_app --factory.
+"""Canonical local job API. Run with uvicorn backend.review.service:create_app --factory.
 
 The service owns workers; transports only submit, observe or explicitly cancel.
 This entry point has no dependency on the legacy review engines or report schema.
@@ -19,13 +19,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import Field
 
-from devwatch.review.contracts import AgentId, AgentWorkItem, ContractModel, ModelTier
-from devwatch.review.declared_context import validate_context_files
-from devwatch.review.jobs import DurableJobManager, JobConflict, JobEvent, JobNotFound, JobStore, JobView, MAX_EVENT_CURSOR
-from devwatch.review.repository import RepositoryContext
-from devwatch.review.stores import ArtifactStore, CaptureCoverage, GitMetadata, SnapshotManifest, StoreLayout
-from devwatch.review.workflow import CanonicalReviewExecutor
-from devwatch.review.workspace import (
+from backend.review.contracts import AgentId, AgentWorkItem, ContractModel, ModelTier
+from backend.review.declared_context import validate_context_files
+from backend.review.jobs import DurableJobManager, JobConflict, JobEvent, JobNotFound, JobStore, JobView, MAX_EVENT_CURSOR
+from backend.review.repository import RepositoryContext
+from backend.review.stores import ArtifactStore, CaptureCoverage, GitMetadata, SnapshotManifest, StoreLayout
+from backend.review.workflow import CanonicalReviewExecutor
+from backend.review.workspace import (
     PathOutsideWorkspaceError,
     WorkspaceError,
     WorkspaceManager,
@@ -196,7 +196,7 @@ def _cursor(value):
 def create_app(*, settings: ServiceSettings | None = None, provider=None):
     settings = settings or ServiceSettings.from_env()
     if provider is None:
-        from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+        from backend.providers.openai_adapter import OpenAIProviderAdapter
         provider_name = os.getenv("DEVWATCH_PROVIDER") or (
             "gemini" if settings.models[ModelTier.SMALL].startswith("gemini-") else "openai")
         provider = OpenAIProviderAdapter(provider_name=provider_name, max_concurrency=3)
@@ -219,6 +219,14 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
 
     app = FastAPI(title="DevWatch Local Review Service", lifespan=lifespan)
     app.state.workspace = WorkspaceManager()
+    app.state.workspaces = {}
+
+    def _workspace_for(principal: str) -> WorkspaceManager:
+        manager = app.state.workspaces.get(principal)
+        if manager is None:
+            manager = app.state.workspace if principal == "local" and "local" not in app.state.workspaces else WorkspaceManager()
+            app.state.workspaces[principal] = manager
+        return manager
     app.add_middleware(BoundedRequestBody, limit=settings.max_request_bytes)
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins),
                        allow_methods=["GET", "POST"], allow_headers=["Authorization", "X-API-Key", "Idempotency-Key", "Last-Event-ID"])
@@ -266,11 +274,12 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
 
     @app.get("/workspace", response_model=WorkspaceResponse)
     async def get_workspace(principal=Depends(owner)):
-        return {"path": str(app.state.workspace.root) if app.state.workspace.root is not None else None}
+        ws = _workspace_for(principal)
+        return {"path": str(ws.root) if ws.root is not None else None}
 
     @app.post("/workspace", response_model=WorkspaceResponse)
     async def set_workspace(body: WorkspaceRequest, principal=Depends(owner)):
-        resolved = app.state.workspace.set_root(body.path)
+        resolved = _workspace_for(principal).set_root(body.path)
         return {"path": str(resolved)}
 
     @app.post("/workspace/pick", response_model=WorkspacePickResponse)
@@ -297,21 +306,22 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
             return WorkspacePickResponse(path=None, error=str(exc))
         if not selected:
             return {"path": None, "cancelled": True}
-        resolved = app.state.workspace.set_root(selected)
+        resolved = _workspace_for(principal).set_root(selected)
         return {"path": str(resolved)}
 
     @app.get("/fs/list", response_model=FsListResponse)
     async def fs_list(path: str = Query(""), principal=Depends(owner)):
-        entries = app.state.workspace.list_dir(path)
+        ws = _workspace_for(principal)
+        entries = ws.list_dir(path)
         return {
-            "root": str(app.state.workspace.get_root()),
+            "root": str(ws.get_root()),
             "path": path,
             "entries": [entry.to_dict() for entry in entries],
         }
 
     @app.get("/fs/read", response_model=FsReadResponse)
     async def fs_read(path: str = Query(..., min_length=1), principal=Depends(owner)):
-        return app.state.workspace.read_file(path).to_dict()
+        return _workspace_for(principal).read_file(path).to_dict()
 
     @app.post("/api/snapshots", status_code=201, response_model=SnapshotManifest)
     async def snapshot(body: SnapshotRequest, principal=Depends(owner)):
@@ -322,14 +332,15 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
     async def submit(body: JobRequest, principal=Depends(owner),
                      idempotency_key: str = Header(min_length=1, max_length=256)):
         payload = body.model_dump(exclude_none=True)
+        ws = _workspace_for(principal)
         if body.workspace_path is not None:
-            resolved = app.state.workspace.set_root(body.workspace_path)
+            resolved = ws.set_root(body.workspace_path)
             payload["workspace_path"] = str(resolved)
             manifest = build_workspace_manifest(resolved)
         elif body.snapshot_id is not None:
             manifest = app.state.artifacts.manifest(body.snapshot_id, owner=principal)
         else:
-            resolved = app.state.workspace.get_root()
+            resolved = ws.get_root()
             payload["workspace_path"] = str(resolved)
             manifest = build_workspace_manifest(resolved)
         validate_context_files(manifest, body.context_files)

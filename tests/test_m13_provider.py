@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from devwatch.providers.base import LLMRequest
-from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+from backend.providers.base import LLMRequest
+from backend.providers.openai_adapter import OpenAIProviderAdapter
 
 
 @pytest.mark.asyncio

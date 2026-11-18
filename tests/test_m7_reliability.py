@@ -6,12 +6,12 @@ import sqlite3
 
 import pytest
 
-from devwatch.providers.base import LLMResponse, LLMUsage
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentId, AgentPrivateState, BalancedLimits, FindingCandidate, TokenUsage
-from devwatch.review.jobs import DurableJobManager, JobConflict
-from devwatch.review.subgraphs import AgentSubgraphs, PermissionedTools, ToolObservation
-from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession, _serializable
+from backend.providers.base import LLMResponse, LLMUsage
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentId, AgentPrivateState, BalancedLimits, FindingCandidate, TokenUsage
+from backend.review.jobs import DurableJobManager, JobConflict
+from backend.review.subgraphs import AgentSubgraphs, PermissionedTools, ToolObservation
+from backend.review.workflow import CanonicalReviewExecutor, _ReviewSession, _serializable
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import MODELS, plan_payload
 from tests.test_iterative_agents import ScriptedProvider, result, task
@@ -327,7 +327,7 @@ def test_storage_and_ownership_failures_are_not_specialist_partial_success(tmp_p
         layout, artifacts, snapshot, jobs = stores(tmp_path)
         executor = CanonicalReviewExecutor(layout, artifacts, jobs,
                                           ReviewProvider(), models=MODELS)
-        from devwatch.review.repository import RepositoryContext
+        from backend.review.repository import RepositoryContext
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="storage")
         repository = RepositoryContext(artifacts, snapshot.snapshot_id, owner="alice")
         session = _ReviewSession(executor, job, repository, BudgetManager(), ["service.py"])

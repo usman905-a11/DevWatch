@@ -15,7 +15,7 @@ BOB = {"X-API-Key": "bob-test-key"}
 
 
 def app(tmp_path, provider=None, **settings):
-    service = importlib.import_module("devwatch.review.service")
+    service = importlib.import_module("backend.review.service")
     return service.create_app(provider=provider or ReviewProvider(), settings=service.ServiceSettings(
         runtime_root=tmp_path / "runtime", models=MODELS,
         api_keys=frozenset({ALICE["X-API-Key"], BOB["X-API-Key"]}), **settings))
@@ -197,7 +197,7 @@ def test_websocket_auth_is_header_or_first_message_never_url(tmp_path):
 
 
 def test_service_requires_explicit_model_tiers_and_production_auth(tmp_path, monkeypatch):
-    service = importlib.import_module("devwatch.review.service")
+    service = importlib.import_module("backend.review.service")
     with pytest.raises(ValueError):
         service.ServiceSettings(runtime_root=tmp_path, models={})
     with pytest.raises(ValueError):
@@ -221,7 +221,7 @@ def test_chunked_body_is_bounded_and_unicode_credentials_are_rejected(tmp_path):
 
 
 def test_job_store_rejects_oversized_cursor_before_sqlite_binding(tmp_path):
-    from devwatch.review.jobs import JobStore
+    from backend.review.jobs import JobStore
     store = JobStore(tmp_path / "devwatch.sqlite")
     with pytest.raises(ValueError):
         store.events("missing", owner="alice", after=2**63)
@@ -230,7 +230,7 @@ def test_job_store_rejects_oversized_cursor_before_sqlite_binding(tmp_path):
 def test_asgi_disconnect_drains_viewer_without_waiting_for_job(tmp_path):
     import asyncio
     async def scenario():
-        service = importlib.import_module("devwatch.review.service")
+        service = importlib.import_module("backend.review.service")
         settings = service.ServiceSettings(runtime_root=tmp_path, models=MODELS, api_keys=frozenset({ALICE["X-API-Key"]}))
         class PausedProvider(ReviewProvider):
             async def generate_completion(self, request):

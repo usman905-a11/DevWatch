@@ -1,6 +1,6 @@
 """Delivered, inspected source keeps its authority across candidate provenance."""
 import asyncio
-from devwatch.review.contracts import AgentId
+from backend.review.contracts import AgentId
 
 from tests.test_audit_evidence import candidate, engine
 from tests.test_repository_context import setup_repository

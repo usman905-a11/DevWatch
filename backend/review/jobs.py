@@ -13,6 +13,7 @@ import inspect
 import json
 import logging
 import math
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -23,8 +24,8 @@ from uuid import uuid4
 
 from pydantic import Field
 
-from devwatch.review.budgets import BudgetLedger
-from devwatch.review.contracts import AgentId, BalancedLimits, ContractModel, FollowupRequest, StopReason
+from backend.review.budgets import BudgetLedger
+from backend.review.contracts import AgentId, BalancedLimits, ContractModel, FollowupRequest, StopReason
 
 _LOG = logging.getLogger(__name__)
 
@@ -886,6 +887,59 @@ class JobStore(_SQLiteStore):
             ]
 
 
+class _JobLeaseLock:
+    """Non-blocking OS file lock held while a worker owns a running job."""
+
+    def __init__(self, path: Path, fd: int):
+        self.path = path
+        self._fd: int | None = fd
+
+    @classmethod
+    def try_acquire(cls, path: Path) -> "_JobLeaseLock | None":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                os.lseek(fd, 0, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return cls(path, fd)
+        except OSError:
+            os.close(fd)
+            return None
+
+    def release(self) -> None:
+        fd, self._fd = self._fd, None
+        if fd is None:
+            return
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                try:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                except OSError:
+                    pass
+            else:
+                import fcntl
+
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                except OSError:
+                    pass
+        finally:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
 class DurableJobManager:
     def __init__(self, store: JobStore,
                  execute: Callable[[JobRecord], Awaitable[dict[str, Any]]], *, concurrent_jobs: int = 1,
@@ -901,6 +955,11 @@ class DurableJobManager:
         self._maintenance_id = uuid4().hex
         self._recovery_cursor = ""
         self._closed = False
+
+    def _acquire_lease(self, job_id: str) -> _JobLeaseLock | None:
+        safe_id = re.sub(r"[^a-zA-Z0-9_.-]", "_", job_id)
+        lease_path = Path(f"{self.store.path}.leases") / f"{safe_id}.lock"
+        return _JobLeaseLock.try_acquire(lease_path)
 
     def _use_runtime(self):
         if self._closed:
@@ -924,7 +983,13 @@ class DurableJobManager:
         self._tasks = {identity: task for identity, task in self._tasks.items() if not task.done()}
         for job in running:
             if job.job_id not in self._tasks:
-                self.store.recover_abandoned(job.job_id, owner=job.owner)
+                lease = self._acquire_lease(job.job_id)
+                if lease is None:
+                    continue
+                try:
+                    self.store.recover_abandoned(job.job_id, owner=job.owner)
+                finally:
+                    lease.release()
         available = self._capacity - len(self._tasks)
         if available:
             for job in self.store.queued(limit=min(available, 100)):
@@ -979,9 +1044,13 @@ class DurableJobManager:
         deadline_expired = False
         initial_elapsed = original.ledger.elapsed_seconds
         heartbeat = None
+        lease = None
         execution_id = uuid4().hex
         try:
             async with self._slots:
+                lease = self._acquire_lease(original.job_id)
+                if lease is None:
+                    return
                 try:
                     job = self.store.claim(original.job_id, owner=original.owner, execution_id=execution_id)
                     claimed = True
@@ -1040,7 +1109,8 @@ class DurableJobManager:
                                                       initial_elapsed=initial_elapsed, run_seconds=time.monotonic() - started)
                     self.store.release_execution(original.job_id, execution_id)
             finally:
-                pass
+                if lease is not None:
+                    lease.release()
 
     async def wait(self, job_id: str, *, owner: str) -> JobRecord:
         while True:

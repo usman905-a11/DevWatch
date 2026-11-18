@@ -8,8 +8,8 @@ from pydantic import ValidationError
 
 def load_contracts():
     # Missing implementation is an explicit failing assertion during the RED step.
-    assert importlib.util.find_spec("devwatch.review.contracts"), "Agent contracts are not implemented"
-    return importlib.import_module("devwatch.review.contracts")
+    assert importlib.util.find_spec("backend.review.contracts"), "Agent contracts are not implemented"
+    return importlib.import_module("backend.review.contracts")
 
 
 def test_capabilities_reject_cross_role_tools_and_agent_source_writes():

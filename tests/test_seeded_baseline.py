@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from devwatch.providers.base import LLMResponse, LLMUsage
-from devwatch.review.contracts import ModelTier
+from backend.providers.base import LLMResponse, LLMUsage
+from backend.review.contracts import ModelTier
 from scripts.run_seeded_scan import (
     DEFAULT_MANIFEST,
     DEFAULT_REPO,

@@ -1,7 +1,7 @@
 import asyncio
 
-from devwatch.review.contracts import AgentAction, Coverage, FindingCandidate, SpecialistResult
-from devwatch.review.repository import SharedBlackboard, StructuralEvidenceGate
+from backend.review.contracts import AgentAction, Coverage, FindingCandidate, SpecialistResult
+from backend.review.repository import SharedBlackboard, StructuralEvidenceGate
 from tests.test_repository_context import setup_repository
 from tests.test_audit_evidence import candidate
 
@@ -36,7 +36,7 @@ def test_schema_invalid_candidate_is_isolated_before_blackboard(tmp_path):
 
 
 def test_candidate_capacity_preserves_admitted_findings_and_records_excess(tmp_path,monkeypatch):
-    from devwatch.config import Config
+    from backend.config import Config
     monkeypatch.setattr(Config,'MAX_CANDIDATE_FINDINGS',2)
     _, _, _, repo, task = setup_repository(tmp_path)
     ref = repo._read_file({'file_path':'service.py'},task).evidence_ref

@@ -6,14 +6,14 @@ import json
 
 import pytest
 
-from devwatch.providers.base import LLMResponse, LLMUsage
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentId, AgentPrivateState, ReviewTask, ModelTier
+from backend.providers.base import LLMResponse, LLMUsage
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentId, AgentPrivateState, ReviewTask, ModelTier
 
 
 def runtime():
-    assert importlib.util.find_spec("devwatch.review.subgraphs"), "Iterative agent subgraphs are missing"
-    return importlib.import_module("devwatch.review.subgraphs")
+    assert importlib.util.find_spec("backend.review.subgraphs"), "Iterative agent subgraphs are missing"
+    return importlib.import_module("backend.review.subgraphs")
 
 
 class ScriptedProvider:
@@ -103,7 +103,7 @@ def test_invalid_model_schema_gets_exactly_one_repair():
 
 
 def test_unknown_command_completion_is_explicit_and_never_retried():
-    from devwatch.review.jobs import UnknownToolCompletion
+    from backend.review.jobs import UnknownToolCompletion
     api = runtime()
     async def scenario():
         provider = ScriptedProvider([{"kind": "call_tool", "tool": "code_search", "arguments": {"query": "x"}}])

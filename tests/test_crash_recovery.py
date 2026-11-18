@@ -10,13 +10,13 @@ import time
 
 import pytest
 
-from devwatch.review.jobs import DurableJobManager, JobConflict, JobStore
+from backend.review.jobs import DurableJobManager, JobConflict, JobStore
 
 
 WORKER = r'''
 import asyncio, json, sys
 from pathlib import Path
-from devwatch.review.jobs import DurableJobManager, JobStore
+from backend.review.jobs import DurableJobManager, JobStore
 
 root = Path(sys.argv[1])
 async def main():

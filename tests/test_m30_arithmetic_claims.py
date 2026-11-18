@@ -2,7 +2,7 @@
 import pytest
 from pydantic import ValidationError
 
-from devwatch.review.arithmetic import ArithmeticClaim, check_claim, check_counterexample
+from backend.review.arithmetic import ArithmeticClaim, check_claim, check_counterexample
 
 
 def claim(expression, **domains):
@@ -78,13 +78,13 @@ def test_forged_counterexample_requires_exact_names_and_integer_values():
 
 def test_candidate_binding_does_not_certify_a_different_prose_clause(tmp_path):
     from tests.test_m20_verification import setup
-    from devwatch.review.contracts import FindingCandidate
+    from backend.review.contracts import FindingCandidate
     _, _, _, candidate = setup(tmp_path)
     assertion = claim('(n ^ (n - 1)) == 1', n=(3, 3))
     candidate['arithmetic_claims'] = [assertion.model_dump()]
     candidate['description'] = 'XOR flips the lowest set bit.'
-    from devwatch.review.verification import candidate_digest, require_independent_verification
-    from devwatch.review.contracts import VerificationPhaseResult
+    from backend.review.verification import candidate_digest, require_independent_verification
+    from backend.review.contracts import VerificationPhaseResult
     from tests.verification_fixtures import decision
     typed = FindingCandidate.model_validate(candidate)
     assert typed.arithmetic_claims[0] == assertion

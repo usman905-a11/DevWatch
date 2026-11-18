@@ -55,7 +55,7 @@ def test_review_cannot_omit_fields_replay_another_claim_or_invent_evidence(tmp_p
 
 
 def test_advisory_requires_verifier_source_inspection_too(tmp_path):
-    from devwatch.review.repository import RepositoryContext
+    from backend.review.repository import RepositoryContext
     _, artifacts, _, _, task = setup_repository(tmp_path)
     snapshot = artifacts.capture(owner='alice', files={'service.py': 'def first(items):\n    return items[0]\n# ' + 'x' * 20000 + '\n'})
     repo = RepositoryContext(artifacts, snapshot.snapshot_id, owner='alice')
@@ -81,8 +81,8 @@ def test_complete_reviews_preserve_supported_rejected_and_genuinely_uncertain_de
 
 def test_prompt_batching_keeps_digest_bindings_limited_to_the_delivered_candidates(tmp_path):
     import json
-    from devwatch.review.budgets import BudgetManager
-    from devwatch.review.contracts import AGENT_CONTRACTS, AgentPrivateState, AgentWorkItem, BalancedLimits
+    from backend.review.budgets import BudgetManager
+    from backend.review.contracts import AGENT_CONTRACTS, AgentPrivateState, AgentWorkItem, BalancedLimits
     repo, _, _, claim = setup(tmp_path)
     runtime, _ = engine(repo, [])
     runtime.budget = BudgetManager(BalancedLimits(model_context_tokens=16000))

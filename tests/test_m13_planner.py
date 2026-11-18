@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentId, BalancedLimits, ModelTier
-from devwatch.review.subgraphs import AgentSubgraphs, PermissionedTools, ToolObservation
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentId, BalancedLimits, ModelTier
+from backend.review.subgraphs import AgentSubgraphs, PermissionedTools, ToolObservation
 from tests.test_control_agents import plan_payload
 from tests.test_iterative_agents import ScriptedProvider
 

@@ -200,6 +200,7 @@ export interface ReportDraft {
 export interface ReportFinding {
   category: string
   kind: 'defect' | 'high_impact_candidate' | 'advisory'
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
   title: string
   description: string
   impact: string

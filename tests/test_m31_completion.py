@@ -2,8 +2,8 @@
 import json
 import pytest
 
-from devwatch.providers.base import LLMResponse, LLMUsage
-from devwatch.review.contracts import AgentPrivateState
+from backend.providers.base import LLMResponse, LLMUsage
+from backend.review.contracts import AgentPrivateState
 from tests.test_m19_candidate_repair import setup
 from tests.test_m16_investigation import complete, engine
 from tests.test_iterative_agents import ScriptedProvider
@@ -58,8 +58,8 @@ async def test_agreeing_model_reviews_cannot_independently_confirm_whole_claim(t
 def test_strict_acceptance_refuses_even_arithmetically_correct_model_confirmation(tmp_path):
     from tests.test_m20_verification import setup as final_setup
     from tests.verification_fixtures import decision
-    from devwatch.review.contracts import FindingCandidate, VerificationDecision
-    from devwatch.review.finalization import FinalAcceptanceGate, assemble_report, AcceptanceError
+    from backend.review.contracts import FindingCandidate, VerificationDecision
+    from backend.review.finalization import FinalAcceptanceGate, assemble_report, AcceptanceError
     repo, _, ref, claim = final_setup(tmp_path)
     claim = {**claim, 'description':'XOR flips the lowest set bit.', 'arithmetic_claims':[
         dict(field='description', expression='(n ^ (n - 1)) == 1',variables={'n':dict(start=3,stop=3,step=1)})]}
@@ -73,7 +73,7 @@ def test_strict_acceptance_refuses_even_arithmetically_correct_model_confirmatio
 
 @pytest.mark.asyncio
 async def test_runtime_renders_arithmetic_in_audit_without_duplicate_prose_encoding(tmp_path):
-    from devwatch.review.verification import arithmetic_receipts
+    from backend.review.verification import arithmetic_receipts
     repo, task, ref, good, _ = setup(tmp_path)
     good = {**good, 'description':'For n=1, the update retains 1. Integer assertion: (1 ^ (1 - 1)) == 1, so a loop can remain at 1.',
         'arithmetic_claims':[dict(field='description',expression='(1 ^ (1 - 1)) == 1',variables={})]}
@@ -91,7 +91,7 @@ async def test_runtime_renders_arithmetic_in_audit_without_duplicate_prose_encod
 
 @pytest.mark.asyncio
 async def test_retained_candidate_cannot_end_before_required_contract_read_and_ack(tmp_path):
-    from devwatch.review.repository import RepositoryContext
+    from backend.review.repository import RepositoryContext
     from tests.test_repository_context import setup_repository
     from tests.test_audit_evidence import candidate
     _, artifacts, _, original, task = setup_repository(tmp_path)
@@ -126,14 +126,15 @@ async def test_retained_candidate_cannot_end_before_required_contract_read_and_a
 
 
 @pytest.mark.asyncio
-async def test_canonical_service_retains_detection_without_calling_it_confirmation(tmp_path):
+async def test_canonical_service_publishes_verified_confirmation_with_severity(tmp_path):
     from scripts.evaluate_agents import load_corpus, review_input, run_case
     from tests.test_m19_evaluation import RecordingProvider
     case = load_corpus()[0]
     row = await run_case(case, tmp_path, mode='full', provider=RecordingProvider(review_input(case)))
     assert row['score']['true_positive'] == 1
-    assert row['findings'] and all(f['kind']=='high_impact_candidate' for f in row['findings'])
-    assert all(f['confidence']<=.5 for f in row['findings'])
+    assert row['findings'] and all(f['kind'] == 'defect' for f in row['findings'])
+    assert all(f['confidence'] == pytest.approx(0.9) for f in row['findings'])
+    assert all(f['severity'] == 'medium' for f in row['findings'])
     assert not row['coverage']['failed']
 
 
@@ -156,9 +157,9 @@ async def test_two_unproven_rejections_cannot_silently_discard_a_candidate(tmp_p
 def test_uninspected_rejection_recovers_as_unreviewed_candidate(tmp_path):
     from tests.test_m20_recovery import setup as recovery_setup
     from tests.verification_fixtures import decision
-    from devwatch.review.contracts import VerificationPhaseResult
-    from devwatch.review.finalization import FinalAcceptanceGate
-    from devwatch.review.workflow import _ReviewSession
+    from backend.review.contracts import VerificationPhaseResult
+    from backend.review.finalization import FinalAcceptanceGate
+    from backend.review.workflow import _ReviewSession
     session, identity, ref = recovery_setup(tmp_path)
     raw = decision(session.board.candidates[identity], [ref], identity=identity,
         verdict='rejected', statuses={'impact':'unsupported'})

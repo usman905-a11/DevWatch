@@ -1,12 +1,12 @@
-from devwatch.review.contracts import MAX_EVIDENCE_PAGE_BYTES
+from backend.review.contracts import MAX_EVIDENCE_PAGE_BYTES
 import asyncio
 import json
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentAction, AgentId, AgentPrivateState, ModelTier
-from devwatch.review.subgraphs import AgentSubgraphs
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentAction, AgentId, AgentPrivateState, ModelTier
+from backend.review.subgraphs import AgentSubgraphs
 from tests.test_iterative_agents import ScriptedProvider
 from tests.test_repository_context import setup_repository
 from tests.verification_fixtures import reviewed
@@ -109,8 +109,8 @@ def test_verifier_can_cite_its_own_scoped_evidence_with_provenance(tmp_path):
 
 
 def test_long_single_line_source_is_stored_and_paged_instead_of_becoming_inaccessible(tmp_path):
-    from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import ArtifactStore
+    from backend.review.repository import RepositoryContext
+    from backend.review.stores import ArtifactStore
     artifacts=ArtifactStore(tmp_path/'devwatch.sqlite')
     snapshot=artifacts.capture(owner='alice',files={'service.py':'message = '+repr('x'*30000)+'\n'})
     repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')

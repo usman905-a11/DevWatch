@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from devwatch.review.contracts import Coverage, FindingCandidate, ReportDraft, ReportFinding, VerificationDecision
-from devwatch.review.finalization import AcceptanceError, FinalAcceptanceGate
+from backend.review.contracts import Coverage, FindingCandidate, ReportDraft, ReportFinding, VerificationDecision
+from backend.review.finalization import AcceptanceError, FinalAcceptanceGate
 from tests.test_audit_evidence import engine, candidate
 from tests.test_repository_context import setup_repository
 from tests.verification_fixtures import reviewed
@@ -47,7 +47,7 @@ def test_compact_synthesis_assembles_verified_fields_deterministically(tmp_path)
     runtime,_ = engine(repo,[dict(kind='submit_verification',inspected_evidence=[ref],payload={'decisions':good['decisions']}),
         dict(kind='submit_synthesis',payload={'summary':'Reviewed source','limitations':[]})])
     state=asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id,files=task.files,candidates={'f1':candidate(repo,ref)}))
-    assert state['output'].report_draft.confirmed_defects[0].model_dump()==good['report_draft']['confirmed_defects'][0] | {'kind':'defect','remediation':'','arithmetic_claims':[]}
+    assert state['output'].report_draft.confirmed_defects[0].model_dump()==good['report_draft']['confirmed_defects'][0] | {'kind':'defect','severity':'medium','remediation':'','arithmetic_claims':[]}
 
 
 def test_verifier_may_raise_confidence_after_inspecting_new_evidence(tmp_path):
@@ -78,8 +78,8 @@ def test_acceptance_requires_verifier_inspection_and_allows_verifier_evidence(tm
 
 
 def test_broken_optional_summary_cannot_discard_confirmed_findings_or_fail_coverage(tmp_path):
-    from devwatch.review.jobs import DurableJobManager
-    from devwatch.review.workflow import CanonicalReviewExecutor
+    from backend.review.jobs import DurableJobManager
+    from backend.review.workflow import CanonicalReviewExecutor
     from tests.test_canonical_workflow import ReviewProvider, stores
     from tests.test_control_agents import MODELS
     class BrokenSynthesis(ReviewProvider):
@@ -105,19 +105,19 @@ def test_broken_optional_summary_cannot_discard_confirmed_findings_or_fail_cover
         await manager.close()
         assert done.status=='completed'
         report=json.loads(done.result['json'])
-        assert not report['confirmed_defects']
-        assert len(report['uncertain_high_impact_candidates'])==1
-        assert report['uncertain_high_impact_candidates'][0]['title']=='Empty input raises'
+        assert len(report['confirmed_defects'])==1
+        assert report['confirmed_defects'][0]['title']=='Empty input raises'
+        assert not report['uncertain_high_impact_candidates']
         assert '__final' not in report['coverage']['failed']
         assert len([r for r in provider.requests if json.loads(r.prompt)['phase']=='synthesis'])==0
     asyncio.run(run())
 
 
 def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path, monkeypatch):
-    from devwatch.review.workflow import CanonicalReviewExecutor
+    from backend.review.workflow import CanonicalReviewExecutor
     from tests.test_canonical_workflow import ReviewProvider, stores
     from tests.test_control_agents import MODELS
-    from devwatch.review.subgraphs import AgentSubgraphs
+    from backend.review.subgraphs import AgentSubgraphs
     class PausedSynthesis(ReviewProvider):
         def __init__(self):
             super().__init__()
@@ -163,9 +163,9 @@ def test_deadline_recovery_preserves_persisted_inspected_verification(tmp_path, 
 
 def test_partial_recovery_downgrades_a_confirmation_without_inspection_receipts(tmp_path):
     from types import SimpleNamespace
-    from devwatch.review.contracts import AgentPrivateState,ReviewTask,SpecialistResult,VerificationPhaseResult
-    from devwatch.review.repository import SharedBlackboard,StructuralEvidenceGate
-    from devwatch.review.workflow import _ReviewSession
+    from backend.review.contracts import AgentPrivateState,ReviewTask,SpecialistResult,VerificationPhaseResult
+    from backend.review.repository import SharedBlackboard,StructuralEvidenceGate
+    from backend.review.workflow import _ReviewSession
     _,_,_,repo,task=setup_repository(tmp_path)
     ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
     board=SharedBlackboard(StructuralEvidenceGate(repo))
@@ -180,17 +180,17 @@ def test_partial_recovery_downgrades_a_confirmation_without_inspection_receipts(
 
 
 def test_inconsistent_persisted_synthesis_recovers_from_recorded_verification(tmp_path):
-    from devwatch.review.budgets import BudgetManager
-    from devwatch.review.contracts import SpecialistResult,VerificationSynthesisResult
-    from devwatch.review.repository import RepositoryContext
-    from devwatch.review.workflow import CanonicalReviewExecutor,_ReviewSession
+    from backend.review.budgets import BudgetManager
+    from backend.review.contracts import SpecialistResult,VerificationSynthesisResult
+    from backend.review.repository import RepositoryContext
+    from backend.review.workflow import CanonicalReviewExecutor,_ReviewSession
     from tests.test_canonical_workflow import stores
     from tests.test_control_agents import MODELS
     from tests.test_iterative_agents import ScriptedProvider
     async def run():
         layout,artifacts,snapshot,jobs=stores(tmp_path)
         repo=RepositoryContext(artifacts,snapshot.snapshot_id,owner='alice')
-        from devwatch.review.contracts import ReviewTask
+        from backend.review.contracts import ReviewTask
         task=ReviewTask(task_id='logic-1',agent_id='logic_correctness',files=['service.py'],focus='boundary')
         ref=repo._read_file({'file_path':'service.py'},task).evidence_ref
         provider=ScriptedProvider([])

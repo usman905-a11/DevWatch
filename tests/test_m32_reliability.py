@@ -1,11 +1,11 @@
 """Close conservative-policy gaps without treating model votes as proof."""
 import pytest
 
-from devwatch.review.contracts import (AgentPrivateState, EvidenceProgress, FindingCandidate,
+from backend.review.contracts import (AgentPrivateState, EvidenceProgress, FindingCandidate,
     ReviewTask, SpecialistResult, VerificationDecision, VerificationPhaseResult)
-from devwatch.review.finalization import AcceptanceError, FinalAcceptanceGate, assemble_report
-from devwatch.review.repository import SharedBlackboard, StructuralEvidenceGate
-from devwatch.review.verification import require_independent_verification
+from backend.review.finalization import AcceptanceError, FinalAcceptanceGate, assemble_report
+from backend.review.repository import SharedBlackboard, StructuralEvidenceGate
+from backend.review.verification import require_independent_verification
 from tests.test_audit_evidence import candidate, engine
 from tests.test_repository_context import setup_repository
 from tests.verification_fixtures import decision
@@ -112,7 +112,7 @@ def test_identical_wording_with_different_evidence_gaps_cannot_merge(tmp_path):
 
 
 def test_partial_recovery_caps_confidence_and_rebuilds_exact_groups(tmp_path):
-    from devwatch.review.workflow import _ReviewSession
+    from backend.review.workflow import _ReviewSession
     from tests.test_m20_recovery import setup
     session, identity, ref = setup(tmp_path)
     claim = session.board.candidates[identity]
@@ -140,7 +140,7 @@ def test_partial_recovery_caps_confidence_and_rebuilds_exact_groups(tmp_path):
 
 
 def test_old_policy_verification_checkpoint_requires_current_adjudication(tmp_path):
-    from devwatch.review.verification import checkpoint_verification
+    from backend.review.verification import checkpoint_verification
     from tests.test_m20_verification import setup
     _, _, ref, claim = setup(tmp_path)
     previous = VerificationPhaseResult(decisions=[decision(claim, [ref], verdict='uncertain',

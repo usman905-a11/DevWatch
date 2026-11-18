@@ -10,13 +10,13 @@ OBSOLETE = ["agents", "pipeline", "routers", "operations", "prompts", "verificat
 
 
 def test_obsolete_runtime_and_compatibility_modules_are_removed():
-    assert [path for path in OBSOLETE if (ROOT / "devwatch" / path).exists()] == []
+    assert [path for path in OBSOLETE if (ROOT / "backend" / path).exists()] == []
 
 
 def test_public_review_contracts_and_config_have_no_old_tiers_or_budget_aliases():
-    import devwatch.review as review
-    from devwatch.review.contracts import AgentId, ReviewTask
+    import backend.review as review
+    from backend.review.contracts import AgentId, ReviewTask
     assert review.AgentId is AgentId and review.ReviewTask is ReviewTask
-    source = (ROOT / "devwatch/config.py").read_text()
+    source = (ROOT / "backend/config.py").read_text()
     for obsolete in ("FAST_MODEL", "HEAVY_MODEL", "MAX_TOKENS_PER_JOB", "GLOBAL_REVIEW_TIMEOUT", "REVIEW_COMMANDS_ENABLED"):
         assert obsolete not in source

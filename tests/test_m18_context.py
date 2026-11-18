@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from devwatch.review.contracts import AgentAction, AgentPrivateState, EvidenceProgress
+from backend.review.contracts import AgentAction, AgentPrivateState, EvidenceProgress
 from tests.test_repository_context import setup_repository
 
 
@@ -62,7 +62,7 @@ def test_requested_offset_stays_first_without_acknowledging_or_widening_scope(tm
 
 @pytest.mark.asyncio
 async def test_new_processed_tool_result_is_delivered_before_crowded_source(tmp_path):
-    from devwatch.review.repository import RepositoryContext
+    from backend.review.repository import RepositoryContext
     _,artifacts,_,original,task=setup_repository(tmp_path)
     source=''.join('value_%d = %r\n' % (i,'x'*220) for i in range(300))
     snapshot=artifacts.capture(owner='alice',files={'service.py':source})

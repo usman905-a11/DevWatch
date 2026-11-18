@@ -25,7 +25,7 @@ def serve(runtime):
     import uvicorn
     from tests.test_canonical_workflow import ReviewProvider
     from tests.test_control_agents import MODELS
-    from devwatch.review.service import ServiceSettings, create_app
+    from backend.review.service import ServiceSettings, create_app
     uvicorn.run(create_app(settings=ServiceSettings(runtime_root=Path(runtime), models=MODELS), provider=ReviewProvider()),
                 host="127.0.0.1", port=SERVICE_PORT, log_level="warning")
 

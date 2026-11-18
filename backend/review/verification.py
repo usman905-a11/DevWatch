@@ -6,20 +6,24 @@ consistency. A structurally valid review is not a deterministic proof of truth.
 from hashlib import sha256
 import json
 
-from devwatch.review.contracts import (FindingCandidate, VerificationPhaseResult,
+from backend.review.contracts import (FindingCandidate, VerificationPhaseResult,
     CausalReview, ClaimAssessment, ReviewObservation, ArithmeticReceipt, DuplicateReview)
-from devwatch.review.arithmetic import ArithmeticCheck, check_claim, check_counterexample
+from backend.review.arithmetic import ArithmeticCheck, check_claim, check_counterexample
 
 
 CLAIM_FIELDS = frozenset(('title', 'description', 'impact', 'remediation'))
 CHALLENGE_POLICY = 'independent-claims-v4'
 
 
-def exact_duplicate_groups(candidates, decisions):
-    """Compare complete claims, including remedies and immutable locations.
+def _normalized_claim_prose(value: str) -> str:
+    return ' '.join(value.strip().split()).rstrip('.')
 
-    Different evidence references or confidence do not change identical wording.
-    Keep different verdicts or evidence gaps separate even when prose matches.
+
+def exact_duplicate_groups(candidates, decisions):
+    """Compare complete claims across agents, including remedies and immutable locations.
+
+    Different evidence references, confidence or specialist category tags do not separate
+    identical claims. Keep different wording, verdicts or evidence gaps strictly separate.
     This establishes equality only, never that an equal claim is true.
     """
     groups = {}
@@ -27,8 +31,10 @@ def exact_duplicate_groups(candidates, decisions):
         if decision.verdict == 'rejected' or decision.causal_review is None:
             continue
         claim = FindingCandidate.model_validate(candidates[decision.finding_id])
-        key = (json.dumps(claim.model_dump(mode='json', exclude={'evidence_refs', 'confidence'}),
-                          sort_keys=True, ensure_ascii=False, separators=(',', ':')),
+        dumped = claim.model_dump(mode='json', exclude={'evidence_refs', 'confidence', 'category'})
+        for field in ('title', 'description', 'impact', 'remediation'):
+            dumped[field] = _normalized_claim_prose(dumped[field])
+        key = (json.dumps(dumped, sort_keys=True, ensure_ascii=False, separators=(',', ':')),
                decision.verdict, tuple(sorted((item.field, item.status)
                    for item in decision.causal_review.assessments)))
         groups.setdefault(key, []).append(decision.finding_id)
@@ -151,6 +157,38 @@ def enforce_arithmetic(candidate, decision):
     return decision.model_copy(deep=True)
 
 
+def apply_exact_duplicate_groups(candidates, result, *, inspected_evidence=None):
+    """Deterministically consolidate identical claims when no explicit groups were recorded."""
+    if result.duplicate_groups:
+        return result
+    groups = exact_duplicate_groups(candidates, result.decisions)
+    if not groups:
+        return result
+    result = result.model_copy(deep=True)
+    by_id = {decision.finding_id: decision for decision in result.decisions}
+    inspected = set(inspected_evidence) if inspected_evidence is not None else None
+    valid_groups = []
+    valid_reviews = []
+    for group in groups:
+        refs = list(dict.fromkeys(ref for identity in group for ref in by_id[identity].evidence_refs))
+        if inspected is not None:
+            refs = [ref for ref in refs if ref in inspected]
+            if not refs:
+                continue
+        valid_groups.append(group)
+        valid_reviews.append(
+            DuplicateReview(
+                finding_ids=group,
+                rationale='Runtime compared identical claim fields and immutable locations with equal verdicts and evidence gaps.',
+                evidence_refs=refs[:8],
+            )
+        )
+    if valid_groups:
+        result.duplicate_groups = valid_groups
+        result.duplicate_reviews = valid_reviews
+    return result
+
+
 def require_independent_verification(candidates, result):
     """No trusted whole-claim proof adapter exists yet; votes are observations.
 
@@ -180,12 +218,8 @@ def require_independent_verification(candidates, result):
         note = 'Nonidentical candidate alternatives were retained; model-only duplicate equivalence is unproven.'
         if note not in result.conflicts:
             result.conflicts.append(note)
-    by_id = {decision.finding_id: decision for decision in result.decisions}
-    result.duplicate_groups = groups
-    result.duplicate_reviews = [DuplicateReview(finding_ids=group,
-        rationale='Runtime compared identical claim fields and immutable locations with equal verdicts and evidence gaps.',
-        evidence_refs=list(dict.fromkeys(ref for identity in group for ref in by_id[identity].evidence_refs))[:8])
-        for group in groups]
+    result.duplicate_groups, result.duplicate_reviews = [], []
+    result = apply_exact_duplicate_groups(candidates, result)
     return result
 
 

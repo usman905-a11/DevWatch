@@ -8,17 +8,39 @@ import socket
 import subprocess
 import threading
 import time
-from urllib.request import ProxyHandler, build_opener
+from urllib.error import HTTPError
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 import uvicorn
 
-from devwatch.providers.base import LLMResponse, LLMUsage
-from devwatch.review.capture import capture_source
-from devwatch.review.client import ReviewClient, _NoRedirect
-from devwatch.review.contracts import ModelTier
-from devwatch.review.service import ServiceSettings, create_app
+from backend.providers.base import LLMResponse, LLMUsage
+from backend.review.capture import capture_source
+from backend.review.contracts import ModelTier
+from backend.review.service import ServiceSettings, create_app
 from tests.verification_fixtures import reviewed
 from tests.assembly_fixtures import held_assembly
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise HTTPError(newurl, code, msg, headers, fp)
+
+
+class ReviewClient:
+    """Minimal synchronous HTTP client for M10 runtime scenarios."""
+
+    def __init__(self, base_url: str, *, api_key: str, opener):
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self._open = opener
+
+    def events(self, job_id: str, *, after: int = 0) -> dict:
+        req = Request(
+            f"{self.base_url}/api/jobs/{job_id}/events?after={after}&limit=1000",
+            headers={"X-API-Key": self.api_key},
+        )
+        with self._open(req, timeout=5) as resp:
+            return json.loads(resp.read().decode("utf-8"))
 
 
 KEY = "m10-local-fixture-key"

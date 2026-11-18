@@ -15,9 +15,9 @@ from typing import Literal
 
 from pydantic import Field
 
-from devwatch.config import Config
-from devwatch.review.contracts import ContractModel, SourceLocation
-from devwatch.review.stores import CaptureCoverage, GitMetadata, validate_source_path
+from backend.config import Config
+from backend.review.contracts import ContractModel, SourceLocation
+from backend.review.stores import CaptureCoverage, GitMetadata, validate_source_path
 
 
 EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".go", ".rs", ".c", ".cpp", ".h",

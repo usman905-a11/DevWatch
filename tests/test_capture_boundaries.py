@@ -8,7 +8,7 @@ from tests.test_source_capture import repository, commit, git
 
 
 def api():
-    return importlib.import_module("devwatch.review.capture")
+    return importlib.import_module("backend.review.capture")
 
 
 def test_directory_catalog_stops_consuming_at_limit_even_for_excluded_entries(tmp_path, monkeypatch):

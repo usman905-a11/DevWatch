@@ -6,9 +6,9 @@ import argparse
 from pathlib import Path
 from typing import Any, get_args
 
-from devwatch.review.contracts import ModelTier, ReportDraft
-from devwatch.review.jobs import JobStatus, StepRenderInfo, StepStatus, StepType, StepUpdatePayload
-from devwatch.review.service import ServiceSettings, create_app
+from backend.review.contracts import ModelTier, ReportDraft
+from backend.review.jobs import JobStatus, StepRenderInfo, StepStatus, StepType, StepUpdatePayload
+from backend.review.service import ServiceSettings, create_app
 
 
 ROOT = Path(__file__).resolve().parents[1]

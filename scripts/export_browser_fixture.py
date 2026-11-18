@@ -5,8 +5,8 @@ from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 
-from devwatch.review.jobs import JobEvent
-from devwatch.review.contracts import ReportDraft, ReviewTask
+from backend.review.jobs import JobEvent
+from backend.review.contracts import ReportDraft, ReviewTask
 from tests.test_review_service import ALICE, app, completed
 
 

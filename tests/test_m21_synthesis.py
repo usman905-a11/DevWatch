@@ -2,7 +2,7 @@
 import asyncio
 import json
 
-from devwatch.review.contracts import AgentPrivateState
+from backend.review.contracts import AgentPrivateState
 from tests.test_audit_evidence import engine
 from tests.test_m20_verification import setup
 from tests.verification_fixtures import decision
@@ -29,7 +29,7 @@ def restored(repo, ref, claim):
         payload=dict(decisions=[decision(claim, [ref])]))])
     async def persist(state, ledger):
         if state.get('phase') == 'synthesis':
-            from devwatch.review.workflow import _serializable
+            from backend.review.workflow import _serializable
             seen.append(_serializable(state))
     runtime.persist = persist
     asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=['service.py'], candidates={'f1':claim}))
@@ -74,8 +74,8 @@ def test_missing_causal_review_in_restored_phase_cannot_finish(tmp_path):
 
 
 def test_revalidation_keeps_one_unresolved_disagreement_limitation(tmp_path):
-    from devwatch.review.contracts import FindingCandidate
-    from devwatch.review.finalization import FinalAcceptanceGate
+    from backend.review.contracts import FindingCandidate
+    from backend.review.finalization import FinalAcceptanceGate
     from tests.test_m20_relations import with_relation
     state = with_relation(tmp_path, 'unresolved', verdicts=('uncertain','uncertain'))
     claims = {identity:FindingCandidate.model_validate(raw) for identity,raw in state['candidates'].items()}

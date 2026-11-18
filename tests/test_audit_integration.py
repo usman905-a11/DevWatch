@@ -3,9 +3,9 @@ import asyncio
 from hashlib import sha256
 import json
 
-from devwatch.review.contracts import AGENT_CONTRACTS, AgentPrivateState, ModelTier
-from devwatch.review.jobs import DurableJobManager
-from devwatch.review.workflow import CanonicalReviewExecutor
+from backend.review.contracts import AGENT_CONTRACTS, AgentPrivateState, ModelTier
+from backend.review.jobs import DurableJobManager
+from backend.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.verification_fixtures import reviewed
 
@@ -54,7 +54,7 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
             else:
                 action=dict(kind='submit_synthesis',payload={'summary':'One evidence-backed defect','limitations':[]})
             action['inspected_evidence']=[page['evidence_ref'] for page in pages]
-            from devwatch.providers.base import LLMResponse,LLMUsage
+            from backend.providers.base import LLMResponse,LLMUsage
             return LLMResponse(finish_reason="stop", content=json.dumps(action),provider='scripted',model=request.model,latency_ms=0,
                                usage=LLMUsage(prompt_tokens=10,completion_tokens=5,total_tokens=15))
     async def run():
@@ -68,8 +68,8 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
         await manager.close()
         assert done.status=='completed'
         report=json.loads(done.result['json'])
-        assert not report['confirmed_defects']
-        assert len(report['uncertain_high_impact_candidates'])==1
+        assert len(report['confirmed_defects'])==1
+        assert not report['uncertain_high_impact_candidates']
         thread=sha256(('alice\0'+job.job_id).encode()).hexdigest()
         specialist=AgentPrivateState.model_validate(executor.checkpoints.load(thread,'logic-1')['state']['private_state'])
         ast=specialist.evidence_refs[0]
@@ -77,7 +77,7 @@ def test_large_evidence_pipeline_through_inspected_verifier_evidence_and_accepte
         assert (12000,13000) in specialist.evidence_progress[ast].delivered
         assert (12000,13000) in specialist.evidence_progress[ast].inspected
         verifier=AgentPrivateState.model_validate(executor.checkpoints.load(thread,'__final')['state']['private_state'])
-        own=report['uncertain_high_impact_candidates'][0]['evidence_refs'][0]
+        own=report['confirmed_defects'][0]['evidence_refs'][0]
         assert verifier.evidence_progress[own].fully_inspected()
         assert verifier.evidence_progress[own].provenance['agent_id']=='synthesizer_verifier'
         assert specialist.evidence_progress[ast].provenance['agent_id']=='logic_correctness'

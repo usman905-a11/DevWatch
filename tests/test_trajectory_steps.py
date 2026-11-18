@@ -5,7 +5,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from devwatch.review.jobs import (
+from backend.review.jobs import (
     JobStore,
     StepRenderInfo,
     StepUpdatePayload,
@@ -229,11 +229,11 @@ def test_job_store_settles_unfinished_running_steps_on_terminal_transition(tmp_p
 
 
 def test_subgraph_emits_nested_agent_planner_and_enriched_tool_steps(tmp_path):
-    from devwatch.review.budgets import BudgetManager
-    from devwatch.review.contracts import AgentId, ReviewTask
-    from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import ArtifactStore
-    from devwatch.review.subgraphs import AgentSubgraphs
+    from backend.review.budgets import BudgetManager
+    from backend.review.contracts import AgentId, ReviewTask
+    from backend.review.repository import RepositoryContext
+    from backend.review.stores import ArtifactStore
+    from backend.review.subgraphs import AgentSubgraphs
     from tests.test_control_agents import MODELS
     from tests.test_iterative_agents import ScriptedProvider, result
 

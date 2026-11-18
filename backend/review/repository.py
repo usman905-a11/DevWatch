@@ -14,15 +14,15 @@ from pathlib import Path, PurePosixPath
 import re
 from typing import Any
 
-from devwatch.config import Config
-from devwatch.review.contracts import CandidateRejection, Coverage, FindingCandidate, ReviewTask, SpecialistResult
-from devwatch.review.jobs import StepRenderInfo
-from devwatch.review.stores import ArtifactStore, validate_source_path
-from devwatch.review.subgraphs import PermissionedTools, ToolObservation
-from devwatch.review.tool_errors import ToolFailure
-from devwatch.review.contracts import EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_BYTES
-from devwatch.review.intelligence import SUPPORTED_EXTENSIONS, analyze_source
-from devwatch.review.workspace import WorkspaceError, WorkspaceManager, WorkspaceNotFoundError, build_workspace_manifest
+from backend.config import Config
+from backend.review.contracts import CandidateRejection, Coverage, FindingCandidate, ReviewTask, SpecialistResult
+from backend.review.jobs import StepRenderInfo
+from backend.review.stores import ArtifactStore, validate_source_path
+from backend.review.subgraphs import PermissionedTools, ToolObservation
+from backend.review.tool_errors import ToolFailure
+from backend.review.contracts import EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_BYTES
+from backend.review.intelligence import SUPPORTED_EXTENSIONS, analyze_source
+from backend.review.workspace import WorkspaceError, WorkspaceManager, WorkspaceNotFoundError, build_workspace_manifest
 
 
 def _json(value: Any) -> str:
@@ -178,7 +178,7 @@ class RepositoryContext:
                              "data": excerpt}, work=work)
 
     def _read_files(self, arguments, work):
-        from devwatch.review.tool_catalogue import SourceArguments
+        from backend.review.tool_catalogue import SourceArguments
         parsed = SourceArguments.model_validate(arguments).model_dump(exclude_unset=True)
         paths = [parsed.pop('file_path'), *parsed.pop('additional_files', [])]
         # Authorize the entire batch before materializing any source artifact.
@@ -390,9 +390,21 @@ class SharedBlackboard:
         self.quarantined[task.task_id] = previous_rejections + [item for item in result.quarantined if item not in previous_rejections]
         previous_result = self.results.get(task.task_id)
         if previous_result is not None:
-            result.coverage.failed = {**previous_result.coverage.failed, **result.coverage.failed}
-            result.coverage.skipped = {**previous_result.coverage.skipped, **result.coverage.skipped}
-            result.coverage.inspected_files = sorted(set(previous_result.coverage.inspected_files + result.coverage.inspected_files))
+            inspected = sorted(set(previous_result.coverage.inspected_files + result.coverage.inspected_files))
+            skipped = {**previous_result.coverage.skipped, **result.coverage.skipped}
+            for path in inspected:
+                if skipped.get(path) == "not_inspected":
+                    skipped.pop(path, None)
+            prev_failed = dict(previous_result.coverage.failed)
+            if (
+                result.stop_reason == "evidence_complete"
+                and prev_failed.get(task.task_id) in {"evidence_incomplete", "no_progress"}
+                and task.task_id not in result.coverage.failed
+            ):
+                prev_failed.pop(task.task_id, None)
+            result.coverage.failed = {**prev_failed, **result.coverage.failed}
+            result.coverage.skipped = skipped
+            result.coverage.inspected_files = inspected
             result.coverage.limitations = sorted(set(previous_result.coverage.limitations + result.coverage.limitations))
         self.results[task.task_id] = result.model_copy(deep=True)
 
@@ -413,6 +425,9 @@ class SharedBlackboard:
             output.skipped.update(result.coverage.skipped)
             output.limitations.extend(result.coverage.limitations)
         output.inspected_files = sorted(set(output.inspected_files))
+        for path in output.inspected_files:
+            if output.skipped.get(path) == "not_inspected":
+                output.skipped.pop(path, None)
         output.inspected_symbols = sorted(set(output.inspected_symbols))
         output.limitations = sorted(set(output.limitations))
         for path in self.gate.repository.manifest.entries:

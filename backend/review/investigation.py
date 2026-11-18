@@ -2,8 +2,8 @@
 from hashlib import sha256
 import json
 
-from devwatch.review.contracts import CandidateRejection, EvidenceProgress, InvestigationProgress
-from devwatch.review.tool_errors import ToolFailure
+from backend.review.contracts import CandidateRejection, EvidenceProgress, InvestigationProgress
+from backend.review.tool_errors import ToolFailure
 
 
 class EvidenceInspectionRequired(ValueError):
@@ -58,25 +58,79 @@ def _inspection(private):
     return sha256(json.dumps(value).encode()).hexdigest()
 
 
-def stalled(private, fingerprint):
-    progress = private.investigation
-    ref = progress.successful_actions.get(fingerprint)
+def _is_stagnant(successful_actions, last_action, last_inspection, stagnant_calls, private, fingerprint):
+    ref = successful_actions.get(fingerprint)
     if ref is not None and private.evidence_progress.get(ref, EvidenceProgress()).fully_inspected():
         return True
-    return (progress.last_action == fingerprint and progress.last_inspection == _inspection(private)
-            and progress.stagnant_calls >= 1)
+    return last_action == fingerprint and last_inspection == _inspection(private) and stagnant_calls >= 1
+
+
+def _updated_progress(successful_actions, last_action, last_inspection, stagnant_calls, private, fingerprint, evidence_ref):
+    inspected = _inspection(private)
+    next_stagnant = stagnant_calls + 1 if last_action == fingerprint and last_inspection == inspected else 0
+    actions = dict(successful_actions)
+    actions.pop(fingerprint, None)
+    actions[fingerprint] = evidence_ref
+    return dict(list(actions.items())[-8:]), fingerprint, inspected, next_stagnant
+
+
+def stalled(private, fingerprint):
+    progress = private.investigation
+    return _is_stagnant(
+        progress.successful_actions,
+        progress.last_action,
+        progress.last_inspection,
+        progress.stagnant_calls,
+        private,
+        fingerprint,
+    )
 
 
 def observed(private, fingerprint, evidence_ref):
     progress = private.investigation
-    inspected = _inspection(private)
-    progress.stagnant_calls = (progress.stagnant_calls + 1 if progress.last_action == fingerprint
-                              and progress.last_inspection == inspected else 0)
-    progress.last_action, progress.last_inspection = fingerprint, inspected
-    actions = dict(progress.successful_actions)
-    actions.pop(fingerprint, None)
-    actions[fingerprint] = evidence_ref
-    progress.successful_actions = dict(list(actions.items())[-8:])
+    actions, last_action, last_inspection, stagnant = _updated_progress(
+        progress.successful_actions,
+        progress.last_action,
+        progress.last_inspection,
+        progress.stagnant_calls,
+        private,
+        fingerprint,
+        evidence_ref,
+    )
+    progress.successful_actions = actions
+    progress.last_action, progress.last_inspection, progress.stagnant_calls = last_action, last_inspection, stagnant
+
+
+def control_stalled(control_progress, private, fingerprint):
+    if not control_progress:
+        return False
+    return _is_stagnant(
+        control_progress.get("successful_actions", {}),
+        control_progress.get("last_action"),
+        control_progress.get("last_inspection"),
+        control_progress.get("stagnant_calls", 0),
+        private,
+        fingerprint,
+    )
+
+
+def control_observed(control_progress, private, fingerprint, evidence_ref):
+    current = control_progress or {}
+    actions, last_action, last_inspection, stagnant = _updated_progress(
+        current.get("successful_actions", {}),
+        current.get("last_action"),
+        current.get("last_inspection"),
+        current.get("stagnant_calls", 0),
+        private,
+        fingerprint,
+        evidence_ref,
+    )
+    return {
+        "successful_actions": actions,
+        "last_action": last_action,
+        "last_inspection": last_inspection,
+        "stagnant_calls": stagnant,
+    }
 
 
 def retain(private, candidates):

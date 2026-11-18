@@ -5,11 +5,11 @@ import subprocess
 
 import pytest
 
-from devwatch.config import Config
+from backend.config import Config
 
 
 def capture(path):
-    return importlib.import_module("devwatch.review.capture").capture_source(path)
+    return importlib.import_module("backend.review.capture").capture_source(path)
 
 
 def git(path, *args):
@@ -108,7 +108,7 @@ def test_single_file_capture_and_missing_target(tmp_path):
 
 
 def test_git_metadata_failure_is_explicit_and_never_reports_clean_scope(tmp_path, monkeypatch):
-    api = importlib.import_module("devwatch.review.capture")
+    api = importlib.import_module("backend.review.capture")
     repository(tmp_path)
     (tmp_path / "service.py").write_text("pass\n")
     def unavailable(*args):

@@ -6,8 +6,8 @@ import pytest
 
 
 def stores():
-    assert importlib.util.find_spec("devwatch.review.stores"), "Separated stores are missing"
-    return importlib.import_module("devwatch.review.stores")
+    assert importlib.util.find_spec("backend.review.stores"), "Separated stores are missing"
+    return importlib.import_module("backend.review.stores")
 
 
 def test_two_store_locations_are_distinct(tmp_path):

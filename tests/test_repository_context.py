@@ -5,13 +5,13 @@ import importlib
 
 import pytest
 
-from devwatch.review.contracts import AgentAction, AgentId, AgentPrivateState, FindingCandidate, ReviewTask, SpecialistResult, Coverage
-from devwatch.review.stores import ArtifactStore
+from backend.review.contracts import AgentAction, AgentId, AgentPrivateState, FindingCandidate, ReviewTask, SpecialistResult, Coverage
+from backend.review.stores import ArtifactStore
 
 
 def repository_api():
-    assert importlib.util.find_spec("devwatch.review.repository"), "Canonical repository context is missing"
-    return importlib.import_module("devwatch.review.repository")
+    assert importlib.util.find_spec("backend.review.repository"), "Canonical repository context is missing"
+    return importlib.import_module("backend.review.repository")
 
 
 def setup_repository(tmp_path):
@@ -108,7 +108,7 @@ def test_context_request_is_bounded_and_does_not_widen_scope(tmp_path):
 
 
 def test_oversized_source_intelligence_returns_parse_failed():
-    from devwatch.review.intelligence import analyze_source
+    from backend.review.intelligence import analyze_source
 
     oversized = "# " + ("x" * 600_000)
     analysis = analyze_source("big.py", oversized)

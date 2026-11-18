@@ -7,16 +7,16 @@ import json
 import pytest
 from tests.verification_fixtures import reviewed
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import (
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import (
     AgentId, Coverage, FindingCandidate, ReportDraft, ReportFinding, ReviewTask,
     VerificationDecision, VerificationSynthesisResult,
 )
 
 
 def finalization():
-    assert importlib.util.find_spec("devwatch.review.finalization"), "Finalization workflow is missing"
-    return importlib.import_module("devwatch.review.finalization")
+    assert importlib.util.find_spec("backend.review.finalization"), "Finalization workflow is missing"
+    return importlib.import_module("backend.review.finalization")
 
 
 def draft():
@@ -134,7 +134,7 @@ def test_acceptance_cannot_drop_verified_or_undecided_candidates():
 
 def test_followup_round_admission_survives_restored_budget():
     api = finalization()
-    from devwatch.review.budgets import BudgetLedger
+    from backend.review.budgets import BudgetLedger
     async def scenario():
         calls, saved = [], []
         budget = BudgetManager()

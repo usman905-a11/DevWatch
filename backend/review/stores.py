@@ -11,9 +11,9 @@ from uuid import uuid4
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from devwatch.config import Config
-from devwatch.review.contracts import ContractModel, SourceLocation
-from devwatch.review.jobs import _SQLiteStore
+from backend.config import Config, is_sensitive_rel_path
+from backend.review.contracts import ContractModel, SourceLocation
+from backend.review.jobs import _SQLiteStore
 
 
 @dataclass(frozen=True)
@@ -118,6 +118,8 @@ def _git_hash(metadata: GitMetadata) -> str:
 def validate_source_path(name: str) -> str:
     name = SourceLocation.relative_source_path(name)
     excluded = {".git", ".devwatch", ".venv", "node_modules", "__pycache__"}
+    if is_sensitive_rel_path(name):
+        raise ValueError("sensitive or generated source path is excluded")
     for part in Path(name).parts:
         if (part.lower().startswith(".env") or part.lower() in excluded
                 or part.lower() in Config.BLOCKED_FILENAMES

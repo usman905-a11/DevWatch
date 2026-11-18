@@ -1,9 +1,9 @@
 """Recovery cannot turn absent or failed semantic review into confirmation."""
 from types import SimpleNamespace
 
-from devwatch.review.contracts import AgentPrivateState, SpecialistResult, VerificationPhaseResult
-from devwatch.review.repository import SharedBlackboard, StructuralEvidenceGate
-from devwatch.review.workflow import _ReviewSession
+from backend.review.contracts import AgentPrivateState, SpecialistResult, VerificationPhaseResult
+from backend.review.repository import SharedBlackboard, StructuralEvidenceGate
+from backend.review.workflow import _ReviewSession
 from tests.test_audit_evidence import candidate
 from tests.test_repository_context import setup_repository
 from tests.verification_fixtures import decision
@@ -63,7 +63,7 @@ def test_planner_failure_is_not_misattributed_to_a_verifier_that_never_ran(tmp_p
 
 def test_restored_synthesis_requires_every_cited_artifact_to_be_fully_inspected(tmp_path):
     import asyncio
-    from devwatch.review.contracts import EvidenceProgress
+    from backend.review.contracts import EvidenceProgress
     from tests.test_audit_evidence import engine
     _, _, _, repo, task = setup_repository(tmp_path)
     first = repo._read_file({'file_path':'service.py'}, task).evidence_ref

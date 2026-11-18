@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from devwatch.providers.base import LLMResponse, LLMUsage
-from devwatch.review.contracts import AgentPrivateState
+from backend.providers.base import LLMResponse, LLMUsage
+from backend.review.contracts import AgentPrivateState
 from tests.test_m19_candidate_repair import setup
 from tests.test_m16_investigation import complete, engine
 

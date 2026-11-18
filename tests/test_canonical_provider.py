@@ -4,8 +4,8 @@ import json
 import httpx
 import pytest
 
-from devwatch.providers.base import LLMRequest
-from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+from backend.providers.base import LLMRequest
+from backend.providers.openai_adapter import OpenAIProviderAdapter
 
 
 def test_real_sdk_uses_unwrapped_transport_and_closes_it(monkeypatch):
@@ -79,7 +79,7 @@ def test_sdk_preserves_finish_reason_and_usage_even_for_empty_truncated_output(m
 @pytest.mark.parametrize("status,exception", [(401, "ProviderAuthenticationError"), (403, "ProviderAuthorizationError"),
     (429, "ProviderRateLimitError"), (500, "ProviderTemporaryError")])
 def test_sdk_failure_has_no_internal_retries_and_releases_transport(monkeypatch, status, exception):
-    from devwatch.providers import exceptions
+    from backend.providers import exceptions
     monkeypatch.setenv("OPENAI_API_KEY", "test-only-key")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     calls = []

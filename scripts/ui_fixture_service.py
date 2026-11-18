@@ -3,7 +3,7 @@ import asyncio
 import os
 from pathlib import Path
 
-from devwatch.review.service import ServiceSettings, create_app
+from backend.review.service import ServiceSettings, create_app
 from tests.test_canonical_workflow import ReviewProvider
 from tests.test_control_agents import MODELS
 

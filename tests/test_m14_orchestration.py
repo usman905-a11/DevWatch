@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentId, AgentPrivateState, ModelTier, ReviewTask, SpecialistResult
-from devwatch.review.repository import RepositoryContext
-from devwatch.review.workflow import CanonicalReviewExecutor, ReviewExecutionError, _ReviewSession
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentId, AgentPrivateState, ModelTier, ReviewTask, SpecialistResult
+from backend.review.repository import RepositoryContext
+from backend.review.workflow import CanonicalReviewExecutor, ReviewExecutionError, _ReviewSession
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import plan_payload
 
@@ -112,10 +112,10 @@ def test_aggregation_validates_complete_result_set_before_any_publication(tmp_pa
 async def test_root_graph_removes_plumbing_nodes_and_runs_five_specialists_in_parallel_isolated(tmp_path, monkeypatch):
     import asyncio
     from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-    from devwatch.providers.base import LLMResponse, LLMUsage
-    from devwatch.review.contracts import SPECIALISTS
-    from devwatch.review.jobs import DurableJobManager
-    from devwatch.review.workflow import _ReviewSession
+    from backend.providers.base import LLMResponse, LLMUsage
+    from backend.review.contracts import SPECIALISTS
+    from backend.review.jobs import DurableJobManager
+    from backend.review.workflow import _ReviewSession
 
     session, _ = session_for(tmp_path)
     async with AsyncSqliteSaver.from_conn_string(str(tmp_path / "graph.sqlite")) as saver:

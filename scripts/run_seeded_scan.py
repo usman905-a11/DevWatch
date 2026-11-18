@@ -13,13 +13,13 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+from backend.providers.openai_adapter import OpenAIProviderAdapter
 from dotenv import load_dotenv
-from devwatch.review.contracts import ModelTier
-from devwatch.review.jobs import DurableJobManager, JobStore
-from devwatch.review.service import ServiceSettings
-from devwatch.review.stores import ArtifactStore, StoreLayout
-from devwatch.review.workflow import CanonicalReviewExecutor
+from backend.review.contracts import ModelTier
+from backend.review.jobs import DurableJobManager, JobStore
+from backend.review.service import ServiceSettings
+from backend.review.stores import ArtifactStore, StoreLayout
+from backend.review.workflow import CanonicalReviewExecutor
 
 
 DEFAULT_REPO = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "seeded_repo"

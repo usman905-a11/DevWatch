@@ -8,10 +8,10 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
-from devwatch.review.contracts import ModelTier
-from devwatch.review.repository import RepositoryContext
-from devwatch.review.service import ServiceSettings, create_app
-from devwatch.review.stores import ArtifactStore, StoreLayout
+from backend.review.contracts import ModelTier
+from backend.review.repository import RepositoryContext
+from backend.review.service import ServiceSettings, create_app
+from backend.review.stores import ArtifactStore, StoreLayout
 
 
 def _make_client(tmp_path: Path) -> TestClient:
@@ -181,7 +181,7 @@ def test_repository_context_reads_live_workspace_without_snapshot_copy(tmp_path:
 
 
 def test_build_workspace_manifest_excludes_secrets_and_enforces_total_size(tmp_path: Path):
-    from devwatch.review.workspace import build_workspace_manifest
+    from backend.review.workspace import build_workspace_manifest
 
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -203,10 +203,10 @@ def test_build_workspace_manifest_excludes_secrets_and_enforces_total_size(tmp_p
 
 
 def test_planner_context_gracefully_prunes_huge_change_list(tmp_path: Path):
-    from devwatch.review.budgets import BudgetManager
-    from devwatch.review.contracts import AgentId, AgentPrivateState, AgentWorkItem
-    from devwatch.review.jobs import JobRecord, JobStore
-    from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession
+    from backend.review.budgets import BudgetManager
+    from backend.review.contracts import AgentId, AgentPrivateState, AgentWorkItem
+    from backend.review.jobs import JobRecord, JobStore
+    from backend.review.workflow import CanonicalReviewExecutor, _ReviewSession
 
     repo = tmp_path / "many"
     repo.mkdir()
@@ -224,3 +224,158 @@ def test_planner_context_gracefully_prunes_huge_change_list(tmp_path: Path):
     selected = session.context({"task": work, "private_state": AgentPrivateState(), "action": None})
     assert len(selected["changes"]) < len(ctx.manifest.entries)
     assert selected["omitted_changes_count"] > 0
+
+
+def test_fs_read_blocks_sensitive_files_and_symlinks_with_403(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "src").mkdir()
+    (repo / "src" / "app.py").write_text("print('ok')\n", encoding="utf-8")
+    sensitive_paths = [
+        ".env",
+        ".env.local",
+        "config/.env.production",
+        "private.key",
+        "cert.pem",
+        "id_rsa",
+        "secrets.json",
+        "service_account.json",
+        ".git/config",
+        ".aws/credentials",
+        ".ssh/id_ed25519",
+    ]
+    for rel in sensitive_paths:
+        target = repo / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("TOP_SECRET_VALUE\n", encoding="utf-8")
+
+    with _make_client(tmp_path) as client:
+        assert client.post("/workspace", json={"path": str(repo)}).status_code == 200
+        assert client.get("/fs/read", params={"path": "src/app.py"}).status_code == 200
+        for rel in sensitive_paths:
+            res = client.get("/fs/read", params={"path": rel})
+            assert res.status_code == 403, f"expected 403 for {rel}, got {res.status_code}"
+            assert "TOP_SECRET_VALUE" not in res.text
+
+
+def test_fs_list_does_not_leak_external_symlink_target_metadata(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside_dir = tmp_path / "outside_dir"
+    outside_dir.mkdir()
+    outside_file = outside_dir / "secret.txt"
+    outside_file.write_text("x" * 1234, encoding="utf-8")
+
+    link_dir = repo / "ext_dir"
+    link_file = repo / "ext_file.txt"
+    try:
+        os.symlink(outside_dir, link_dir, target_is_directory=True)
+        os.symlink(outside_file, link_file)
+    except OSError:
+        pytest.skip("symlinks require elevated privileges on this Windows host")
+
+    with _make_client(tmp_path) as client:
+        client.post("/workspace", json={"path": str(repo)})
+        entries = {e["name"]: e for e in client.get("/fs/list", params={"path": ""}).json()["entries"]}
+        assert entries["ext_dir"]["isSymlink"] is True
+        assert entries["ext_dir"]["ignored"] is True
+        assert entries["ext_dir"]["type"] == "file"
+        assert entries["ext_dir"]["size"] == 0
+        assert entries["ext_file.txt"]["isSymlink"] is True
+        assert entries["ext_file.txt"]["ignored"] is True
+        assert entries["ext_file.txt"]["size"] == 0
+        assert client.get("/fs/list", params={"path": "ext_dir"}).status_code == 403
+        assert client.get("/fs/read", params={"path": "ext_file.txt"}).status_code == 403
+
+
+def test_workspace_state_is_isolated_per_principal(tmp_path: Path):
+    from backend.review.contracts import ModelTier
+    from backend.review.service import ServiceSettings, create_app
+
+    repo_a = tmp_path / "repo_a"
+    repo_a.mkdir()
+    (repo_a / "a.py").write_text("a = 1\n", encoding="utf-8")
+    repo_b = tmp_path / "repo_b"
+    repo_b.mkdir()
+    (repo_b / "b.py").write_text("b = 2\n", encoding="utf-8")
+
+    app = create_app(
+        settings=ServiceSettings(
+            runtime_root=tmp_path / "runtime",
+            models={t: t.value for t in ModelTier},
+            api_keys=frozenset({"alice-key", "bob-key"}),
+        ),
+        provider=object(),
+    )
+    with TestClient(app) as client:
+        alice = {"X-API-Key": "alice-key"}
+        bob = {"X-API-Key": "bob-key"}
+        assert client.post("/workspace", headers=alice, json={"path": str(repo_a)}).status_code == 200
+        assert client.get("/workspace", headers=bob).json() == {"path": None}
+        assert client.get("/fs/list", headers=bob).status_code == 409
+        assert client.post("/workspace", headers=bob, json={"path": str(repo_b)}).status_code == 200
+        alice_list = [e["name"] for e in client.get("/fs/list", headers=alice).json()["entries"]]
+        bob_list = [e["name"] for e in client.get("/fs/list", headers=bob).json()["entries"]]
+        assert alice_list == ["a.py"]
+        assert bob_list == ["b.py"]
+
+
+def test_fs_list_never_follows_external_reparse_entry_even_without_os_symlink(tmp_path: Path, monkeypatch):
+    from backend.review import workspace as ws_mod
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("x" * 2048, encoding="utf-8")
+
+    class FakeDirEntry:
+        def __init__(self, name: str, path: Path, *, escape: bool):
+            self.name = name
+            self.path = str(path)
+            self._escape = escape
+
+        def is_symlink(self) -> bool:
+            return self._escape
+
+        def is_dir(self, *, follow_symlinks: bool = True) -> bool:
+            if self._escape and follow_symlinks:
+                raise AssertionError("must never call is_dir(follow_symlinks=True) on external symlink")
+            return False
+
+        def stat(self, *, follow_symlinks: bool = True):
+            if self._escape and follow_symlinks:
+                raise AssertionError("must never call stat(follow_symlinks=True) on external symlink")
+            raise AssertionError("must never stat external symlink")
+
+    fake_entry = FakeDirEntry("ext_link", repo / "ext_link", escape=True)
+
+    class _ScanCtx:
+        def __enter__(self):
+            return iter([fake_entry])
+
+        def __exit__(self, *args):
+            return False
+
+    orig_realpath = ws_mod.os.path.realpath
+
+    def fake_realpath(p, *args, **kwargs):
+        if Path(p) == repo / "ext_link":
+            return str(outside / "secret.txt")
+        return orig_realpath(p, *args, **kwargs)
+
+    monkeypatch.setattr(ws_mod.os, "scandir", lambda _target: _ScanCtx())
+    monkeypatch.setattr(ws_mod.os.path, "realpath", fake_realpath)
+
+    mgr = ws_mod.WorkspaceManager()
+    mgr.set_root(repo)
+    entries = mgr.list_dir("")
+    assert len(entries) == 1
+    assert entries[0].to_dict() == {
+        "name": "ext_link",
+        "path": "ext_link",
+        "type": "file",
+        "size": 0,
+        "isSymlink": True,
+        "ignored": True,
+    }

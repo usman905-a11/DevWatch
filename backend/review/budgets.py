@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from pydantic import Field, field_validator
 
-from devwatch.review.contracts import AgentId, BalancedLimits, ContractModel, TokenUsage
+from backend.review.contracts import AgentId, BalancedLimits, ContractModel, TokenUsage
 
 
 class BudgetExceeded(RuntimeError):

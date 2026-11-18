@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from devwatch.review.jobs import DurableJobManager
-from devwatch.review.workflow import CanonicalReviewExecutor
+from backend.review.jobs import DurableJobManager
+from backend.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import MODELS
 
@@ -57,7 +57,7 @@ def test_canonical_timeout_recovery_preserves_inspection_without_new_model_calls
 def test_manager_deadline_calls_recovery_only_after_executor_is_drained(tmp_path, monkeypatch, lagging_clock):
     if lagging_clock:
         # Windows loop timers may expire slightly ahead of the accounting clock.
-        monkeypatch.setattr("devwatch.review.jobs.time", SimpleNamespace(monotonic=lambda: 10., time=time.time))
+        monkeypatch.setattr("backend.review.jobs.time", SimpleNamespace(monotonic=lambda: 10., time=time.time))
     async def scenario():
         _, _, snapshot, jobs = stores(tmp_path)
         drained, recoveries = asyncio.Event(), []
@@ -118,8 +118,56 @@ def test_explicit_cancel_never_invokes_deadline_recovery(tmp_path):
     asyncio.run(scenario())
 
 
+def test_workspace_timeout_recovery_succeeds_without_snapshot_id_key(tmp_path):
+    from backend.review.stores import ArtifactStore, StoreLayout
+    from backend.review.jobs import JobStore
+
+    repo = tmp_path / "workspace_repo"
+    repo.mkdir()
+    (repo / "service.py").write_text("def first(items):\n    return items[0]\n", encoding="utf-8")
+
+    class PausedFinal(ReviewProvider):
+        def __init__(self):
+            super().__init__()
+            self.entered, self.cancelled = asyncio.Event(), False
+
+        async def generate_completion(self, request):
+            if json.loads(request.prompt)["task"]["agent_id"] == "synthesizer_verifier":
+                self.requests.append(request)
+                self.entered.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    self.cancelled = True
+            return await super().generate_completion(request)
+
+    async def scenario():
+        layout = StoreLayout(tmp_path / "runtime")
+        artifacts = ArtifactStore(layout.app_db)
+        jobs = JobStore(layout.app_db)
+        provider = PausedFinal()
+        executor = CanonicalReviewExecutor(layout, artifacts, jobs, provider, models=MODELS)
+        job = jobs.submit(owner="alice", request={"workspace_path": str(repo)}, idempotency_key="ws-deadline")
+        jobs.transition(job.job_id, owner="alice", expected_status="queued", status="running")
+        operation = asyncio.create_task(executor(jobs.get(job.job_id, owner="alice")))
+        await asyncio.wait_for(provider.entered.wait(), 20)
+        operation.cancel()
+        await asyncio.gather(operation, return_exceptions=True)
+        assert provider.cancelled
+        ledger = jobs.get(job.job_id, owner="alice").ledger
+        ledger.elapsed_seconds = 600
+        jobs.update_ledger(job.job_id, owner="alice", ledger=ledger)
+        output = await executor.recover_timeout(jobs.get(job.job_id, owner="alice"))
+        report = json.loads(output["json"])
+        assert report["coverage"]["inspected_files"] == ["service.py"]
+        assert report["coverage"]["failed"]["__job"] == "review_time_exhausted"
+        assert len(report["uncertain_high_impact_candidates"]) == 1
+
+    asyncio.run(scenario())
+
+
 def test_deadline_after_empty_followup_retains_initial_candidate_and_completed_coverage(tmp_path, monkeypatch):
-    from devwatch.providers.base import LLMResponse, LLMUsage
+    from backend.providers.base import LLMResponse, LLMUsage
     class PausedAfterFollowup(ReviewProvider):
         def __init__(self):
             super().__init__(followup=True)
@@ -143,7 +191,7 @@ def test_deadline_after_empty_followup_retains_initial_candidate_and_completed_c
     async def scenario():
         layout, artifacts, snapshot, jobs = stores(tmp_path)
         provider = PausedAfterFollowup()
-        from devwatch.review.subgraphs import AgentSubgraphs
+        from backend.review.subgraphs import AgentSubgraphs
         original = AgentSubgraphs._run_control
         async def after_completed_followup(runtime, agent, **kwargs):
             if agent.value == 'synthesizer_verifier' and runtime.budget.ledger.review_round == 2:

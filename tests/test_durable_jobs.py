@@ -8,12 +8,12 @@ import pytest
 
 
 def jobs():
-    assert importlib.util.find_spec("devwatch.review.jobs"), "Durable jobs are missing"
-    return importlib.import_module("devwatch.review.jobs")
+    assert importlib.util.find_spec("backend.review.jobs"), "Durable jobs are missing"
+    return importlib.import_module("backend.review.jobs")
 
 
 def test_changed_accounting_publishes_transactional_metadata_without_duplicates(tmp_path):
-    from devwatch.review.budgets import BudgetLedger
+    from backend.review.budgets import BudgetLedger
     api = jobs()
     store = api.JobStore(tmp_path / "devwatch.sqlite")
     job = store.submit(owner="alice", request={}, idempotency_key="accounting")
@@ -200,4 +200,32 @@ def test_shutdown_of_unclaimed_waiter_does_not_interrupt_another_manager(tmp_pat
             assert (await second.wait(waiting.job_id, owner="alice")).status == "completed"
         finally:
             await second.close()
+    asyncio.run(scenario())
+
+
+def test_cross_manager_scan_does_not_interrupt_live_worker_holding_lease(tmp_path):
+    api = jobs()
+    async def scenario():
+        store = api.JobStore(tmp_path / "devwatch.sqlite")
+        started, release = asyncio.Event(), asyncio.Event()
+
+        async def worker_exec(job):
+            started.set()
+            await release.wait()
+            return {"ok": True}
+
+        first = api.DurableJobManager(store, worker_exec)
+        job = await first.submit(owner="alice", request={}, idempotency_key="live-lock")
+        await started.wait()
+
+        second = api.DurableJobManager(store, worker_exec)
+        second._scan()
+        assert store.get(job.job_id, owner="alice").status == "running"
+
+        release.set()
+        completed = await first.wait(job.job_id, owner="alice")
+        assert completed.status == "completed"
+        await first.close()
+        await second.close()
+
     asyncio.run(scenario())

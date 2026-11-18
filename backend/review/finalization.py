@@ -16,12 +16,12 @@ from typing import Any, Callable, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import (
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import (
     AgentId, Coverage, FindingCandidate, FollowupRequest, ReportDraft, ReportFinding, ReviewTask,
     VerificationDecision, VerificationSynthesisResult, VerificationAudit, VerificationPhaseResult,
 )
-from devwatch.review.verification import validate_decision, validate_relations, arithmetic_receipts, exact_duplicate_groups
+from backend.review.verification import validate_decision, validate_relations, arithmetic_receipts, exact_duplicate_groups
 
 
 class AcceptanceError(ValueError):
@@ -109,7 +109,7 @@ class FinalAcceptanceGate:
                 seen.add(finding.finding_id)
                 if finding.location.snapshot_id != draft.snapshot_id:
                     raise AcceptanceError("finding belongs to a different snapshot")
-                for field in ("location", "title", "description", "impact", "category", "remediation", "arithmetic_claims"):
+                for field in ("location", "title", "description", "impact", "category", "severity", "remediation", "arithmetic_claims"):
                     if getattr(finding, field) != getattr(candidate, field):
                         raise AcceptanceError("final claim differs from the verified candidate")
                 if decision.verdict != verdict or finding.kind != kind:
@@ -165,6 +165,20 @@ def report_summary(draft):
               'Coverage applies only to the captured source and recorded evidence.')
 
 
+def _duplicate_components(duplicate_groups) -> list[set[str]]:
+    components: list[set[str]] = []
+    for group in duplicate_groups:
+        members = set(group)
+        disjoint = []
+        for component in components:
+            if members & component:
+                members |= component
+            else:
+                disjoint.append(component)
+        components = [*disjoint, members]
+    return components
+
+
 def _report_ids(candidates, decisions, duplicate_groups):
     """Select representatives only from authoritative verifier duplicate groups.
 
@@ -173,19 +187,12 @@ def _report_ids(candidates, decisions, duplicate_groups):
     """
     by_id = {decision.finding_id: decision for decision in decisions}
     expected = {identity for identity, decision in by_id.items() if decision.verdict != "rejected"}
-    components = []
     for group in duplicate_groups:
         members = set(group)
         if (len(group) < 2 or len(members) != len(group)
                 or not members.issubset(candidates) or not members.issubset(by_id)):
             raise AcceptanceError("duplicate groups require distinct known verified candidates")
-        disjoint = []
-        for component in components:
-            if members & component:
-                members |= component
-            else:
-                disjoint.append(component)
-        components = [*disjoint, members]
+    components = _duplicate_components(duplicate_groups)
     priority = {"confirmed": 0, "uncertain": 1, "advisory": 2}
     for component in components:
         eligible = component & expected
@@ -221,10 +228,21 @@ def _markdown_text(value: str) -> str:
     return re.sub(r"([\\`*{}\[\]()#+.!|_])", r"\\\1", escaped).replace("\r", "").replace("\n", " ")
 
 
+def _group_members_by_id(duplicate_groups: list[list[str]]) -> dict[str, set[str]]:
+    grouped: dict[str, set[str]] = {}
+    for component in _duplicate_components(duplicate_groups):
+        for member in component:
+            grouped[member] = component
+    return grouped
+
+
 def render_accepted_report(report: AcceptedReport) -> dict[str, str]:
     if not isinstance(report, AcceptedReport):
         raise TypeError("renderer requires an accepted structured draft")
     draft = report.draft
+    audit = draft.verification_audit
+    group_map = _group_members_by_id(audit.duplicate_groups) if audit is not None else {}
+    decision_by_id = {d.finding_id: d for d in audit.decisions} if audit is not None else {}
     lines = ["# DevWatch review", "", _markdown_text(draft.summary), ""]
     for title, findings in (
         ("Confirmed defects", draft.confirmed_defects),
@@ -236,16 +254,37 @@ def render_accepted_report(report: AcceptedReport) -> dict[str, str]:
             lines.extend(["None reported.", ""])
         for finding in sorted(findings, key=lambda f: (f.location.file_path, f.location.start_line, f.finding_id)):
             location = finding.location
-            lines.extend([
+            members = sorted(group_map.get(finding.finding_id, {finding.finding_id}))
+            merged_refs = list(finding.evidence_refs)
+            contributors: list[str] = []
+            if audit is not None:
+                for member in members:
+                    origin = audit.provenance.get(member)
+                    if origin is not None:
+                        tag = f"{origin.agent_id.value}/{origin.task_id}"
+                        if tag not in contributors:
+                            contributors.append(tag)
+                    dec = decision_by_id.get(member)
+                    if dec is not None:
+                        for ref in dec.evidence_refs:
+                            if ref not in merged_refs:
+                                merged_refs.append(ref)
+            finding_lines = [
                 f"### {_markdown_text(finding.title)}", "",
+                f"Severity: {_markdown_text(finding.severity)}",
                 f"Location: {_markdown_text(location.file_path)}:{location.start_line}-{location.end_line}",
+            ]
+            if contributors:
+                finding_lines.append(f"Contributors: {_markdown_text(', '.join(sorted(contributors)))}")
+            finding_lines.extend([
                 f"Description: {_markdown_text(finding.description)}",
                 f"Impact: {_markdown_text(finding.impact)}",
-                f"Evidence: {_markdown_text(', '.join(finding.evidence_refs))}",
+                f"Evidence: {_markdown_text(', '.join(merged_refs))}",
                 f"Verification: {_markdown_text(finding.verification_rationale)}",
                 f"Confidence: {finding.confidence:.2f}",
                 f"Remediation: {_markdown_text(finding.remediation)}", "",
             ])
+            lines.extend(finding_lines)
     lines.extend(["## Coverage", "", f"Files inspected: {len(draft.coverage.inspected_files)}",
                   f"Symbols inspected: {len(draft.coverage.inspected_symbols)}"])
     for label, entries in (("Skipped", draft.coverage.skipped), ("Failed", draft.coverage.failed)):

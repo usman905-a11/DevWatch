@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from devwatch.providers.base import LLMRequest, LLMUsage
-from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+from backend.providers.base import LLMRequest, LLMUsage
+from backend.providers.openai_adapter import OpenAIProviderAdapter
 from tests.test_audit_evidence import engine
 from tests.test_m20_verification import setup
 from tests.verification_fixtures import decision
@@ -64,7 +64,7 @@ def test_unknown_call_retains_its_reservation_and_persisted_metadata(tmp_path):
     provider.generate_completion = unknown
     saved = []
     async def persist(state, ledger):
-        from devwatch.review.workflow import _serializable
+        from backend.review.workflow import _serializable
         saved.append((_serializable(state), ledger))
     runtime.persist = persist
     state = asyncio.run(runtime.run_final(snapshot_id=repo.snapshot_id, files=task.files, candidates={'f1':claim}))

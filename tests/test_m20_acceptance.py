@@ -1,8 +1,8 @@
 """Final publication must not bypass semantic admission or inflate completeness."""
 import pytest
 
-from devwatch.review.contracts import FindingCandidate, VerificationDecision
-from devwatch.review.finalization import AcceptanceError, FinalAcceptanceGate, assemble_report
+from backend.review.contracts import FindingCandidate, VerificationDecision
+from backend.review.finalization import AcceptanceError, FinalAcceptanceGate, assemble_report
 from tests.verification_fixtures import decision
 
 
@@ -44,7 +44,7 @@ def test_accepted_report_retains_rejection_review_trace_and_replaces_unbounded_s
 
 
 def test_incomplete_coverage_cannot_be_hidden_by_synthesis_summary():
-    from devwatch.review.contracts import Coverage
+    from backend.review.contracts import Coverage
     candidate = claim()
     record = VerificationDecision.model_validate(decision(candidate, ['ev1']))
     report = draft(candidate, record, coverage=Coverage(inspected_files=['service.py'],

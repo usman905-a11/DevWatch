@@ -3,9 +3,9 @@ import asyncio
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import ModelTier
-from devwatch.review.subgraphs import AgentSubgraphs, PermissionedTools
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import ModelTier
+from backend.review.subgraphs import AgentSubgraphs, PermissionedTools
 from scripts.evaluate_agents import MeasuredProvider
 from tests.test_iterative_agents import ScriptedProvider, task
 
@@ -50,7 +50,7 @@ def test_untyped_failure_keeps_unknown_reservation_even_when_message_claims_no_d
 
 
 def test_nested_meter_releases_only_a_proven_undispatched_inner_refusal():
-    from devwatch.providers.base import LLMRequest
+    from backend.providers.base import LLMRequest
     provider = ScriptedProvider([])
     rates = {'m':dict(input_per_million=1,output_per_million=1)}
     inner = MeasuredProvider(provider,rates=rates,max_cost_usd=.0000001)

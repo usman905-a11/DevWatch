@@ -3,7 +3,7 @@ import asyncio
 from contextlib import contextmanager
 from unittest.mock import patch
 
-from devwatch.review.subgraphs import AgentSubgraphs
+from backend.review.subgraphs import AgentSubgraphs
 
 
 @contextmanager

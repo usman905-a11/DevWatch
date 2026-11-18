@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentAction, AgentPrivateState, FindingCandidate, ModelTier
-from devwatch.review.subgraphs import AgentSubgraphs
-from devwatch.review.workflow import _serializable
-from devwatch.review.repository import RepositoryContext
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentAction, AgentPrivateState, FindingCandidate, ModelTier
+from backend.review.subgraphs import AgentSubgraphs
+from backend.review.workflow import _serializable
+from backend.review.repository import RepositoryContext
 from tests.test_audit_evidence import candidate
 from tests.test_iterative_agents import ScriptedProvider
 from tests.test_repository_context import setup_repository

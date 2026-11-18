@@ -115,7 +115,7 @@ def test_cli_rejects_provided_full_evaluation_without_creating_output(tmp_path,m
     ('bug_reliability',['specialist_completion','arithmetic_claims']),
 ])
 async def test_cost_guidance_loads_after_real_source_delivery_only_for_performance(tmp_path,role,expected):
-    from devwatch.review.contracts import AgentId
+    from backend.review.contracts import AgentId
     from tests.test_iterative_agents import ScriptedProvider
     from tests.test_m16_investigation import complete,engine,read
     from tests.test_repository_context import setup_repository

@@ -2,7 +2,7 @@
 import json
 import pytest
 
-from devwatch.review.contracts import AgentPrivateState, AgentWorkItem, ReviewTask
+from backend.review.contracts import AgentPrivateState, AgentWorkItem, ReviewTask
 from tests.test_audit_evidence import engine
 from tests.test_m20_verification import setup
 
@@ -58,7 +58,7 @@ def test_copied_request_metadata_is_rejected_with_safe_actionable_repair(tmp_pat
 
 def test_schema_compaction_does_not_edit_data_defaults_named_title():
     from pydantic import BaseModel
-    from devwatch.review.prompts import response_schema
+    from backend.review.prompts import response_schema
     class Response(BaseModel):
         metadata: dict = {'title': 'User data', 'nested': {'title': 'Keep'}}
     assert response_schema(Response)['properties']['metadata']['default'] == {

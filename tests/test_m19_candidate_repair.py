@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentPrivateState, BalancedLimits
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentPrivateState, BalancedLimits
 from tests.test_audit_evidence import candidate
 from tests.test_iterative_agents import ScriptedProvider
 from tests.test_m16_investigation import complete, engine

@@ -163,7 +163,7 @@ async def test_scripted_evaluator_inspects_every_assigned_file_before_completion
 
 @pytest.mark.asyncio
 async def test_cost_guard_rejects_before_provider_call_and_keeps_unknown_charge():
-    from devwatch.providers.base import LLMRequest
+    from backend.providers.base import LLMRequest
     class Provider:
         calls = 0
         async def generate_completion(self, request):
@@ -183,7 +183,7 @@ async def test_cost_guard_rejects_before_provider_call_and_keeps_unknown_charge(
 
 @pytest.mark.asyncio
 async def test_cost_meter_prices_unallocated_reasoning_tokens_as_output():
-    from devwatch.providers.base import LLMRequest, LLMResponse, LLMUsage
+    from backend.providers.base import LLMRequest, LLMResponse, LLMUsage
     class Provider:
         async def generate_completion(self, request):
             return LLMResponse(content="ok", provider="fixture", model="m", latency_ms=0,
@@ -197,7 +197,7 @@ async def test_cost_meter_prices_unallocated_reasoning_tokens_as_output():
 
 @pytest.mark.asyncio
 async def test_missing_usage_keeps_reservation_instead_of_claiming_free_call():
-    from devwatch.providers.base import LLMRequest, LLMResponse
+    from backend.providers.base import LLMRequest, LLMResponse
     class Provider:
         async def generate_completion(self, request):
             return LLMResponse(content="ok", provider="fixture", model="m", latency_ms=0)
@@ -233,7 +233,7 @@ def test_incomplete_human_judgments_cannot_be_presented_as_adjudicated():
 
 @pytest.mark.asyncio
 async def test_provider_failure_is_harness_failure_not_model_reasoning(tmp_path):
-    from devwatch.providers.exceptions import ProviderQuotaExhaustedError
+    from backend.providers.exceptions import ProviderQuotaExhaustedError
     class UnavailableProvider:
         async def generate_completion(self, request):
             raise ProviderQuotaExhaustedError("No provider quota", provider="fixture")

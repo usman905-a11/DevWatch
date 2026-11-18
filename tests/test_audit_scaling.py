@@ -3,9 +3,9 @@ import json
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentPrivateState, BalancedLimits, ModelTier
-from devwatch.review.subgraphs import AgentSubgraphs
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentPrivateState, BalancedLimits, ModelTier
+from backend.review.subgraphs import AgentSubgraphs
 from tests.test_repository_context import setup_repository
 from tests.test_iterative_agents import ScriptedProvider
 from tests.test_audit_evidence import candidate
@@ -112,7 +112,7 @@ def test_verification_truncation_shrinks_batch_and_completes(tmp_path):
             batch = body['candidates']
             if len(batch) > 2:
                 self.requests.append(request)
-                from devwatch.providers.base import LLMResponse, LLMUsage
+                from backend.providers.base import LLMResponse, LLMUsage
                 return LLMResponse(content='{"partial":', provider='scripted', model=request.model,
                     latency_ms=1, usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15),
                     finish_reason='length')

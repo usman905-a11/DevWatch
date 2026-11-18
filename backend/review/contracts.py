@@ -10,9 +10,9 @@ from types import MappingProxyType
 from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from devwatch.review.tool_errors import ToolDiagnostic
-from devwatch.review.prompts import system_policy
-from devwatch.review.arithmetic import ArithmeticClaim, ArithmeticCounterexample, ArithmeticCheck
+from backend.review.tool_errors import ToolDiagnostic
+from backend.review.prompts import system_policy
+from backend.review.arithmetic import ArithmeticClaim, ArithmeticCounterexample, ArithmeticCheck
 
 
 class ContractModel(BaseModel):
@@ -103,6 +103,7 @@ class SourceLocation(ContractModel):
 class FindingCandidate(ContractModel):
     category: str = Field(min_length=1, max_length=64)
     kind: Literal["defect", "high_impact_candidate", "advisory"] = "defect"
+    severity: Literal["critical", "high", "medium", "low", "info"] = "medium"
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=2000)
     impact: str = Field(min_length=1, max_length=1000)

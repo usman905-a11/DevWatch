@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from devwatch.review.contracts import AgentAction, AgentId, AgentPrivateState, ModelTier, ReviewPlan
-from devwatch.review.jobs import DurableJobManager
-from devwatch.review.workflow import CanonicalReviewExecutor
+from backend.review.contracts import AgentAction, AgentId, AgentPrivateState, ModelTier, ReviewPlan
+from backend.review.jobs import DurableJobManager
+from backend.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import plan_payload
 from tests.test_repository_context import setup_repository
@@ -44,7 +44,7 @@ def test_initial_specialist_interruption_resumes_investigation(tmp_path):
 
 
 def test_failed_dispatch_cancels_and_drains_other_specialists(tmp_path, monkeypatch):
-    from devwatch.review.workflow import _ReviewSession
+    from backend.review.workflow import _ReviewSession
     async def scenario():
         layout, artifacts, snapshot, jobs = stores(tmp_path)
         entered, cancelled = asyncio.Event(), asyncio.Event()
@@ -98,7 +98,7 @@ def test_aggregate_evidence_cannot_be_retrieved_or_attached_outside_task_scope(t
         with pytest.raises(PermissionError):
             repo.context({"task": task, "private_state": AgentPrivateState(evidence_refs=[observed.evidence_ref]), "action": None})
         source = await repo.tools().execute(task, AgentAction(kind="call_tool", tool="read_file", arguments={"file_path": "service.py"}))
-        from devwatch.review.contracts import FindingCandidate
+        from backend.review.contracts import FindingCandidate
         candidate = FindingCandidate(category="logic", title="Claim", description="Claim", impact="Failure", confidence=0.7,
             location=dict(snapshot_id=manifest.snapshot_id, file_path="service.py", start_line=2, end_line=2),
             evidence_refs=[source.evidence_ref, observed.evidence_ref])
@@ -164,7 +164,7 @@ def test_synthesis_cannot_claim_inspection_of_unopened_source(tmp_path):
 def test_final_iteration_exhaustion_returns_a_partial_uncertain_report(tmp_path):
     async def scenario():
         layout, artifacts, snapshot, jobs = stores(tmp_path)
-        from devwatch.review.budgets import BudgetLedger
+        from backend.review.budgets import BudgetLedger
         job = jobs.submit(owner="alice", request={"snapshot_id": snapshot.snapshot_id}, idempotency_key="partial")
         jobs.update_ledger(job.job_id, owner="alice", ledger=BudgetLedger(task_iterations={"__final": 8}))
         provider = ReviewProvider()

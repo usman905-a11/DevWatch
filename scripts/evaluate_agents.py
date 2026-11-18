@@ -8,7 +8,7 @@ from contextlib import closing
 from hashlib import sha256
 from pathlib import Path
 
-from devwatch.providers.exceptions import ProviderBudgetRefusedError
+from backend.providers.exceptions import ProviderBudgetRefusedError
 
 
 CORPUS_VERSION = "agent-evaluation-v1"
@@ -215,12 +215,12 @@ async def run_case(case, runtime_root, *, mode, provider, live=False, models=Non
     scores raw specialist claims. Full mode scores accepted report groups and
     separately records pre-verification candidates. No gold enters either path.
     """
-    from devwatch.review.budgets import BudgetManager
-    from devwatch.review.contracts import AgentId, EvidenceProgress, ModelTier, ReviewTask
-    from devwatch.review.jobs import DurableJobManager, JobStore
-    from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import ArtifactStore, StoreLayout
-    from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession
+    from backend.review.budgets import BudgetManager
+    from backend.review.contracts import AgentId, EvidenceProgress, ModelTier, ReviewTask
+    from backend.review.jobs import DurableJobManager, JobStore
+    from backend.review.repository import RepositoryContext
+    from backend.review.stores import ArtifactStore, StoreLayout
+    from backend.review.workflow import CanonicalReviewExecutor, _ReviewSession
 
     if mode not in {"specialist", "full"}:
         raise ValueError("mode must be specialist or full")

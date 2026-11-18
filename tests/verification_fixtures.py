@@ -2,7 +2,7 @@
 from hashlib import sha256
 import json
 
-from devwatch.review.contracts import FindingCandidate
+from backend.review.contracts import FindingCandidate
 
 
 def reviewed(candidate, refs, *, statuses=None):

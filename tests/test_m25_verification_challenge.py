@@ -7,8 +7,8 @@ import pytest
 from tests.test_audit_evidence import engine
 from tests.test_m20_verification import setup
 from tests.verification_fixtures import decision
-from devwatch.review.contracts import VerificationPhaseResult
-from devwatch.review import verification
+from backend.review.contracts import VerificationPhaseResult
+from backend.review import verification
 
 
 def action(record, ref):
@@ -157,8 +157,8 @@ async def test_canonical_report_preserves_disputed_candidate_without_confirmatio
 
 
 def test_challenge_batch_shrinking_keeps_undelivered_candidates_provisional(tmp_path):
-    from devwatch.review.budgets import BudgetManager
-    from devwatch.review.contracts import BalancedLimits
+    from backend.review.budgets import BudgetManager
+    from backend.review.contracts import BalancedLimits
     from tests.test_iterative_agents import ScriptedProvider
     repo, task, ref, claim = setup(tmp_path)
     candidates = {f'f{index}': {**claim, 'description': 'Index zero is unguarded. ' * 70} for index in range(8)}

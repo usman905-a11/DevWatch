@@ -3,9 +3,9 @@
 import asyncio
 import json
 
-from devwatch.review.contracts import ModelTier
-from devwatch.review.jobs import DurableJobManager
-from devwatch.review.workflow import CanonicalReviewExecutor
+from backend.review.contracts import ModelTier
+from backend.review.jobs import DurableJobManager
+from backend.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.assembly_fixtures import held_assembly
 

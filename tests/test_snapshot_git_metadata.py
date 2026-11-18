@@ -4,10 +4,10 @@ import subprocess
 
 import pytest
 
-from devwatch.review.capture import capture_source
-from devwatch.review.contracts import AgentAction, AgentId, ReviewTask
-from devwatch.review.repository import RepositoryContext
-from devwatch.review.stores import ArtifactStore
+from backend.review.capture import capture_source
+from backend.review.contracts import AgentAction, AgentId, ReviewTask
+from backend.review.repository import RepositoryContext
+from backend.review.stores import ArtifactStore
 
 
 def test_capture_keeps_staged_and_unstaged_git_evidence_snapshot_bound(tmp_path):

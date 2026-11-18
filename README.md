@@ -4,7 +4,7 @@ DevWatch is a local, durable multi-agent code-review service and web IDE. It ope
 
 The project provides:
 
-- A FastAPI service ([`devwatch/review/service.py`](devwatch/review/service.py)) with durable jobs, checkpoints, SSE/WebSocket event streams, and crash recovery.
+- A FastAPI service ([`backend/review/service.py`](backend/review/service.py)) with durable jobs, checkpoints, SSE/WebSocket event streams, and crash recovery.
 - A seven-agent LangGraph workflow: one `planner`, five parallel specialists (`architecture_security`, `bug_reliability`, `logic_correctness`, `quality_testability`, `performance_scalability`), and one `synthesizer_verifier`.
 - A React + Monaco web IDE in [`frontend/`](frontend/) with lazy folder browsing, live review activity tracking, source click-through, and report exports.
 - Bounded AST/tree-sitter repository intelligence and immutable evidence tracking.
@@ -121,7 +121,7 @@ When `DEVWATCH_API_KEY` is unset in `development` mode, only loopback clients (`
 ### 1. Start the backend service
 
 ```powershell
-e:\dewatch\.venv\Scripts\python.exe -m uvicorn devwatch.review.service:create_app --factory --host 127.0.0.1 --port 8000 --env-file .env
+e:\dewatch\.venv\Scripts\python.exe -m uvicorn backend.review.service:create_app --factory --host 127.0.0.1 --port 8000 --env-file .env
 ```
 
 Add `--reload` if you want automatic reloads when editing backend Python files.
@@ -174,7 +174,7 @@ Open the local Vite URL printed in the terminal (default API target is `http://1
 
 ## Runtime Limits & Verification Policy
 
-- Default `BalancedLimits` ([`devwatch/review/contracts.py`](devwatch/review/contracts.py)):
+- Default `BalancedLimits` ([`backend/review/contracts.py`](backend/review/contracts.py)):
   - `review_seconds`: `600` (10-minute wall-clock limit per job)
   - `provider_timeout_seconds`: `90` (configurable up to `120`)
   - `job_tokens`: `None` (uncapped by default; pass an explicit integer limit in `BalancedLimits` if a per-job token ceiling is desired)

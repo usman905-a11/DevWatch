@@ -1,6 +1,6 @@
 # Canonical service cutover
 
-Run `uvicorn devwatch.review.service:create_app --factory` or `devwatch serve`.
+Run `uvicorn backend.review.service:create_app --factory`.
 CLI, browser and IDE clients use `/api/snapshots` and `/api/jobs` with owned job
 status, cancel/resume, immutable source, persistent events and deterministic reports.
 There is one review implementation and exactly seven AI identities.

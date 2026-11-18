@@ -3,9 +3,9 @@ import asyncio
 
 import pytest
 
-from devwatch.review.arithmetic import ArithmeticClaim
-from devwatch.review.contracts import VerificationPhaseResult
-from devwatch.review import verification
+from backend.review.arithmetic import ArithmeticClaim
+from backend.review.contracts import VerificationPhaseResult
+from backend.review import verification
 from tests.test_audit_evidence import engine
 from tests.test_m20_verification import setup
 from tests.verification_fixtures import decision
@@ -85,8 +85,8 @@ def test_passing_calculation_does_not_approve_unrelated_prose(tmp_path):
 
 
 def test_acceptance_rechecks_math_instead_of_trusting_stored_model_votes(tmp_path):
-    from devwatch.review.finalization import FinalAcceptanceGate, assemble_report, AcceptanceError
-    from devwatch.review.contracts import FindingCandidate, VerificationDecision
+    from backend.review.finalization import FinalAcceptanceGate, assemble_report, AcceptanceError
+    from backend.review.contracts import FindingCandidate, VerificationDecision
     _, _, ref, candidate = setup(tmp_path)
     candidate = asserted(candidate, 'n == 0', start=1, stop=1)
     record = VerificationDecision.model_validate(decision(candidate, [ref]))
@@ -104,8 +104,8 @@ def test_old_rejection_checkpoint_cannot_bypass_disagreement_review(tmp_path):
 
 
 def test_report_carries_computed_scope_and_retains_disputed_observations(tmp_path):
-    from devwatch.review.finalization import FinalAcceptanceGate, assemble_report, render_accepted_report, AcceptanceError
-    from devwatch.review.contracts import FindingCandidate
+    from backend.review.finalization import FinalAcceptanceGate, assemble_report, render_accepted_report, AcceptanceError
+    from backend.review.contracts import FindingCandidate
     repo, task, ref, candidate = setup(tmp_path)
     candidate = asserted(candidate, '(n ^ (n - 1)) == 1')
     positive = decision(candidate, [ref])
@@ -142,8 +142,8 @@ def test_model_cannot_forge_original_judgment_history(tmp_path):
 
 
 def test_valid_counterexample_refutes_large_domain_without_exhaustive_enumeration(tmp_path):
-    from devwatch.review.finalization import FinalAcceptanceGate, assemble_report
-    from devwatch.review.contracts import FindingCandidate
+    from backend.review.finalization import FinalAcceptanceGate, assemble_report
+    from backend.review.contracts import FindingCandidate
     repo, task, ref, candidate = setup(tmp_path)
     candidate = asserted(candidate, '(n ^ (n - 1)) == n', stop=2147483647)
     positive = decision(candidate, [ref])

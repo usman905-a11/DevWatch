@@ -4,8 +4,8 @@ This is not a model and must never be used for live accuracy measurements.
 """
 import json
 
-from devwatch.providers.base import LLMResponse, LLMUsage
-from devwatch.review.contracts import SPECIALISTS
+from backend.providers.base import LLMResponse, LLMUsage
+from backend.review.contracts import SPECIALISTS
 from tests.verification_fixtures import reviewed
 
 

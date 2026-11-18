@@ -3,15 +3,15 @@ import json
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentId, AgentPrivateState, AgentWorkItem, ModelTier, ReviewTask
-from devwatch.review.subgraphs import AgentSubgraphs, PermissionedTools
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentId, AgentPrivateState, AgentWorkItem, ModelTier, ReviewTask
+from backend.review.subgraphs import AgentSubgraphs, PermissionedTools
 from tests.test_iterative_agents import ScriptedProvider
 
 
 @pytest.mark.parametrize('role', [AgentId.LOGIC_CORRECTNESS, AgentId.SYNTHESIZER_VERIFIER])
 def test_nonplanner_response_reservation_fits_remaining_role_allowance(role):
-    from devwatch.review.contracts import BalancedLimits
+    from backend.review.contracts import BalancedLimits
     budget = BudgetManager(BalancedLimits(job_tokens=250_000))
     runtime = AgentSubgraphs(ScriptedProvider([]), PermissionedTools(), budget, lambda state: {},
                             models={tier:tier.value for tier in ModelTier})
@@ -21,7 +21,7 @@ def test_nonplanner_response_reservation_fits_remaining_role_allowance(role):
                  phase='verification' if role == AgentId.SYNTHESIZER_VERIFIER else 'investigation', candidates={})
     context = dict(evidence=[],scope=['subject.py'],snapshot_id='snapshot')
     prompt, _ = runtime._prepare_prompt(state, context, repair=False)
-    from devwatch.review.contracts import AGENT_CONTRACTS
+    from backend.review.contracts import AGENT_CONTRACTS
     framing = len(AGENT_CONTRACTS[role].system_prompt.encode()) + 512
     required = len(prompt.encode()) + framing
     limit = budget.limits.job_tokens
@@ -37,9 +37,9 @@ def test_nonplanner_response_reservation_fits_remaining_role_allowance(role):
 @pytest.mark.parametrize('partial', [False, True])
 def test_bounded_source_batch_completes_three_files_without_fabricating_inspection(tmp_path, partial):
     import asyncio
-    from devwatch.providers.base import LLMResponse, LLMUsage
-    from devwatch.review.repository import RepositoryContext
-    from devwatch.review.stores import ArtifactStore
+    from backend.providers.base import LLMResponse, LLMUsage
+    from backend.review.repository import RepositoryContext
+    from backend.review.stores import ArtifactStore
     artifacts = ArtifactStore(tmp_path/'artifacts')
     manifest = artifacts.capture(owner='alice',files={'a.py':('A = 1\n' if not partial else 'A = '+repr('x'*20000)+'\n'),'b.py':'B = 2\n','c.py':'C = 3\n'})
     repo = RepositoryContext(artifacts,manifest.snapshot_id,owner='alice')
@@ -70,8 +70,8 @@ def test_bounded_source_batch_completes_three_files_without_fabricating_inspecti
 
 def test_source_batch_denies_one_unassigned_path_before_calling_any_handler():
     import asyncio
-    from devwatch.review.contracts import AgentAction
-    from devwatch.review.subgraphs import ToolObservation
+    from backend.review.contracts import AgentAction
+    from backend.review.subgraphs import ToolObservation
     tools = PermissionedTools()
     calls = []
     async def handler(arguments,task):
@@ -87,6 +87,6 @@ def test_source_batch_denies_one_unassigned_path_before_calling_any_handler():
 
 @pytest.mark.parametrize('additional', [['b.py','c.py','d.py','e.py'], ['../private.py'], ['a.py'], ['b.py','b.py']])
 def test_source_batch_rejects_oversize_traversal_and_duplicate_paths(additional):
-    from devwatch.review.tool_catalogue import SourceArguments
+    from backend.review.tool_catalogue import SourceArguments
     with pytest.raises(ValueError):
         SourceArguments.model_validate(dict(file_path='a.py',additional_files=additional))

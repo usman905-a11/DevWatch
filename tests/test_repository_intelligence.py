@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from devwatch.review.contracts import AgentAction, AgentId, AgentWorkItem
-from devwatch.review.repository import RepositoryContext
-from devwatch.review.stores import ArtifactStore
+from backend.review.contracts import AgentAction, AgentId, AgentWorkItem
+from backend.review.repository import RepositoryContext
+from backend.review.stores import ArtifactStore
 
 
 def repository(tmp_path):
@@ -49,7 +49,7 @@ def test_call_and_symbol_tools_have_distinct_scoped_outputs(tmp_path):
 
 
 def test_non_ast_extensions_skip_subprocess_and_parallel_analyze_is_deterministic(tmp_path, monkeypatch):
-    from devwatch.review import intelligence
+    from backend.review import intelligence
     calls = []
     real_analyze = intelligence.analyze_source
 
@@ -57,7 +57,7 @@ def test_non_ast_extensions_skip_subprocess_and_parallel_analyze_is_deterministi
         calls.append(path)
         return real_analyze(path, source)
 
-    monkeypatch.setattr("devwatch.review.repository.analyze_source", wrapped)
+    monkeypatch.setattr("backend.review.repository.analyze_source", wrapped)
     artifacts = ArtifactStore(tmp_path / "devwatch.sqlite")
     snap = artifacts.capture(owner="alice", files={
         "notes.md": "# doc\n",

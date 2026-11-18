@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from devwatch.providers.exceptions import ProviderAuthenticationError
-from devwatch.review.jobs import DurableJobManager
-from devwatch.review.workflow import CanonicalReviewExecutor
+from backend.providers.exceptions import ProviderAuthenticationError
+from backend.review.jobs import DurableJobManager
+from backend.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import MODELS
 

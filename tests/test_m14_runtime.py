@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from devwatch.review.contracts import BalancedLimits, ModelTier
-from devwatch.review.jobs import DurableJobManager
-from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession
+from backend.review.contracts import BalancedLimits, ModelTier
+from backend.review.jobs import DurableJobManager
+from backend.review.workflow import CanonicalReviewExecutor, _ReviewSession
 from tests.test_canonical_workflow import ReviewProvider, stores
 
 

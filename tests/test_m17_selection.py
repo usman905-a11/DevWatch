@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentPrivateState, SPECIALISTS
-from devwatch.review.workflow import _serializable
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentPrivateState, SPECIALISTS
+from backend.review.workflow import _serializable
 from tests.test_iterative_agents import ScriptedProvider
 from tests.test_m16_investigation import complete, engine, read
 from tests.test_repository_context import setup_repository

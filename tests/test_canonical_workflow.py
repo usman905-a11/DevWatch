@@ -6,17 +6,17 @@ import json
 
 import pytest
 
-from devwatch.providers.base import LLMResponse, LLMUsage
-from devwatch.review.contracts import AgentId, ModelTier
-from devwatch.review.jobs import DurableJobManager, JobStore
-from devwatch.review.stores import ArtifactStore, StoreLayout
+from backend.providers.base import LLMResponse, LLMUsage
+from backend.review.contracts import AgentId, ModelTier
+from backend.review.jobs import DurableJobManager, JobStore
+from backend.review.stores import ArtifactStore, StoreLayout
 from tests.test_control_agents import plan_payload
 from tests.verification_fixtures import reviewed
 
 
 def workflow_api():
-    assert importlib.util.find_spec("devwatch.review.workflow"), "Canonical root graph is missing"
-    return importlib.import_module("devwatch.review.workflow")
+    assert importlib.util.find_spec("backend.review.workflow"), "Canonical root graph is missing"
+    return importlib.import_module("backend.review.workflow")
 
 
 class ReviewProvider:

@@ -5,12 +5,12 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentPrivateState, ModelTier, SpecialistResult
-from devwatch.review.repository import SharedBlackboard, StructuralEvidenceGate
-from devwatch.review.jobs import DurableJobManager
-from devwatch.review.subgraphs import AgentSubgraphs
-from devwatch.review.workflow import CanonicalReviewExecutor
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentPrivateState, ModelTier, SpecialistResult
+from backend.review.repository import SharedBlackboard, StructuralEvidenceGate
+from backend.review.jobs import DurableJobManager
+from backend.review.subgraphs import AgentSubgraphs
+from backend.review.workflow import CanonicalReviewExecutor
 from tests.test_audit_evidence import candidate
 from tests.test_iterative_agents import ScriptedProvider
 from tests.test_repository_context import setup_repository

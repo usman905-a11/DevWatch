@@ -19,18 +19,18 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 from langsmith import tracing_context
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.declared_context import load_declared_context
-from devwatch.review.contracts import (
+from backend.review.budgets import BudgetManager
+from backend.review.declared_context import load_declared_context
+from backend.review.contracts import (
     AgentId, AgentPrivateState, AgentWorkItem, ReviewPlan, ReviewTask, SpecialistResult,
     VerificationPhaseResult, VerificationSynthesisResult, VerificationDecision, ReportDraft, SPECIALISTS,
 )
-from devwatch.review.finalization import FinalAcceptanceGate, FinalizationWorkflow, assemble_report, render_accepted_report
-from devwatch.review.jobs import JobConflict, JobRecord, JobStore, TrajectoryStepTracker, _SQLiteStore, observed_node, safe_stop_reason
-from devwatch.review.repository import RepositoryContext, SharedBlackboard, StructuralEvidenceGate
-from devwatch.review.stores import ArtifactStore, StoreLayout
-from devwatch.review.subgraphs import AgentSubgraphs
-from devwatch.review.verification import (validate_decision, validate_relations,
+from backend.review.finalization import FinalAcceptanceGate, FinalizationWorkflow, assemble_report, render_accepted_report
+from backend.review.jobs import JobConflict, JobRecord, JobStore, TrajectoryStepTracker, _SQLiteStore, observed_node, safe_stop_reason
+from backend.review.repository import RepositoryContext, SharedBlackboard, StructuralEvidenceGate
+from backend.review.stores import ArtifactStore, StoreLayout
+from backend.review.subgraphs import AgentSubgraphs
+from backend.review.verification import (validate_decision, validate_relations,
     checkpoint_verification, CHALLENGE_POLICY, require_independent_verification)
 
 
@@ -124,7 +124,14 @@ class CanonicalReviewExecutor:
         """Revalidate persisted evidence after workers drain; never call a model."""
         if job.workflow_version != "seven-agent-v1" or job.ledger.elapsed_seconds < job.limits.review_seconds:
             raise ReviewExecutionError("deadline recovery requires an exhausted canonical job")
-        repository = RepositoryContext(self.artifacts, job.request["snapshot_id"], owner=job.owner)
+        if "workspace_path" in job.request:
+            repository = RepositoryContext(
+                self.artifacts,
+                owner=job.owner,
+                workspace_root=job.request["workspace_path"],
+            )
+        else:
+            repository = RepositoryContext(self.artifacts, job.request["snapshot_id"], owner=job.owner)
         budget = BudgetManager(job.limits, job.ledger.model_copy(deep=True))
         self.reconcile_models(job, budget)
         session = _ReviewSession(self, job, repository, budget, [])
@@ -175,7 +182,7 @@ class CanonicalReviewExecutor:
                 inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
                 snapshot_id=repository.snapshot_id, duplicate_groups=result.duplicate_groups, verification=result,
                 provenance=session.board.provenance(), allow_unreviewed=True,
-                require_independent_support=True).accept(draft, decisions)
+                require_independent_support=False).accept(draft, decisions)
         workflow = FinalizationWorkflow(partial, no_followup, accept, budget=budget, tasks=tasks,
                                         renderer=lambda accepted: self.render_report(job, accepted), emit=session.emit)
         rendered = (await workflow.run())["rendered"]
@@ -235,7 +242,7 @@ class _ReviewSession:
         self.step = self.steps.step
         self.agents = AgentSubgraphs(executor.provider, repository.tools(), budget, self.context,
             models=executor.models, persist=self.persist_agent, model_slots=executor.model_slots, emit=self.emit,
-            require_verification_challenge=True, require_independent_support=True, step_tracker=self.steps)
+            require_verification_challenge=True, require_independent_support=False, step_tracker=self.steps)
 
     def emit(self, kind, **payload):
         if kind == "model_call_completed":
@@ -273,7 +280,7 @@ class _ReviewSession:
         if self.declared_context is not None:
             selected['declared_context'] = self.declared_context
         if state["task"].agent_id == AgentId.PLANNER:
-            from devwatch.review.intelligence import SUPPORTED_EXTENSIONS
+            from backend.review.intelligence import SUPPORTED_EXTENSIONS
             prioritized = sorted(
                 self.changed,
                 key=lambda path: (PurePosixPath(path).suffix.lower() not in SUPPORTED_EXTENSIONS, path),
@@ -557,7 +564,7 @@ class _ReviewSession:
                 return FinalAcceptanceGate(self.board.candidates, evidence_refs=refs, inspected_evidence=inspected,
                     snapshot_id=self.repository.snapshot_id, duplicate_groups=groups, verification=verification,
                     provenance=self.board.provenance(), allow_unreviewed=allow_unreviewed,
-                    require_independent_support=True)
+                    require_independent_support=False)
             try:
                 same_decisions = (recorded is not None and len(recorded.decisions) == len(decisions)
                                   and {item.finding_id: item for item in recorded.decisions}

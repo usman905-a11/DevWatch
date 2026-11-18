@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from devwatch.review.contracts import VerificationDecision, VerificationPhaseResult
-from devwatch.review.finalization import AcceptanceError, FinalAcceptanceGate, FinalizationWorkflow, assemble_report
-from devwatch.review.jobs import DurableJobManager
+from backend.review.contracts import VerificationDecision, VerificationPhaseResult
+from backend.review.finalization import AcceptanceError, FinalAcceptanceGate, FinalizationWorkflow, assemble_report
+from backend.review.jobs import DurableJobManager
 from tests.test_finalization_workflow import finding
 from tests.test_m14_runtime import MultipleTasksProvider, executor_for, stores
 from tests.verification_fixtures import reviewed

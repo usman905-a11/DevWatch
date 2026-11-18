@@ -4,10 +4,10 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.contracts import AgentId, AgentPrivateState, AgentWorkItem, ReviewTask, ModelTier
-from devwatch.review.repository import RepositoryContext
-from devwatch.review.workflow import CanonicalReviewExecutor, _ReviewSession
+from backend.review.budgets import BudgetManager
+from backend.review.contracts import AgentId, AgentPrivateState, AgentWorkItem, ReviewTask, ModelTier
+from backend.review.repository import RepositoryContext
+from backend.review.workflow import CanonicalReviewExecutor, _ReviewSession
 from tests.test_canonical_workflow import ReviewProvider, stores
 from tests.test_control_agents import MODELS
 from tests.test_review_service import ALICE, app
@@ -69,7 +69,7 @@ def test_prompt_pressure_never_silently_discards_declared_context(tmp_path):
     from tests.test_m16_investigation import engine
     from tests.test_repository_context import setup_repository
     from tests.test_iterative_agents import ScriptedProvider
-    from devwatch.review.subgraphs import PromptContextLimit
+    from backend.review.subgraphs import PromptContextLimit
     _,_,_,repo,task=setup_repository(tmp_path)
     runtime=engine(repo,ScriptedProvider([]))
     state=dict(task=task,private_state=AgentPrivateState(),model_tier=ModelTier.MEDIUM)

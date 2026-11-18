@@ -4,12 +4,12 @@ import importlib
 
 import pytest
 
-from devwatch.review.contracts import AgentId, BalancedLimits
+from backend.review.contracts import AgentId, BalancedLimits
 
 
 def budgets():
-    assert importlib.util.find_spec("devwatch.review.budgets"), "Cumulative budget manager is missing"
-    return importlib.import_module("devwatch.review.budgets")
+    assert importlib.util.find_spec("backend.review.budgets"), "Cumulative budget manager is missing"
+    return importlib.import_module("backend.review.budgets")
 
 
 def test_three_inflight_model_reservations_and_no_fourth():

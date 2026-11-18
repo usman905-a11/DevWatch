@@ -4,11 +4,11 @@ import json
 import httpx
 import pytest
 
-from devwatch.providers.base import LLMRequest
-from devwatch.providers.openai_adapter import OpenAIProviderAdapter
-from devwatch.review.contracts import BalancedLimits, ModelTier
-from devwatch.review.jobs import DurableJobManager
-from devwatch.review.workflow import CanonicalReviewExecutor
+from backend.providers.base import LLMRequest
+from backend.providers.openai_adapter import OpenAIProviderAdapter
+from backend.review.contracts import BalancedLimits, ModelTier
+from backend.review.jobs import DurableJobManager
+from backend.review.workflow import CanonicalReviewExecutor
 from tests.test_canonical_workflow import ReviewProvider, stores
 
 

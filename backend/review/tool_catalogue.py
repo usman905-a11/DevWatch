@@ -4,8 +4,8 @@ from typing import Any
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from devwatch.review.contracts import EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_CHARS, ContractModel, SourceLocation
-from devwatch.review.prompts import response_schema
+from backend.review.contracts import EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_CHARS, ContractModel, SourceLocation
+from backend.review.prompts import response_schema
 
 
 class Arguments(ContractModel):

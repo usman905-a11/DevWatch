@@ -7,13 +7,13 @@ import traceback
 import httpx
 from typing import Optional, Dict, Any
 
-from devwatch.providers.base import (
+from backend.providers.base import (
     LLMProvider,
     LLMRequest,
     LLMResponse,
     LLMUsage,
 )
-from devwatch.providers.exceptions import (
+from backend.providers.exceptions import (
     ProviderError,
     ProviderAuthenticationError,
     ProviderAuthorizationError,
@@ -28,7 +28,7 @@ from devwatch.providers.exceptions import (
     ProviderNonRetryableError,
 )
 
-logger = logging.getLogger("devwatch.providers.openai")
+logger = logging.getLogger("backend.providers.openai")
 
 
 class OpenAIProviderAdapter(LLMProvider):

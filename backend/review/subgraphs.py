@@ -16,16 +16,16 @@ from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
 from pydantic import Field, ValidationError
 
-from devwatch.providers.base import LLMProvider, LLMRequest, LLMResponse
-from devwatch.providers.exceptions import (ProviderAuthenticationError, ProviderInvalidResponseError, ProviderRateLimitError,
+from backend.providers.base import LLMProvider, LLMRequest, LLMResponse
+from backend.providers.exceptions import (ProviderAuthenticationError, ProviderInvalidResponseError, ProviderRateLimitError,
     ProviderQuotaExhaustedError, ProviderTemporaryError, ProviderTimeoutError, ProviderBudgetRefusedError)
-from devwatch.review.budgets import BudgetExceeded, BudgetManager
-from devwatch.review.jobs import StepHandle, StepRenderInfo, StepType, TrajectoryStepTracker, UnknownToolCompletion, safe_stop_reason
-from devwatch.review.tool_catalogue import TOOL_ARGUMENTS, describe_tool
-from devwatch.review.tool_errors import ToolFailure, diagnose, failure_identity, safe_arguments
-from devwatch.review import investigation, tool_selection, prompts
-from devwatch.review import verification as semantic_verification
-from devwatch.review.contracts import (
+from backend.review.budgets import BudgetExceeded, BudgetManager
+from backend.review.jobs import StepHandle, StepRenderInfo, StepType, TrajectoryStepTracker, UnknownToolCompletion, safe_stop_reason
+from backend.review.tool_catalogue import TOOL_ARGUMENTS, describe_tool
+from backend.review.tool_errors import ToolFailure, diagnose, failure_identity, safe_arguments
+from backend.review import investigation, tool_selection, prompts
+from backend.review import verification as semantic_verification
+from backend.review.contracts import (
     AGENT_CONTRACTS, EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_CHARS, SPECIALISTS, AgentAction, AgentId, AgentPrivateState, AgentWorkItem,
     ContractModel, EvidenceProgress, ModelTier, ReviewPlan, ReviewTask, SpecialistResult, TokenUsage,
     SynthesisSummary, VerificationPhaseResult, VerificationSynthesisResult,
@@ -187,6 +187,7 @@ class AgentExecutionState(TypedDict, total=False):
     tool_selections: list[dict[str, Any]]
     prompt_revision: dict[str, Any]
     parent_step_idx: int | None
+    control_progress: dict[str, Any]
 
 
 class ModelRouter:
@@ -228,7 +229,7 @@ class AgentSubgraphs:
         self.control_graph = self._build()
 
     def _build(self):
-        from devwatch.review.jobs import observed_node
+        from backend.review.jobs import observed_node
         builder = StateGraph(AgentExecutionState)
         builder.add_node("investigate", observed_node("investigate", self._investigate, self._event, scope="agent"))
         builder.add_node("execute_action", observed_node("execute_action", self._execute_action, self._event, scope="agent"))
@@ -368,6 +369,8 @@ class AgentSubgraphs:
             reason = investigation.finish(private, reason)
         private.stop_reason = reason
         private.stop_explanation = explanation
+        if reason != "evidence_complete" and explanation and explanation not in private.coverage.limitations:
+            private.coverage.limitations.append(explanation[:512])
         if reason == "evidence_complete" and private.coverage.failed.get(state["task"].task_id) in {"evidence_incomplete", "no_progress"}:
             private.coverage.failed.pop(state["task"].task_id)
         if reason != "evidence_complete":
@@ -469,7 +472,7 @@ class AgentSubgraphs:
         elif action.kind == "submit_synthesis":
             if state.get("phase") != "synthesis" or state.get("verification") is None:
                 raise ValueError("verification must precede synthesis")
-            from devwatch.review.finalization import assemble_report, FinalAcceptanceGate
+            from backend.review.finalization import assemble_report, FinalAcceptanceGate
             if "report_draft" not in action.payload:
                 prose = SynthesisSummary.model_validate(action.payload)
                 verified = state["verification"]
@@ -492,7 +495,7 @@ class AgentSubgraphs:
         elif action.kind == "request_followup":
             # Follow-up proposals belong to the verification output; runtime
             # Completion Assessment alone may admit and dispatch a follow-up.
-            from devwatch.review.contracts import FollowupRequest
+            from backend.review.contracts import FollowupRequest
             if state.get("phase") != "verification":
                 raise ValueError("follow-up proposals must be recorded before synthesis")
             request = FollowupRequest.model_validate(action.payload)
@@ -790,7 +793,7 @@ class AgentSubgraphs:
         Revalidate persisted decisions and inspection on this path too. The outer
         acceptance boundary stamps authoritative blackboard provenance later.
         """
-        from devwatch.review.finalization import assemble_report, FinalAcceptanceGate
+        from backend.review.finalization import assemble_report, FinalAcceptanceGate
         task, private = state['task'], state['private_state']
         self.budget.timeout_for('command')
         await self._save(state)
@@ -801,6 +804,13 @@ class AgentSubgraphs:
                 raise ValueError('Recorded verification is required for assembly.')
             if self.require_independent_support:
                 verified = semantic_verification.require_independent_verification(candidates, verified)
+                state['verification'] = verified
+            elif not verified.duplicate_groups:
+                verified = semantic_verification.apply_exact_duplicate_groups(
+                    candidates,
+                    verified,
+                    inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
+                )
                 state['verification'] = verified
             if self.tools.validate_confirmation is not None:
                 for decision in verified.decisions:
@@ -968,7 +978,10 @@ class AgentSubgraphs:
                 action.arguments = arguments
                 if repeated:
                     raise ToolFailure("repeated_tool_failure", "Repeated failed action blocked.", recoverable=False)
-                if private.investigation is not None and investigation.stalled(private, fingerprint):
+                if private.investigation is not None:
+                    if investigation.stalled(private, fingerprint):
+                        return self._stop(state, "no_progress", explanation="Repeated request adds no new acknowledged evidence.")
+                elif investigation.control_stalled(state.get("control_progress"), private, fingerprint):
                     return self._stop(state, "no_progress", explanation="Repeated request adds no new acknowledged evidence.")
                 self.budget.consume_tool(task.task_id)
                 private.tool_call_count += 1
@@ -1009,6 +1022,10 @@ class AgentSubgraphs:
                     receipt.processed = True
                 if private.investigation is not None:
                     investigation.observed(private, fingerprint, observation.evidence_ref)
+                else:
+                    state["control_progress"] = investigation.control_observed(
+                        state.get("control_progress"), private, fingerprint, observation.evidence_ref
+                    )
                 state["last_tool_error"] = None
             elif action.kind == "submit_candidates":
                 output = SpecialistResult.model_validate(action.payload)
@@ -1058,6 +1075,12 @@ class AgentSubgraphs:
                 completed = list(verified.decisions)
                 previous = state.get("verification")
                 verified = semantic_verification.combine_verification(previous, verified)
+                if not self.require_independent_support and not verified.duplicate_groups:
+                    verified = semantic_verification.apply_exact_duplicate_groups(
+                        state['candidates'],
+                        verified,
+                        inspected_evidence={ref for ref, receipt in private.evidence_progress.items() if receipt.fully_inspected()},
+                    )
                 proposed = state.get("proposed_followups", [])
                 # A proposal is never a dispatch or a separate agent.
                 verified.followup_requests.extend(proposed)
@@ -1070,7 +1093,7 @@ class AgentSubgraphs:
                 if {decision.finding_id for decision in verified.decisions} == set(state["candidates"]):
                     state["phase"] = "synthesis"
             elif action.kind == "request_followup":
-                from devwatch.review.contracts import FollowupRequest
+                from backend.review.contracts import FollowupRequest
                 state.setdefault("proposed_followups", []).append(FollowupRequest.model_validate(action.payload))
             elif action.kind == "submit_synthesis":
                 state["output"] = VerificationSynthesisResult.model_validate(action.payload)
@@ -1170,6 +1193,7 @@ class AgentSubgraphs:
             state["validation_error"] = restored_state.get("validation_error", "")
             state["provider_observations"] = restored_state.get("provider_observations", [])
             state['tool_selections']=restored_state.get('tool_selections',[])
+            state["control_progress"] = restored_state.get("control_progress")
         # Ambient SDK settings must not export graph state, prompts or source.
         # Optional observability uses a separate metadata-only integration.
         return await self._invoke(self.graphs[task.agent_id], state)
@@ -1219,6 +1243,7 @@ class AgentSubgraphs:
             state["validation_error"] = restored_state.get("validation_error", "")
             state["provider_observations"] = restored_state.get("provider_observations", [])
             state['tool_selections']=restored_state.get('tool_selections',[])
+            state["control_progress"] = restored_state.get("control_progress")
         return await self._invoke(self.control_graph, state)
 
     def _restored_retry(self, restored, private):

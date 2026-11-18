@@ -5,11 +5,12 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import os
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
 
-from devwatch.config import Config
+from backend.config import Config, SENSITIVE_DIR_NAMES, is_sensitive_rel_path
 from .capture import EXCLUDED_DIRECTORIES, EXCLUDED_PATTERNS
 from .stores import (
     CaptureCoverage,
@@ -156,8 +157,37 @@ def _matches_gitignore(rel_posix: str, name: str, is_dir: bool, patterns: Iterab
     return False
 
 
+def _is_link_or_reparse(path: Path, dirent: os.DirEntry[str] | None = None) -> bool:
+    """Detect POSIX symlinks and Windows symlinks/junction reparse points without following."""
+    try:
+        if dirent is not None and dirent.is_symlink():
+            return True
+    except OSError:
+        return True
+    try:
+        st = os.lstat(path)
+    except OSError:
+        return True
+    if stat.S_ISLNK(st.st_mode):
+        return True
+    attrs = getattr(st, "st_file_attributes", 0)
+    reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400)
+    return bool(attrs & reparse)
+
+
+def _symlink_escapes_root(root_real: Path, path: Path) -> bool:
+    try:
+        resolved = Path(os.path.realpath(path))
+        resolved.relative_to(root_real)
+        return False
+    except (OSError, ValueError):
+        return True
+
+
 def is_ignored_entry(rel_posix: str, name: str, is_dir: bool, gitignore_patterns: Iterable[str] = ()) -> bool:
-    if name in IGNORED_DIR_NAMES:
+    if name in IGNORED_DIR_NAMES or name.lower() in SENSITIVE_DIR_NAMES:
+        return True
+    if is_sensitive_rel_path(rel_posix):
         return True
     if not is_dir:
         lower_name = name.lower()
@@ -167,7 +197,7 @@ def is_ignored_entry(rel_posix: str, name: str, is_dir: bool, gitignore_patterns
             if fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(lower_name, pat):
                 return True
     parts = [part for part in rel_posix.split("/") if part]
-    if any(part in IGNORED_DIR_NAMES for part in parts):
+    if any(part in IGNORED_DIR_NAMES or part.lower() in SENSITIVE_DIR_NAMES for part in parts):
         return True
     return _matches_gitignore(rel_posix, name, is_dir, gitignore_patterns)
 
@@ -252,18 +282,39 @@ class WorkspaceManager:
                 for dirent in it:
                     name = dirent.name
                     child_rel = f"{rel_prefix}/{name}" if rel_prefix else name
-                    is_symlink = dirent.is_symlink()
+                    dirent_path = Path(dirent.path)
+                    is_symlink = _is_link_or_reparse(dirent_path, dirent)
+                    if is_symlink and _symlink_escapes_root(root_real, dirent_path):
+                        # Never stat or reveal target type/size for links escaping workspace root.
+                        entries.append(
+                            FsEntry(
+                                name=name,
+                                path=child_rel,
+                                type="file",
+                                size=0,
+                                isSymlink=True,
+                                ignored=True,
+                            )
+                        )
+                        continue
                     try:
-                        is_dir = dirent.is_dir(follow_symlinks=True)
+                        is_dir = dirent.is_dir(follow_symlinks=is_symlink)
                     except OSError:
                         is_dir = False
                     size = 0
                     if not is_dir:
                         try:
-                            size = dirent.stat(follow_symlinks=True).st_size
+                            size = dirent.stat(follow_symlinks=is_symlink).st_size
                         except OSError:
                             size = 0
                     ignored = is_ignored_entry(child_rel, name, is_dir, patterns)
+                    if is_symlink and not ignored:
+                        try:
+                            target_rel = Path(os.path.realpath(dirent_path)).relative_to(root_real).as_posix()
+                            if is_sensitive_rel_path(target_rel):
+                                ignored = True
+                        except (OSError, ValueError):
+                            ignored = True
                     entries.append(
                         FsEntry(
                             name=name,
@@ -282,7 +333,12 @@ class WorkspaceManager:
 
     def read_file(self, rel_path: str, *, max_bytes: int | None = None) -> FsReadResult:
         cap = self.max_read_bytes if max_bytes is None else max_bytes
+        raw_norm = _normalize_rel(rel_path)
+        if raw_norm and is_sensitive_rel_path(raw_norm):
+            raise PathOutsideWorkspaceError(f"access to sensitive file is forbidden: {raw_norm}")
         target, norm_rel = self.resolve_safe(rel_path, allow_root=False)
+        if is_sensitive_rel_path(norm_rel):
+            raise PathOutsideWorkspaceError(f"access to sensitive file is forbidden: {norm_rel}")
         if not target.exists():
             raise WorkspaceNotFoundError(f"file not found: {rel_path}")
         if not target.is_file():
@@ -349,7 +405,7 @@ def build_workspace_manifest(
         for dname in sorted(dirnames):
             d_rel = f"{rel_dir}/{dname}" if rel_dir else dname
             d_full = Path(dirpath) / dname
-            if d_full.is_symlink():
+            if _is_link_or_reparse(d_full):
                 skipped_reasons[d_rel] = "symlink_directory"
                 continue
             if is_ignored_entry(d_rel, dname, True, patterns):
@@ -359,17 +415,22 @@ def build_workspace_manifest(
 
         for fname in sorted(filenames):
             f_rel = f"{rel_dir}/{fname}" if rel_dir else fname
+            f_full = Path(dirpath) / fname
+            if _is_link_or_reparse(f_full) and _symlink_escapes_root(root_real, f_full):
+                skipped_reasons[f_rel] = "outside_workspace"
+                continue
+            if is_sensitive_rel_path(f_rel):
+                skipped_reasons[f_rel] = "excluded_secret"
+                continue
             if is_ignored_entry(f_rel, fname, False, patterns):
-                lower_name = fname.lower()
-                if lower_name in Config.BLOCKED_FILENAMES or lower_name.startswith(".env.") or any(
-                    fnmatch.fnmatch(lower_name, pat) for pat in Config.BLOCKED_PATTERNS
-                ):
-                    skipped_reasons[f_rel] = "excluded_secret"
                 continue
             try:
                 resolved, norm_rel = _resolve_within_root(root_real, f_rel, allow_root=False)
             except PathOutsideWorkspaceError:
                 skipped_reasons[f_rel] = "outside_workspace"
+                continue
+            if is_sensitive_rel_path(norm_rel):
+                skipped_reasons[f_rel] = "excluded_secret"
                 continue
 
             if not resolved.is_file():

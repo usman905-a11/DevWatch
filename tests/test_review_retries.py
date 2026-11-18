@@ -4,12 +4,12 @@ import json
 
 import pytest
 
-from devwatch.providers.exceptions import (
+from backend.providers.exceptions import (
     ProviderAuthenticationError, ProviderInvalidResponseError, ProviderQuotaExhaustedError,
     ProviderRateLimitError, ProviderTemporaryError, ProviderTimeoutError,
 )
-from devwatch.review.budgets import BudgetManager
-from devwatch.review.subgraphs import AgentSubgraphs, PermissionedTools
+from backend.review.budgets import BudgetManager
+from backend.review.subgraphs import AgentSubgraphs, PermissionedTools
 from tests.test_control_agents import MODELS
 from tests.test_iterative_agents import ScriptedProvider, task, result
 
@@ -79,7 +79,7 @@ def test_unclassified_or_unsafe_failures_are_not_retried(error):
 
 
 def test_provider_adapter_disables_hidden_sdk_retries(monkeypatch):
-    from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+    from backend.providers.openai_adapter import OpenAIProviderAdapter
     monkeypatch.setenv("GEMINI_API_KEY", "test-only")
     config = OpenAIProviderAdapter()._get_client_config()
     assert config["max_retries"] == 0
@@ -87,7 +87,7 @@ def test_provider_adapter_disables_hidden_sdk_retries(monkeypatch):
 
 
 def test_adapter_transport_error_with_unknown_completion_is_not_replayed():
-    from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+    from backend.providers.openai_adapter import OpenAIProviderAdapter
     translated = OpenAIProviderAdapter()._translate_sdk_error(ConnectionResetError("connection reset after submission"))
     async def scenario():
         provider = FailingProvider([translated] * 4)
@@ -101,7 +101,7 @@ def test_adapter_transport_error_with_unknown_completion_is_not_replayed():
 
 
 def test_resume_during_retry_backoff_preserves_operation_and_iteration():
-    from devwatch.review.workflow import _serializable
+    from backend.review.workflow import _serializable
     async def scenario():
         budget, saved = BudgetManager(), []
         first = FailingProvider([ProviderTemporaryError("transient")])
@@ -120,7 +120,7 @@ def test_resume_during_retry_backoff_preserves_operation_and_iteration():
         with pytest.raises(asyncio.CancelledError):
             await operation
         restored = saved[-1]
-        from devwatch.review.contracts import AgentPrivateState
+        from backend.review.contracts import AgentPrivateState
         second = FailingProvider([ProviderTemporaryError("transient")] * 4)
         resumed = AgentSubgraphs(second, PermissionedTools(), budget, lambda state: {}, models=MODELS)
         output = await resumed.run_specialist(task(), private_state=AgentPrivateState.model_validate(restored["private_state"]),
@@ -134,7 +134,7 @@ def test_resume_during_retry_backoff_preserves_operation_and_iteration():
 
 @pytest.mark.parametrize("status", [429, 503])
 def test_adapter_confirmed_rejections_remain_retryable(status):
-    from devwatch.providers.openai_adapter import OpenAIProviderAdapter
+    from backend.providers.openai_adapter import OpenAIProviderAdapter
     raw = RuntimeError("confirmed rejection")
     raw.status_code = status
     translated = OpenAIProviderAdapter()._translate_sdk_error(raw)
@@ -149,8 +149,8 @@ def test_adapter_confirmed_rejections_remain_retryable(status):
 
 
 def test_retry_resume_preserves_schema_repair_phase():
-    from devwatch.review.contracts import AgentPrivateState
-    from devwatch.review.workflow import _serializable
+    from backend.review.contracts import AgentPrivateState
+    from backend.review.workflow import _serializable
     async def scenario():
         budget, saved = BudgetManager(), []
         first = FailingProvider(["invalid JSON", ProviderTemporaryError("transient")])
