@@ -3,22 +3,45 @@ import { ActivityBar, ActivityView } from '../components/ActivityBar'
 import { BottomDrawer, BottomDrawerTab } from '../components/BottomDrawer'
 import { CodeEditor, LineRange, OpenTab } from '../components/CodeEditor'
 import { FileExplorer } from '../components/FileExplorer'
+import { FolderPickerModal } from '../components/FolderPickerModal'
 import { HistoryPanel } from '../components/HistoryPanel'
 import { ExecutionMode, SettingsPanel } from '../components/SettingsPanel'
 import { WorkspaceSearchPanel } from '../components/WorkspaceSearchPanel'
-import { DurableReviewClient, ServiceError } from './durable-client'
+import { DurableReviewClient, ServiceError, WorkspaceBrowseResponse } from './durable-client'
 import { isRangeCoveredByTab, mergeSourceExcerpt } from './source-buffer'
 import { JobActivity } from './JobActivity'
 import { ReportPanel } from './ReportPanel'
 import { useReviewSession } from './useReviewSession'
 import { ReportFinding } from './wire'
 
+function readReviewUrlParam(): string | null {
+  if (typeof window === 'undefined') return null
+  const value = new URLSearchParams(window.location.search).get('review')
+  return value && /^[0-9a-f]{32}$/.test(value) ? value : null
+}
+
+function syncReviewUrlParam(jobId: string | null): void {
+  if (typeof window === 'undefined' || !window.history?.replaceState) return
+  const url = new URL(window.location.href)
+  if (jobId) {
+    url.searchParams.set('review', jobId)
+  } else {
+    url.searchParams.delete('review')
+  }
+  const next = url.pathname + url.search + url.hash
+  if (next !== window.location.pathname + window.location.search + window.location.hash) {
+    window.history.replaceState(null, '', next)
+  }
+}
+
 export function DurableApp() {
   const [client] = useState(() => new DurableReviewClient())
   const { session, state } = useReviewSession(client)
-  const [jobId, setJobId] = useState('')
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
   const [folderBusy, setFolderBusy] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerBrowse, setPickerBrowse] = useState<WorkspaceBrowseResponse | null>(null)
+  const [pickerError, setPickerError] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const [tabs, setTabs] = useState<OpenTab[]>([])
   const [activePath, setActivePath] = useState<string | null>(null)
@@ -33,6 +56,7 @@ export function DurableApp() {
   const [jobTokens, setJobTokens] = useState('')
   const evidenceRequest = useRef<AbortController | null>(null)
   const draggingSidebar = useRef(false)
+  const initialRestoreDone = useRef(false)
 
   const busy = state.busy || folderBusy
   const inputLocked = busy || session.hasPendingSubmission()
@@ -67,22 +91,38 @@ export function DurableApp() {
   useEffect(() => {
     let cancelled = false
     client.getWorkspace()
-      .then(res => {
-        if (!cancelled) {
-          setLocalError(null)
-          if (res.path) {
-            setWorkspacePath(res.path)
-          }
-          void session.refreshHistory()
+      .then(async res => {
+        if (cancelled) return
+        setLocalError(null)
+        if (res.path) {
+          setWorkspacePath(res.path)
+        }
+        const urlReviewId = readReviewUrlParam()
+        const history = await session.refreshHistory()
+        if (cancelled) return
+        const activeMatch =
+          history.find(item => ['running', 'queued'].includes(item.status) && (!res.path || item.workspace_path === res.path))
+          ?? history.find(item => ['running', 'queued'].includes(item.status))
+        const restoreId = urlReviewId ?? activeMatch?.job_id ?? null
+        initialRestoreDone.current = true
+        if (restoreId && canChangeInput()) {
+          void session.switchJob(restoreId)
         }
       })
       .catch(err => {
+        initialRestoreDone.current = true
         if (!cancelled && err instanceof ServiceError && err.status === 401) {
           setLocalError('Backend authentication failed. Check DEVWATCH_API_KEY in .env and restart the dev server.')
         }
       })
     return () => { cancelled = true }
   }, [client, session])
+
+  useEffect(() => {
+    if (initialRestoreDone.current) {
+      syncReviewUrlParam(state.job?.job_id ?? null)
+    }
+  }, [state.job?.job_id])
 
   useEffect(() => {
     if (state.job?.status && ['completed', 'failed', 'cancelled'].includes(state.job.status)) {
@@ -128,33 +168,56 @@ export function DurableApp() {
     setLocalError(null)
   }
 
-  async function pickWorkspaceFolder() {
-    if (!canChangeInput()) return
+  async function browseFolderPath(targetPath?: string) {
     setFolderBusy(true)
-    setLocalError(null)
+    setPickerError(null)
     try {
-      const res = await client.pickWorkspace()
-      if (res.path) {
-        applyWorkspace(res.path)
-      } else if (res.error) {
-        setLocalError('Native folder picker unavailable on the backend service.')
-      }
+      const data = await client.browseDirs(targetPath)
+      setPickerBrowse(data)
     } catch (err) {
       if (err instanceof ServiceError && err.status === 401) {
-        setLocalError('Backend authentication failed. Check DEVWATCH_API_KEY in .env and restart the dev server.')
+        setPickerError('Backend authentication failed. Check DEVWATCH_API_KEY in .env.')
       } else {
-        setLocalError('Could not open folder picker. Check that the backend service is connected.')
+        setPickerError('Could not list folders from the backend service.')
       }
     } finally {
       setFolderBusy(false)
     }
   }
 
-  function openJob(event: React.FormEvent) {
-    event.preventDefault()
+  async function pickWorkspaceFolder() {
     if (!canChangeInput()) return
     setLocalError(null)
-    void session.attach(jobId.trim())
+    setPickerOpen(true)
+    await browseFolderPath(workspacePath ?? undefined)
+  }
+
+  async function selectPickedFolder(folderPath: string) {
+    if (!canChangeInput()) return
+    setFolderBusy(true)
+    setPickerError(null)
+    try {
+      const res = await client.setWorkspace(folderPath)
+      if (res.path) {
+        applyWorkspace(res.path)
+        setPickerOpen(false)
+      }
+    } catch (err) {
+      if (err instanceof ServiceError && err.status === 401) {
+        setPickerError('Backend authentication failed. Check DEVWATCH_API_KEY in .env.')
+      } else {
+        setPickerError('Could not open selected folder.')
+      }
+    } finally {
+      setFolderBusy(false)
+    }
+  }
+
+  function startNewReviewView() {
+    if (!canChangeInput()) return
+    session.reset()
+    syncReviewUrlParam(null)
+    setLocalError(null)
   }
 
   const openFile = useCallback(
@@ -344,7 +407,7 @@ export function DurableApp() {
         </button>
       </div>
     </header>
-    <section className="source-bar" aria-label="Workspace and job controls">
+    <section className="source-bar" aria-label="Workspace and review history controls">
       <button className="header-button folder-picker-btn" type="button" disabled={inputLocked} onClick={() => { void pickWorkspaceFolder() }}>
         Open local folder
       </button>
@@ -353,10 +416,23 @@ export function DurableApp() {
           Folder: <code>{workspacePath}</code>
         </span>
       )}
-      <form className="job-controls" onSubmit={openJob}>
-        <label>Job ID<input value={jobId} autoComplete="off" onChange={event => setJobId(event.target.value)} required /></label>
-        <button className="header-button" disabled={inputLocked}>Open job</button>
-      </form>
+      <button
+        className="header-button"
+        type="button"
+        onClick={() => handleSelectActivity('history')}
+      >
+        Review history ({state.history.length})
+      </button>
+      {state.job && (
+        <button
+          className="header-button"
+          type="button"
+          disabled={inputLocked}
+          onClick={startNewReviewView}
+        >
+          New review
+        </button>
+      )}
       <span className="status-note">Jobs keep running when this view closes.</span>
     </section>
     <section className="job-bar" aria-label="Durable job controls">
@@ -413,11 +489,13 @@ export function DurableApp() {
           <HistoryPanel
             jobs={state.history}
             activeJobId={state.job?.job_id}
+            activeWorkspacePath={workspacePath}
             busy={busy}
             onSelectJob={selectedId => {
-              setJobId(selectedId)
+              setMobilePane('review')
               void session.switchJob(selectedId)
             }}
+            onNewReview={startNewReviewView}
             onRefresh={() => { void session.refreshHistory() }}
           />
         )}
@@ -482,5 +560,14 @@ export function DurableApp() {
       <span className="status-spacer" />
       <span>{state.job?.status ?? 'No job submitted'}</span>
     </footer>
+    <FolderPickerModal
+      open={pickerOpen}
+      browseData={pickerBrowse}
+      loading={folderBusy}
+      error={pickerError}
+      onNavigate={path => { void browseFolderPath(path) }}
+      onSelectFolder={path => { void selectPickedFolder(path) }}
+      onClose={() => setPickerOpen(false)}
+    />
   </div>
 }

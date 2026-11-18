@@ -60,12 +60,14 @@ export class ReviewSession {
     const preservedHistory = this.state.history
     this.dispose(); this.stepsByIdx = new Map(); this.request = new AbortController(); this.update({ ...empty(), history: preservedHistory })
   }
-  async refreshHistory(limit = 30) {
+  async refreshHistory(limit = 30): Promise<JobView[]> {
     try {
       const history = await this.client.listJobs(limit, this.request.signal)
       this.update({ history })
+      return history
     } catch {
       // History refresh is non-fatal when offline or unauthenticated.
+      return this.state.history
     }
   }
   async switchJob(jobId: string) {

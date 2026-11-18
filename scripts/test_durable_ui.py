@@ -11,18 +11,13 @@ from playwright.sync_api import sync_playwright, expect
 
 
 def pick_folder(page, target: Path):
-    def _forward_pick(route):
-        headers = {k: v for k, v in route.request.headers.items() if k.lower() != "content-length"}
-        headers["content-type"] = "application/json"
-        api_res = page.request.post(
-            "http://127.0.0.1:8019/workspace",
-            headers=headers,
-            data=json.dumps({"path": str(target.resolve())}),
-        )
-        route.fulfill(status=api_res.status, body=api_res.body(), content_type="application/json")
-
-    page.route("**/workspace/pick", _forward_pick, times=1)
     page.get_by_role("button", name="Open local folder", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Open local folder")
+    expect(dialog).to_be_visible(timeout=10000)
+    dialog.get_by_role("button", name=ROOT.name, exact=True).click()
+    dialog.get_by_role("button", name=".tools", exact=True).click()
+    dialog.get_by_role("button", name=target.name, exact=True).click()
+    dialog.get_by_role("button", name="Open Selected Folder", exact=True).click()
 
 
 def main():
@@ -61,11 +56,13 @@ def main():
             page.get_by_role("button", name="Download Markdown").click()
         assert "Uncertain" in Path(saved.value.path()).read_text(encoding="utf-8")
 
-        # Reopen job without workspace open and verify Open source still loads from /api/jobs/{id}/source.
+        # Reload page cleanly, auto-restoring the job via URL, and also verify reopening via History sidebar.
         page.reload()
         page.wait_for_load_state("networkidle")
-        page.get_by_label("Job ID", exact=True).fill(job_id)
-        page.get_by_role("button", name="Open job", exact=True).click()
+        expect(page.get_by_role("heading", name="Uncertain high-impact candidates (1)")).to_be_visible(timeout=20000)
+        page.get_by_role("button", name="New review", exact=True).click()
+        page.get_by_role("button", name="History", exact=True).click()
+        page.locator(f'.history-card[data-job-id="{job_id}"]').click()
         expect(page.get_by_role("heading", name="Uncertain high-impact candidates (1)")).to_be_visible(timeout=20000)
         page.get_by_role("button", name="Open source", exact=True).click()
         expect(page.locator("#source-pane .monaco-editor")).to_be_visible(timeout=10000)

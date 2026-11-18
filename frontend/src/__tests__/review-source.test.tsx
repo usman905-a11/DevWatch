@@ -6,8 +6,9 @@ describe('review source entry', () => {
   it('requires an explicit review source before the first run', () => {
     const markup = renderToStaticMarkup(<App />)
 
-    expect(markup).toContain('Open job')
+    expect(markup).not.toContain('Open job')
     expect(markup).toContain('Open local folder')
+    expect(markup).toContain('History')
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Run review<\/button>/)
     expect(markup).not.toContain('Command palette')
     expect(markup).not.toContain('>main<')

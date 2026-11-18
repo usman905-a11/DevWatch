@@ -80,18 +80,15 @@ def run():
                         page.goto(f"http://127.0.0.1:{VITE_PORT}"); page.wait_for_load_state("networkidle")
 
                         def pick_folder(target: Path):
-                            def _forward_pick(route):
-                                headers = {k: v for k, v in route.request.headers.items() if k.lower() != "content-length"}
-                                headers["content-type"] = "application/json"
-                                api_res = page.request.post(
-                                    f"http://127.0.0.1:{SERVICE_PORT}/workspace",
-                                    headers=headers,
-                                    data=json.dumps({"path": str(target)}),
-                                )
-                                route.fulfill(status=api_res.status, body=api_res.body(), content_type="application/json")
-
-                            page.route("**/workspace/pick", _forward_pick, times=1)
                             page.get_by_role("button", name="Open local folder", exact=True).click()
+                            dialog = page.get_by_role("dialog", name="Open local folder")
+                            expect(dialog).to_be_visible(timeout=10000)
+                            # Walk ROOT -> .tools -> temp dir -> source inside the real UI folder picker
+                            dialog.get_by_role("button", name=ROOT.name, exact=True).click()
+                            dialog.get_by_role("button", name=".tools", exact=True).click()
+                            dialog.get_by_role("button", name=target.parent.name, exact=True).click()
+                            dialog.get_by_role("button", name=target.name, exact=True).click()
+                            dialog.get_by_role("button", name="Open Selected Folder", exact=True).click()
 
                         started = time.monotonic()
                         pick_folder(source)
@@ -130,8 +127,12 @@ def run():
 
                         job = page.locator(".job-bar > code").inner_text().split()[-1]
                         page.reload(); page.wait_for_load_state("networkidle")
-                        page.get_by_label("Job ID", exact=True).fill(job)
-                        page.get_by_role("button", name="Open job", exact=True).click()
+                        expect(page.get_by_role("button", name="Download JSON")).to_be_visible(timeout=10000)
+
+                        # Clear view via New review and reopen directly from History sidebar card.
+                        page.get_by_role("button", name="New review", exact=True).click()
+                        page.get_by_role("button", name="History", exact=True).click()
+                        page.locator(f'.history-card[data-job-id="{job}"]').click()
                         expect(page.get_by_role("button", name="Download JSON")).to_be_visible(timeout=10000)
                         results.get_by_role("button", name="Open source").first.click()
                         expect(page.locator("#source-pane .monaco-editor")).to_be_visible(timeout=10000)

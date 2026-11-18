@@ -195,6 +195,8 @@ export interface JobView {
   limits: BalancedLimits
   created_at: number
   updated_at: number
+  summary_preview?: string | null
+  finding_counts?: Record<string, number> | null
 }
 
 export interface JobsListResponse {

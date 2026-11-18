@@ -6,6 +6,7 @@ import { ActivityBar } from '../components/ActivityBar'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { CodeEditor } from '../components/CodeEditor'
 import { FileExplorer } from '../components/FileExplorer'
+import { FolderPickerModal } from '../components/FolderPickerModal'
 import { HistoryPanel } from '../components/HistoryPanel'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { WorkspaceSearchPanel } from '../components/WorkspaceSearchPanel'
@@ -47,7 +48,7 @@ describe('Phase 5 Modern Dark IDE Workbench', () => {
     expect(html).not.toContain('Set workspace')
     expect(html).not.toContain('Service URL')
     expect(html).not.toContain('API key')
-    expect(html).toContain('Open job')
+    expect(html).not.toContain('Open job')
     expect(html).not.toContain('Repository path')
     expect(html).not.toContain('Apply fix')
   })
@@ -73,11 +74,30 @@ describe('Phase 5 Modern Dark IDE Workbench', () => {
     )
     expect(explorerHtml).toContain('Filter files')
 
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    const richJob = {
+      ...job,
+      created_at: nowSeconds - 120,
+      updated_at: nowSeconds - 60,
+      workspace_path: 'E:/repo/my-app',
+      summary_preview: 'Checked auth & SQL parameterization',
+      finding_counts: { defects: 2, uncertain: 1, advisories: 0 },
+    }
     const historyHtml = renderToStaticMarkup(
-      <HistoryPanel jobs={[job]} activeJobId={job.job_id} onSelectJob={vi.fn()} onRefresh={vi.fn()} />,
+      <HistoryPanel
+        jobs={[richJob]}
+        activeJobId={richJob.job_id}
+        activeWorkspacePath="E:/repo/my-app"
+        onSelectJob={vi.fn()}
+        onNewReview={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
     )
-    expect(historyHtml).toContain(job.job_id)
     expect(historyHtml).toContain('Review History')
+    expect(historyHtml).toContain('New review')
+    expect(historyHtml).toContain('Today')
+    expect(historyHtml).toContain('Checked auth &amp; SQL parameterization')
+    expect(historyHtml).toContain('2 defects')
 
     const searchHtml = renderToStaticMarkup(
       <WorkspaceSearchPanel
@@ -106,6 +126,27 @@ describe('Phase 5 Modern Dark IDE Workbench', () => {
     expect(settingsHtml).toContain('Execution defaults')
     expect(settingsHtml).toContain('dewatch-dark')
     expect(settingsHtml).toContain('.env')
+
+    const pickerHtml = renderToStaticMarkup(
+      <FolderPickerModal
+        open
+        browseData={{
+          current_path: 'E:/projects',
+          parent_path: 'E:/',
+          roots: [{ name: 'Home', path: 'C:/Users/HP' }, { name: 'E:\\', path: 'E:\\' }],
+          directories: [{ name: 'dewatch', path: 'E:/projects/dewatch' }],
+        }}
+        loading={false}
+        error={null}
+        onNavigate={vi.fn()}
+        onSelectFolder={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(pickerHtml).toContain('role="dialog"')
+    expect(pickerHtml).toContain('E:/projects')
+    expect(pickerHtml).toContain('dewatch')
+    expect(pickerHtml).toContain('Open Selected Folder')
   })
 
   it('shows code breadcrumb, finding count badge on tabs, rich 7-agent grid, filtered report controls, and bottom workbench drawer', () => {

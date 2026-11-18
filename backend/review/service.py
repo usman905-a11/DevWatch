@@ -11,6 +11,7 @@ import hmac
 import json
 import os
 from pathlib import Path
+import string
 import subprocess
 import sys
 from typing import Literal
@@ -154,6 +155,55 @@ class WorkspacePickResponse(ContractModel):
     error: str | None = None
 
 
+class BrowseEntry(ContractModel):
+    name: str
+    path: str
+
+
+class WorkspaceBrowseResponse(ContractModel):
+    current_path: str
+    parent_path: str | None = None
+    roots: list[BrowseEntry]
+    directories: list[BrowseEntry]
+
+
+def _quick_browse_roots(active_root: Path | None = None) -> list[BrowseEntry]:
+    roots: list[BrowseEntry] = []
+    seen: set[str] = set()
+
+    def add(label: str, candidate: Path | None) -> None:
+        if candidate is None:
+            return
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            return
+        if not resolved.exists() or not resolved.is_dir():
+            return
+        key = str(resolved).lower()
+        if key in seen:
+            return
+        seen.add(key)
+        roots.append(BrowseEntry(name=label, path=str(resolved)))
+
+    if active_root is not None:
+        add(f"Active ({active_root.name or active_root})", active_root)
+    home = Path.home()
+    add("Home", home)
+    for sub in ("Desktop", "Documents", "Projects", "dev", "workspace"):
+        add(sub, home / sub)
+    cwd = Path.cwd()
+    add(cwd.name or str(cwd), cwd)
+    if os.name == "nt":
+        for letter in string.ascii_uppercase:
+            drive = Path(f"{letter}:\\")
+            if drive.exists():
+                add(f"{letter}:\\", drive)
+    else:
+        add("/", Path("/"))
+    return roots
+
+
 class FsEntryModel(ContractModel):
     name: str
     path: str
@@ -196,6 +246,23 @@ def _public_job(job):
     data["snapshot_id"] = job.request.get("snapshot_id")
     if "workspace_path" in job.request:
         data["workspace_path"] = job.request["workspace_path"]
+    if job.status == "completed" and isinstance(job.result, dict):
+        raw_json = job.result.get("json")
+        if isinstance(raw_json, str):
+            try:
+                parsed = json.loads(raw_json)
+            except (TypeError, ValueError):
+                parsed = None
+            if isinstance(parsed, dict):
+                raw_summary = parsed.get("summary")
+                if isinstance(raw_summary, str) and raw_summary.strip():
+                    collapsed = " ".join(raw_summary.split())
+                    data["summary_preview"] = collapsed[:160] + ("…" if len(collapsed) > 160 else "")
+                data["finding_counts"] = {
+                    "defects": len(parsed.get("confirmed_defects") or ()),
+                    "uncertain": len(parsed.get("uncertain_high_impact_candidates") or ()),
+                    "advisories": len(parsed.get("advisories") or ()),
+                }
     return data
 
 
@@ -354,6 +421,41 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
             return {"path": None, "cancelled": True}
         resolved = _workspace_for(principal).set_root(selected)
         return {"path": str(resolved)}
+
+    @app.get("/workspace/browse", response_model=WorkspaceBrowseResponse)
+    async def browse_workspace(path: str | None = Query(default=None), principal=Depends(owner)):
+        ws = _workspace_for(principal)
+        if path and path.strip():
+            target = Path(path).expanduser()
+        elif ws.root is not None and ws.root.exists():
+            target = ws.root
+        else:
+            target = Path.home()
+        try:
+            resolved = target.resolve()
+        except OSError as exc:
+            raise WorkspaceNotFoundError(f"Directory not accessible: {target}") from exc
+        if not resolved.exists() or not resolved.is_dir():
+            raise WorkspaceNotFoundError(f"Directory not found: {resolved}")
+        directories: list[BrowseEntry] = []
+        try:
+            with os.scandir(resolved) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            directories.append(BrowseEntry(name=entry.name, path=entry.path))
+                    except OSError:
+                        continue
+        except PermissionError as exc:
+            raise WorkspaceError("Directory cannot be listed") from exc
+        directories.sort(key=lambda item: (item.name.startswith("."), item.name.lower()))
+        parent = resolved.parent if resolved.parent != resolved else None
+        return WorkspaceBrowseResponse(
+            current_path=str(resolved),
+            parent_path=str(parent) if parent is not None else None,
+            roots=_quick_browse_roots(ws.root),
+            directories=directories,
+        )
 
     @app.get("/fs/list", response_model=FsListResponse)
     async def fs_list(path: str = Query(""), principal=Depends(owner)):

@@ -87,3 +87,16 @@ def test_list_jobs_returns_owner_scoped_jobs_ordered_newest_first_with_limit(tmp
         assert bob_list.status_code == 200
         assert [j["job_id"] for j in bob_list.json()["jobs"]] == [jb]
 
+        import time
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            cur = client.get(f"/api/jobs/{j2}", headers=alice).json()
+            if cur["status"] == "completed":
+                break
+            time.sleep(0.05)
+        completed_list = client.get("/api/jobs", headers=alice).json()["jobs"]
+        j2_view = next(item for item in completed_list if item["job_id"] == j2)
+        assert isinstance(j2_view["summary_preview"], str)
+        assert "0 confirmed defect" in j2_view["summary_preview"]
+        assert j2_view["finding_counts"] == {"defects": 0, "uncertain": 0, "advisories": 0}
+

@@ -451,6 +451,8 @@ class JobView(ContractModel):
     limits: BalancedLimits
     created_at: float = Field(ge=0, allow_inf_nan=False)
     updated_at: float = Field(ge=0, allow_inf_nan=False)
+    summary_preview: str | None = None
+    finding_counts: dict[str, int] | None = None
 
 
 _TRANSITIONS = {

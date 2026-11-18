@@ -33,6 +33,18 @@ export interface WorkspaceResponse {
   error?: string
 }
 
+export interface BrowseEntry {
+  name: string
+  path: string
+}
+
+export interface WorkspaceBrowseResponse {
+  current_path: string
+  parent_path?: string | null
+  roots: BrowseEntry[]
+  directories: BrowseEntry[]
+}
+
 export interface SubmissionIntent {
   workspace_path?: string
   snapshot_id?: string
@@ -84,12 +96,12 @@ export class DurableReviewClient {
     return response
   }
 
-  private async requestBytes(path: string, options: RequestInit = {}, mime = 'application/json', limit = 1000000, signal?: AbortSignal): Promise<ArrayBuffer> {
+  private async requestBytes(path: string, options: RequestInit = {}, mime = 'application/json', limit = 1000000, signal?: AbortSignal, timeoutMs = 10000): Promise<ArrayBuffer> {
     const controller = new AbortController()
     const abort = () => controller.abort()
     signal?.addEventListener('abort', abort, { once: true })
     if (signal?.aborted) controller.abort()
-    const timer = setTimeout(abort, 10000)
+    const timer = setTimeout(abort, timeoutMs)
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
     try {
       const response = await this.fetchResponse(path, { method: 'GET', ...options }, controller.signal)
@@ -120,14 +132,14 @@ export class DurableReviewClient {
     }
   }
 
-  private async request(path: string, options: RequestInit = {}, mime = 'application/json', limit = 1000000, signal?: AbortSignal): Promise<string> {
-    const bytes = await this.requestBytes(path, options, mime, limit, signal)
+  private async request(path: string, options: RequestInit = {}, mime = 'application/json', limit = 1000000, signal?: AbortSignal, timeoutMs = 10000): Promise<string> {
+    const bytes = await this.requestBytes(path, options, mime, limit, signal, timeoutMs)
     try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes) }
     catch { throw new ProtocolError('Invalid service response encoding') }
   }
 
-  private async json(path: string, options: RequestInit = {}, signal?: AbortSignal, limit = 1000000): Promise<unknown> {
-    const text = await this.request(path, options, 'application/json', limit, signal)
+  private async json(path: string, options: RequestInit = {}, signal?: AbortSignal, limit = 1000000, timeoutMs = 10000): Promise<unknown> {
+    const text = await this.request(path, options, 'application/json', limit, signal, timeoutMs)
     try { return JSON.parse(text) } catch { throw new ProtocolError() }
   }
 
@@ -145,7 +157,12 @@ export class DurableReviewClient {
   }
 
   async pickWorkspace(signal?: AbortSignal): Promise<WorkspaceResponse> {
-    return (await this.json('/workspace/pick', { method: 'POST' }, signal)) as WorkspaceResponse
+    return (await this.json('/workspace/pick', { method: 'POST' }, signal, 1000000, 300000)) as WorkspaceResponse
+  }
+
+  async browseDirs(path?: string, signal?: AbortSignal): Promise<WorkspaceBrowseResponse> {
+    const query = path ? `?${new URLSearchParams({ path })}` : ''
+    return (await this.json(`/workspace/browse${query}`, {}, signal, 2000000)) as WorkspaceBrowseResponse
   }
 
   async listDir(path = '', signal?: AbortSignal): Promise<FsListResponse> {

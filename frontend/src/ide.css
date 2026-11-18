@@ -193,6 +193,301 @@
   margin-left: auto;
 }
 
+.history-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ide-shell .history-new-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.history-scope-row {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ide-border);
+}
+
+.history-groups {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-group-heading {
+  margin: 2px 4px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ide-text-muted);
+}
+
+.history-summary {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ide-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+}
+
+.history-findings-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ide-accent-strong);
+}
+
+.status-pill.status-running::before,
+.status-pill.status-queued::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ide-accent);
+  margin-right: 5px;
+  display: inline-block;
+}
+
+/* Built-in Folder Picker Modal */
+.folder-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(5, 8, 12, 0.72);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.folder-modal {
+  width: min(720px, 100%);
+  max-height: min(560px, 90vh);
+  background: var(--ide-bg-panel);
+  border: 1px solid var(--ide-border-strong);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+}
+
+.folder-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--ide-bg-elevated);
+  border-bottom: 1px solid var(--ide-border);
+}
+
+.folder-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.folder-modal-title h2 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.folder-modal-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.folder-modal-roots {
+  width: 170px;
+  flex: 0 0 170px;
+  border-right: 1px solid var(--ide-border);
+  background: var(--ide-bg-app);
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.folder-section-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ide-text-muted);
+  padding: 4px 6px;
+}
+
+.folder-root-btn {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ide-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.folder-root-btn:hover {
+  background: var(--ide-bg-hover);
+}
+
+.folder-root-btn.active {
+  background: var(--ide-accent-soft);
+  color: var(--ide-accent-strong);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.folder-modal-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.folder-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.folder-current-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--ide-accent-strong);
+  background: var(--ide-bg-app);
+  border: 1px solid var(--ide-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+.folder-filter-bar input {
+  width: 100%;
+  background: var(--ide-bg-app);
+  color: var(--ide-text);
+  border: 1px solid var(--ide-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.folder-dir-list {
+  flex: 1 1 auto;
+  min-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--ide-border);
+  border-radius: 7px;
+  background: var(--ide-bg-editor);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.folder-dir-row {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--ide-text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.folder-dir-row:hover {
+  background: var(--ide-bg-hover);
+}
+
+.folder-dir-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-list-empty {
+  padding: 18px 12px;
+  font-size: 12px;
+  color: var(--ide-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.folder-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--ide-bg-elevated);
+  border-top: 1px solid var(--ide-border);
+}
+
+.folder-modal-footer .review-button {
+  background: linear-gradient(135deg, #0284c7, #38bdf8);
+  color: #06121e;
+  font-weight: 700;
+  font-size: 12px;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.folder-modal-footer .review-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+  .folder-modal-body {
+    flex-direction: column;
+  }
+  .folder-modal-roots {
+    width: 100%;
+    flex: 0 0 auto;
+    max-height: 110px;
+    border-right: none;
+    border-bottom: 1px solid var(--ide-border);
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
 .ide-shell .source-bar,
 .ide-shell .job-bar {
   background: var(--ide-bg-panel);

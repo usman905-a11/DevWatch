@@ -59,3 +59,30 @@ def test_workspace_pick_handles_cancel_and_unavailable_cleanly(tmp_path: Path, m
         assert failed.status_code == 200
         assert failed.json()["path"] is None
         assert failed.json()["error"] == "display unavailable"
+
+
+def test_workspace_browse_lists_only_directories_and_requires_auth(tmp_path: Path) -> None:
+    (tmp_path / "repo_alpha").mkdir()
+    (tmp_path / "repo_beta").mkdir()
+    (tmp_path / "secret.txt").write_text("hidden", encoding="utf-8")
+
+    with _make_client(tmp_path) as client:
+        unauth = client.get("/workspace/browse")
+        assert unauth.status_code == 401
+
+        root_res = client.get("/workspace/browse", headers=HEADERS)
+        assert root_res.status_code == 200
+        root_payload = root_res.json()
+        assert root_payload["current_path"]
+        assert isinstance(root_payload["roots"], list)
+
+        sub_res = client.get("/workspace/browse", params={"path": str(tmp_path)}, headers=HEADERS)
+        assert sub_res.status_code == 200
+        sub_payload = sub_res.json()
+        assert sub_payload["current_path"] == str(tmp_path.resolve())
+        dir_names = [d["name"] for d in sub_payload["directories"]]
+        assert dir_names == ["repo_alpha", "repo_beta"]
+        assert "secret.txt" not in dir_names
+
+        missing = client.get("/workspace/browse", params={"path": str(tmp_path / "missing")}, headers=HEADERS)
+        assert missing.status_code == 404
