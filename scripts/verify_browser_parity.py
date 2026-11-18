@@ -80,14 +80,16 @@ def run():
                         page.goto(f"http://127.0.0.1:{VITE_PORT}"); page.wait_for_load_state("networkidle")
 
                         def pick_folder(target: Path):
+                            resolved = target.resolve()
                             page.get_by_role("button", name="Open local folder", exact=True).click()
                             dialog = page.get_by_role("dialog", name="Open local folder")
                             expect(dialog).to_be_visible(timeout=10000)
-                            # Walk ROOT -> .tools -> temp dir -> source inside the real UI folder picker
-                            dialog.get_by_role("button", name=ROOT.name, exact=True).click()
-                            dialog.get_by_role("button", name=".tools", exact=True).click()
-                            dialog.get_by_role("button", name=target.parent.name, exact=True).click()
-                            dialog.get_by_role("button", name=target.name, exact=True).click()
+                            dialog.get_by_role("button", name=resolved.anchor, exact=True).click()
+                            subdirs = dialog.get_by_label("Subfolders")
+                            filter_box = dialog.get_by_label("Filter folders")
+                            for part in resolved.parts[1:]:
+                                filter_box.fill(part)
+                                subdirs.get_by_role("button", name=part, exact=True).click()
                             dialog.get_by_role("button", name="Open Selected Folder", exact=True).click()
 
                         started = time.monotonic()

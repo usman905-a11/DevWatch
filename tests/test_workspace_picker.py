@@ -81,7 +81,7 @@ def test_workspace_browse_lists_only_directories_and_requires_auth(tmp_path: Pat
         sub_payload = sub_res.json()
         assert sub_payload["current_path"] == str(tmp_path.resolve())
         dir_names = [d["name"] for d in sub_payload["directories"]]
-        assert dir_names == ["repo_alpha", "repo_beta"]
+        assert dir_names == ["repo_alpha", "repo_beta", "runtime"]
         assert "secret.txt" not in dir_names
 
         missing = client.get("/workspace/browse", params={"path": str(tmp_path / "missing")}, headers=HEADERS)

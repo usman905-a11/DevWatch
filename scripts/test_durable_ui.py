@@ -11,12 +11,16 @@ from playwright.sync_api import sync_playwright, expect
 
 
 def pick_folder(page, target: Path):
+    resolved = target.resolve()
     page.get_by_role("button", name="Open local folder", exact=True).click()
     dialog = page.get_by_role("dialog", name="Open local folder")
     expect(dialog).to_be_visible(timeout=10000)
-    dialog.get_by_role("button", name=ROOT.name, exact=True).click()
-    dialog.get_by_role("button", name=".tools", exact=True).click()
-    dialog.get_by_role("button", name=target.name, exact=True).click()
+    dialog.get_by_role("button", name=resolved.anchor, exact=True).click()
+    subdirs = dialog.get_by_label("Subfolders")
+    filter_box = dialog.get_by_label("Filter folders")
+    for part in resolved.parts[1:]:
+        filter_box.fill(part)
+        subdirs.get_by_role("button", name=part, exact=True).click()
     dialog.get_by_role("button", name="Open Selected Folder", exact=True).click()
 
 

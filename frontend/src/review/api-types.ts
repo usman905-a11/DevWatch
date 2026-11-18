@@ -44,6 +44,11 @@ export interface BalancedLimits {
   model_context_tokens: number
 }
 
+export interface BrowseEntry {
+  name: string
+  path: string
+}
+
 export interface BudgetLedger {
   review_round: number
   agent_usage: Record<string, TokenUsage>
@@ -341,6 +346,13 @@ export interface VerificationDecision {
   evidence_refs: string[]
   causal_review?: CausalReview | null
   arithmetic_counterexamples: ArithmeticCounterexample[]
+}
+
+export interface WorkspaceBrowseResponse {
+  current_path: string
+  parent_path?: string | null
+  roots: BrowseEntry[]
+  directories: BrowseEntry[]
 }
 
 export interface WorkspacePickResponse {
