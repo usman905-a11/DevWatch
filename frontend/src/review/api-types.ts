@@ -59,6 +59,8 @@ export interface CaptureCoverage {
   skipped: Record<string, string>
   failed: Record<string, string>
   limitations: string[]
+  discovered_count?: number | null
+  excluded_by_reason?: Record<string, number> | null
 }
 
 export interface CausalReview {
@@ -80,6 +82,18 @@ export interface Coverage {
   skipped: Record<string, string>
   failed: Record<string, string>
   limitations: string[]
+  metrics?: CoverageMetrics | null
+}
+
+export interface CoverageMetrics {
+  total_discovered: number
+  eligible: number
+  excluded: number
+  excluded_by_reason: Record<string, number>
+  assigned: number
+  inspected: number
+  skipped_limits: number
+  failed: number
 }
 
 export interface Disagreement {
@@ -165,6 +179,8 @@ export interface JobRequest {
   workspace_path?: string | null
   changed_files?: string[] | null
   context_files?: string[] | null
+  execution_mode?: 'parallel' | 'balanced' | 'sequential' | null
+  job_tokens?: number | null
 }
 
 export type JobStatus = 'queued' | 'running' | 'interrupted' | 'completed' | 'failed' | 'cancelled'
@@ -179,6 +195,10 @@ export interface JobView {
   limits: BalancedLimits
   created_at: number
   updated_at: number
+}
+
+export interface JobsListResponse {
+  jobs: JobView[]
 }
 
 export interface ModelReservation {

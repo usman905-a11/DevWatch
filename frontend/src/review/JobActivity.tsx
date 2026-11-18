@@ -1,4 +1,4 @@
-import { reduceTrajectorySteps, TrajectoryStep } from './durable-events'
+import { deriveAgentStatuses, deriveReviewStage, reduceTrajectorySteps, TrajectoryStep } from './durable-events'
 import { AgentId, JobView, StreamEvent } from './wire'
 
 export const agentNames: Record<AgentId, string> = {
@@ -6,6 +6,16 @@ export const agentNames: Record<AgentId, string> = {
   quality_testability: 'Code Quality & Testability', architecture_security: 'Architecture & Security',
   performance_scalability: 'Performance & Scalability', synthesizer_verifier: 'Synthesizer / Verifier',
 }
+
+const AGENT_ORDER: AgentId[] = [
+  'planner',
+  'bug_reliability',
+  'logic_correctness',
+  'quality_testability',
+  'architecture_security',
+  'performance_scalability',
+  'synthesizer_verifier',
+]
 
 function renderTrajectoryStep(
   step: TrajectoryStep,
@@ -119,9 +129,40 @@ export function JobActivity({
   }
   const usageMap = job?.ledger?.agent_usage ?? {}
   const tokens = Object.values(usageMap).reduce((total, usage) => total + (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0), 0)
+  const stage = deriveReviewStage(events, job)
+  const statuses = deriveAgentStatuses(events, trajectorySteps, job)
+  const limitTokens = job?.limits?.job_tokens
+  const tokenRatio = limitTokens && limitTokens > 0 ? Math.min(100, Math.round((tokens / limitTokens) * 100)) : null
+
   return <section className="review-progress" aria-label="Agent activity">
-    <p role="status" aria-live="polite">Job: {job?.status ?? 'not submitted'} · Connection: {connection}</p>
-    {latest && <p>{`${latestAgentId && latestAgentId in agentNames ? agentNames[latestAgentId] : 'Review service'}: ${latest.type}`}</p>}
+    <div className="ide-stage-strip">
+      <p role="status" aria-live="polite">Job: {job?.status ?? 'not submitted'} · Connection: {connection}</p>
+      <span className={`stage-pill stage-${stage}`}>{stage}</span>
+    </div>
+    {latest && <p className="latest-activity-line">{`${latestAgentId && latestAgentId in agentNames ? agentNames[latestAgentId] : 'Review service'}: ${latest.type}`}</p>}
+    <div className="agent-card-grid" aria-label="Multi-agent live telemetry">
+      {AGENT_ORDER.map(agentId => {
+        const info = statuses[agentId]
+        return (
+          <div key={agentId} className={`agent-mini-card state-${info.state}`}>
+            <div className="agent-mini-head">
+              <span className="agent-mini-name">{agentNames[agentId]}</span>
+              <span className={`agent-state-dot state-${info.state}`}>{info.state}</span>
+            </div>
+            <div className="agent-mini-meta">
+              <span>{info.toolCount} tools</span>
+              <span>{info.tokens.toLocaleString()} tok</span>
+            </div>
+            {info.stepTitle && <div className="agent-mini-step" title={info.stepTitle}>{info.stepTitle}</div>}
+          </div>
+        )
+      })}
+    </div>
+    {tokenRatio != null && (
+      <div className="token-budget-bar" aria-label="Token budget usage">
+        <div className="token-budget-fill" style={{ width: `${tokenRatio}%` }} />
+      </div>
+    )}
     {trajectorySteps.length > 0 && (
       <details open>
         <summary>Trajectory steps ({trajectorySteps.length})</summary>

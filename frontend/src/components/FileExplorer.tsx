@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Tree, NodeRendererProps, TreeApi } from 'react-arborist'
-import { ChevronDown, ChevronRight, FileCode2, Folder, FolderOpen, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileCode2, Folder, FolderOpen, Loader2, RefreshCw, Search } from 'lucide-react'
 import { FsEntry } from '../review/durable-client'
 
 export interface TreeNodeData {
@@ -19,8 +19,28 @@ export interface TreeNodeData {
 interface FileExplorerProps {
   workspacePath: string | null
   selectedFile: string | null
+  findingCounts?: Record<string, number>
   onSelectFile: (path: string) => void
   loadDir: (path: string) => Promise<FsEntry[]>
+}
+
+function filterTree(nodes: TreeNodeData[], query: string): TreeNodeData[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return nodes
+  const out: TreeNodeData[] = []
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      if (node.name.toLowerCase().includes(q) || node.path.toLowerCase().includes(q)) {
+        out.push(node)
+      }
+      continue
+    }
+    const filteredChildren = node.children ? filterTree(node.children, q) : []
+    if (node.name.toLowerCase().includes(q) || filteredChildren.length > 0) {
+      out.push({ ...node, children: filteredChildren })
+    }
+  }
+  return out
 }
 
 function toTreeNode(entry: FsEntry): TreeNodeData {
@@ -54,16 +74,21 @@ function updateNodeInTree(
 export const FileExplorer: React.FC<FileExplorerProps> = ({
   workspacePath,
   selectedFile,
+  findingCounts = {},
   onSelectFile,
   loadDir,
 }) => {
   const [data, setData] = useState<TreeNodeData[]>([])
+  const [filterText, setFilterText] = useState('')
   const [rootLoading, setRootLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [height, setHeight] = useState(500)
+  const [reloadNonce, setReloadNonce] = useState(0)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const treeRef = useRef<TreeApi<TreeNodeData> | null>(null)
   const inFlightRef = useRef<Set<string>>(new Set())
+
+  const visibleData = useMemo(() => filterTree(data, filterText), [data, filterText])
 
   useEffect(() => {
     const el = containerRef.current
@@ -100,7 +125,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
     return () => {
       cancelled = true
     }
-  }, [workspacePath, loadDir])
+  }, [workspacePath, loadDir, reloadNonce])
 
   const handleToggle = useCallback(
     async (id: string) => {
@@ -142,6 +167,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const renderNode = ({ node, style }: NodeRendererProps<TreeNodeData>) => {
     const isDir = node.data.type === 'dir'
     const isSelected = !isDir && selectedFile === node.data.path
+    const count = !isDir ? (findingCounts[node.data.path] ?? 0) : 0
     return (
       <div
         style={style}
@@ -154,72 +180,94 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
             onSelectFile(node.data.path)
           }
         }}
-        className={`flex items-center gap-1.5 px-2 py-0.5 text-[13px] cursor-pointer select-none truncate ${
-          isSelected
-            ? 'bg-sky-500/20 text-sky-200'
-            : 'text-zinc-200 hover:bg-zinc-800/70'
-        } ${node.data.ignored ? 'opacity-45' : ''}`}
+        className={`explorer-row ${isSelected ? 'selected' : ''} ${node.data.ignored ? 'ignored' : ''}`}
         title={node.data.path}
       >
-        <span className="w-3.5 h-3.5 flex items-center justify-center shrink-0 text-zinc-400">
+        <span className="explorer-chevron">
           {isDir ? (
             node.data.loading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
+              <Loader2 className="icon-xs spin" />
             ) : node.isOpen ? (
-              <ChevronDown className="w-3.5 h-3.5" />
+              <ChevronDown className="icon-sm" />
             ) : (
-              <ChevronRight className="w-3.5 h-3.5" />
+              <ChevronRight className="icon-sm" />
             )
           ) : null}
         </span>
         {isDir ? (
           node.isOpen ? (
-            <FolderOpen className="w-4 h-4 text-amber-400/90 shrink-0" />
+            <FolderOpen className="icon-sm icon-folder" />
           ) : (
-            <Folder className="w-4 h-4 text-amber-400/80 shrink-0" />
+            <Folder className="icon-sm icon-folder" />
           )
         ) : (
-          <FileCode2 className="w-4 h-4 text-sky-400/80 shrink-0" />
+          <FileCode2 className="icon-sm icon-file" />
         )}
-        <span className="truncate">{node.data.name}</span>
+        <span className="explorer-label">{node.data.name}</span>
+        {count > 0 && <span className="explorer-finding-badge">{count}</span>}
       </div>
     )
   }
 
   return (
-    <div ref={containerRef} className="h-full w-full flex flex-col overflow-hidden bg-zinc-950/60">
+    <div className="explorer-panel">
+      <div className="sidebar-panel-header">
+        <span className="sidebar-panel-title">Explorer</span>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Refresh explorer"
+          title="Refresh explorer"
+          disabled={!workspacePath || rootLoading}
+          onClick={() => setReloadNonce(n => n + 1)}
+        >
+          <RefreshCw className={`icon-xs ${rootLoading ? 'spin' : ''}`} />
+        </button>
+      </div>
+      <div className="sidebar-search-box">
+        <Search className="icon-xs icon-muted" />
+        <input
+          type="search"
+          aria-label="Filter files"
+          placeholder="Filter files..."
+          value={filterText}
+          onChange={e => setFilterText(e.target.value)}
+        />
+      </div>
       {error && (
-        <div className="px-3 py-1.5 text-xs text-red-400 bg-red-950/40 border-b border-red-900/40">
+        <div className="explorer-error" role="alert">
           {error}
         </div>
       )}
-      {!workspacePath ? (
-        <div className="p-4 text-xs text-zinc-500">Open a local folder to browse files.</div>
-      ) : rootLoading ? (
-        <div className="p-4 text-xs text-zinc-400 flex items-center gap-2">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading workspace...
-        </div>
-      ) : data.length === 0 ? (
-        <div className="p-4 text-xs text-zinc-500">Folder is empty.</div>
-      ) : (
-        <Tree<TreeNodeData>
-          ref={treeRef}
-          data={data}
-          openByDefault={false}
-          width="100%"
-          height={height}
-          indent={14}
-          rowHeight={24}
-          disableDrag
-          disableDrop
-          disableEdit
-          onToggle={id => {
-            void handleToggle(id)
-          }}
-        >
-          {renderNode}
-        </Tree>
-      )}
+      <div ref={containerRef} className="explorer-tree-host">
+        {!workspacePath ? (
+          <div className="explorer-empty">Open a local folder to browse files.</div>
+        ) : rootLoading ? (
+          <div className="explorer-empty explorer-loading">
+            <Loader2 className="icon-sm spin" /> Loading workspace...
+          </div>
+        ) : visibleData.length === 0 ? (
+          <div className="explorer-empty">{filterText ? 'No matching files.' : 'Folder is empty.'}</div>
+        ) : (
+          <Tree<TreeNodeData>
+            ref={treeRef}
+            data={visibleData}
+            openByDefault={false}
+            width="100%"
+            height={height}
+            indent={14}
+            rowHeight={24}
+            disableDrag
+            disableDrop
+            disableEdit
+            onToggle={id => {
+              void handleToggle(id)
+            }}
+          >
+            {renderNode}
+          </Tree>
+        )}
+      </div>
     </div>
   )
 }

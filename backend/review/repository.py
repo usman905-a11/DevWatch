@@ -15,13 +15,13 @@ import re
 from typing import Any
 
 from backend.config import Config
-from backend.review.contracts import CandidateRejection, Coverage, FindingCandidate, ReviewTask, SpecialistResult
+from backend.review.contracts import CandidateRejection, Coverage, CoverageMetrics, FindingCandidate, ReviewTask, SpecialistResult
 from backend.review.jobs import StepRenderInfo
-from backend.review.stores import ArtifactStore, validate_source_path
+from backend.review.stores import ASTCacheStore, ArtifactStore, validate_source_path
 from backend.review.subgraphs import PermissionedTools, ToolObservation
 from backend.review.tool_errors import ToolFailure
 from backend.review.contracts import EVIDENCE_PAGE_CHARS, MAX_EVIDENCE_PAGE_BYTES
-from backend.review.intelligence import SUPPORTED_EXTENSIONS, analyze_source
+from backend.review.intelligence import PARSER_VERSION, SUPPORTED_EXTENSIONS, analyze_source
 from backend.review.workspace import WorkspaceError, WorkspaceManager, WorkspaceNotFoundError, build_workspace_manifest
 
 
@@ -52,6 +52,7 @@ class RepositoryContext:
                 raise ValueError("either workspace_root or snapshot_id is required")
             self.snapshot_id = snapshot_id
             self.manifest = artifacts.manifest(snapshot_id, owner=owner)
+        self._ast_cache = ASTCacheStore(artifacts.path.parent / "cache" / "repo-cache.sqlite")
         self._analysis = None
 
     def _source(self, path):
@@ -84,21 +85,44 @@ class RepositoryContext:
             return self._analysis
         paths = sorted(self.manifest.entries)
         parseable = [path for path in paths if PurePosixPath(path).suffix.lower() in SUPPORTED_EXTENSIONS]
-        if len(parseable) > 1:
-            sources = {path: self._source(path) for path in parseable}
-            with ThreadPoolExecutor(max_workers=min(8, len(parseable))) as pool:
-                parsed = dict(zip(parseable, pool.map(lambda p: analyze_source(p, sources[p]), parseable)))
-            result = {
-                path: parsed[path] if path in parsed else analyze_source(path, "")
-                for path in paths
-            }
-        else:
-            result = {
-                path: analyze_source(path, self._source(path))
-                if PurePosixPath(path).suffix.lower() in SUPPORTED_EXTENSIONS
-                else analyze_source(path, "")
-                for path in paths
-            }
+        key_for = {
+            path: ASTCacheStore.cache_key(
+                parser_version=PARSER_VERSION,
+                extension=PurePosixPath(path).suffix.lower(),
+                content_hash=self.manifest.entries[path].content_hash,
+            )
+            for path in parseable
+        }
+        cached = self._ast_cache.get_many(list(key_for.values())) if parseable else {}
+        parsed_by_path: dict[str, dict[str, Any]] = {
+            path: cached[key]
+            for path, key in key_for.items()
+            if key in cached
+        }
+        misses = [path for path in parseable if path not in parsed_by_path]
+        if len(misses) > 1:
+            sources = {path: self._source(path) for path in misses}
+            with ThreadPoolExecutor(max_workers=min(8, len(misses))) as pool:
+                computed = dict(zip(misses, pool.map(lambda p: analyze_source(p, sources[p]), misses)))
+            parsed_by_path.update(computed)
+        elif len(misses) == 1:
+            path = misses[0]
+            parsed_by_path[path] = analyze_source(path, self._source(path))
+        if misses:
+            self._ast_cache.put_many([
+                (
+                    key_for[path],
+                    self.manifest.entries[path].content_hash,
+                    PARSER_VERSION,
+                    path,
+                    parsed_by_path[path],
+                )
+                for path in misses
+            ])
+        result = {
+            path: parsed_by_path[path] if path in parsed_by_path else analyze_source(path, "")
+            for path in paths
+        }
         self._analysis = result
         return result
 
@@ -355,8 +379,13 @@ class SharedBlackboard:
         self.candidate_tasks: dict[str, str] = {}
         self.results: dict[str, SpecialistResult] = {}
         self.quarantined: dict[str, list[CandidateRejection]] = {}
+        self._assigned_files: set[str] = set()
+
+    def record_assigned_files(self, files) -> None:
+        self._assigned_files.update(files)
 
     def publish(self, task: ReviewTask, result: SpecialistResult) -> None:
+        self._assigned_files.update(task.files)
         result = SpecialistResult.model_validate(result.model_dump())
         if result.task_id != task.task_id or result.agent_id != task.agent_id:
             raise ValueError("result does not belong to this review task")
@@ -433,4 +462,34 @@ class SharedBlackboard:
         for path in self.gate.repository.manifest.entries:
             if path not in output.inspected_files:
                 output.skipped.setdefault(path, "not_inspected")
+        limit_reasons = {"too_large", "total_size_limit", "snapshot_file_limit", "snapshot_file_size_limit"}
+        if capture.excluded_by_reason is not None:
+            excluded_by_reason = dict(capture.excluded_by_reason)
+        else:
+            excluded_by_reason = {}
+            for reason in capture.skipped.values():
+                excluded_by_reason[reason] = excluded_by_reason.get(reason, 0) + 1
+            for reason in capture.failed.values():
+                excluded_by_reason[reason] = excluded_by_reason.get(reason, 0) + 1
+        eligible = len(self.gate.repository.manifest.entries)
+        excluded_total = sum(excluded_by_reason.values())
+        total_discovered = (
+            capture.discovered_count
+            if capture.discovered_count is not None
+            else eligible + len(capture.skipped) + len(capture.failed)
+        )
+        skipped_limits = sum(
+            count for reason, count in excluded_by_reason.items() if reason in limit_reasons
+        )
+        assigned_count = len(self._assigned_files) if self._assigned_files else len(output.inspected_files)
+        output.metrics = CoverageMetrics(
+            total_discovered=total_discovered,
+            eligible=eligible,
+            excluded=excluded_total,
+            excluded_by_reason=excluded_by_reason,
+            assigned=assigned_count,
+            inspected=len(output.inspected_files),
+            skipped_limits=skipped_limits,
+            failed=len(output.failed),
+        )
         return output

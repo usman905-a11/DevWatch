@@ -1,36 +1,36 @@
 {
   "events": [
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "status": "queued"
       },
       "seq": 1,
-      "timestamp": 1794931803.2048845,
+      "timestamp": 1795022332.1329582,
       "type": "job_queued"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "status": "running"
       },
       "seq": 2,
-      "timestamp": 1794931803.2198865,
+      "timestamp": 1795022332.1437893,
       "type": "job_running"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "graph_scope": "review",
         "node": "planner",
         "operation_id": "[redacted]"
       },
       "seq": 3,
-      "timestamp": 1794931803.268403,
+      "timestamp": 1795022332.2432754,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "iteration": 0,
@@ -39,11 +39,11 @@
         "task_id": "__planner"
       },
       "seq": 4,
-      "timestamp": 1794931803.2887053,
+      "timestamp": 1795022332.28096,
       "type": "agent_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "agent_name": "planner",
@@ -68,11 +68,11 @@
         "task_id": "__planner"
       },
       "seq": 5,
-      "timestamp": 1794931803.294705,
+      "timestamp": 1795022332.2863142,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "graph_scope": "agent",
@@ -84,11 +84,11 @@
         "task_id": "__planner"
       },
       "seq": 6,
-      "timestamp": 1794931803.2997048,
+      "timestamp": 1795022332.3025696,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "iteration": 1,
@@ -97,11 +97,11 @@
         "task_id": "__planner"
       },
       "seq": 7,
-      "timestamp": 1794931803.304706,
+      "timestamp": 1795022332.3125706,
       "type": "iteration_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "attempt": 1,
@@ -112,11 +112,11 @@
         "task_id": "__planner"
       },
       "seq": 8,
-      "timestamp": 1794931803.6012392,
+      "timestamp": 1795022332.781271,
       "type": "model_call_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "agent_name": "planner",
@@ -136,15 +136,15 @@
         "task_id": "__planner"
       },
       "seq": 9,
-      "timestamp": 1794931803.6064618,
+      "timestamp": 1795022332.789857,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "attempt": 1,
-        "duration_seconds": 0.016000000000531145,
+        "duration_seconds": 0.01599999999962165,
         "finish_reason": "stop",
         "iteration": 1,
         "operation_id": "[redacted]",
@@ -155,21 +155,21 @@
         "total_tokens": 15
       },
       "seq": 10,
-      "timestamp": 1794931803.6124763,
+      "timestamp": 1795022332.8007343,
       "type": "model_call_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
-        "duration_seconds": 0.375,
+        "duration_seconds": 0.6099999999987631,
         "total_tokens": 15
       },
       "seq": 11,
-      "timestamp": 1794931803.6124763,
+      "timestamp": 1795022332.8007343,
       "type": "budget_updated"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "agent_name": "planner",
@@ -177,7 +177,7 @@
         "error_details": null,
         "parent_step_idx": 0,
         "render_info": {
-          "duration_ms": 32,
+          "duration_ms": 47,
           "title": "Planned action: submit_plan"
         },
         "run_id": "[redacted]",
@@ -188,11 +188,11 @@
         "task_id": "__planner"
       },
       "seq": 12,
-      "timestamp": 1794931803.6314747,
+      "timestamp": 1795022332.833419,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "graph_scope": "agent",
@@ -205,11 +205,11 @@
         "task_id": "__planner"
       },
       "seq": 13,
-      "timestamp": 1794931803.6581016,
+      "timestamp": 1795022332.86444,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "graph_scope": "agent",
@@ -221,11 +221,11 @@
         "task_id": "__planner"
       },
       "seq": 14,
-      "timestamp": 1794931803.6631746,
+      "timestamp": 1795022332.8738043,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "graph_scope": "agent",
@@ -238,11 +238,11 @@
         "task_id": "__planner"
       },
       "seq": 15,
-      "timestamp": 1794931803.6889033,
+      "timestamp": 1795022332.905289,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
         "agent_name": "planner",
@@ -250,7 +250,7 @@
         "error_details": null,
         "parent_step_idx": null,
         "render_info": {
-          "duration_ms": 390,
+          "duration_ms": 640,
           "title": "Running planner (__planner)"
         },
         "run_id": "[redacted]",
@@ -261,14 +261,14 @@
         "task_id": "__planner"
       },
       "seq": 16,
-      "timestamp": 1794931803.6951447,
+      "timestamp": 1795022332.9154568,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "planner",
-        "duration_seconds": 0.40599999999994907,
+        "duration_seconds": 0.6409999999996217,
         "iteration": 1,
         "outcome": "succeeded",
         "phase": "planning",
@@ -278,11 +278,11 @@
         "total_tokens": 15
       },
       "seq": 17,
-      "timestamp": 1794931803.700503,
+      "timestamp": 1795022332.921163,
       "type": "agent_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "graph_scope": "review",
         "node": "planner",
@@ -290,22 +290,22 @@
         "outcome": "succeeded"
       },
       "seq": 18,
-      "timestamp": 1794931803.7123504,
+      "timestamp": 1795022332.9368806,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "graph_scope": "review",
         "node": "logic_correctness",
         "operation_id": "[redacted]"
       },
       "seq": 19,
-      "timestamp": 1794931803.7265186,
+      "timestamp": 1795022332.970013,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "iteration": 0,
@@ -314,11 +314,11 @@
         "task_id": "logic-1"
       },
       "seq": 20,
-      "timestamp": 1794931803.7360268,
+      "timestamp": 1795022332.9931746,
       "type": "agent_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -341,11 +341,11 @@
         "task_id": "logic-1"
       },
       "seq": 21,
-      "timestamp": 1794931803.7410264,
+      "timestamp": 1795022333.0012276,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -357,11 +357,11 @@
         "task_id": "logic-1"
       },
       "seq": 22,
-      "timestamp": 1794931803.7460265,
+      "timestamp": 1795022333.016253,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "iteration": 1,
@@ -370,11 +370,11 @@
         "task_id": "logic-1"
       },
       "seq": 23,
-      "timestamp": 1794931803.750027,
+      "timestamp": 1795022333.0242531,
       "type": "iteration_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
@@ -385,11 +385,11 @@
         "task_id": "logic-1"
       },
       "seq": 24,
-      "timestamp": 1794931803.7889235,
+      "timestamp": 1795022333.1067624,
       "type": "model_call_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -409,15 +409,15 @@
         "task_id": "logic-1"
       },
       "seq": 25,
-      "timestamp": 1794931803.7956438,
+      "timestamp": 1795022333.1128814,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
-        "duration_seconds": 0.015000000000327418,
+        "duration_seconds": 0.01600000000144064,
         "finish_reason": "stop",
         "iteration": 1,
         "operation_id": "[redacted]",
@@ -428,21 +428,21 @@
         "total_tokens": 15
       },
       "seq": 26,
-      "timestamp": 1794931803.801643,
+      "timestamp": 1795022333.126532,
       "type": "model_call_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
-        "duration_seconds": 0.5619999999998981,
+        "duration_seconds": 0.9380000000001019,
         "total_tokens": 30
       },
       "seq": 27,
-      "timestamp": 1794931803.801643,
+      "timestamp": 1795022333.126532,
       "type": "budget_updated"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -450,7 +450,7 @@
         "error_details": null,
         "parent_step_idx": 2,
         "render_info": {
-          "duration_ms": 32,
+          "duration_ms": 47,
           "title": "Selected tool: read_file"
         },
         "run_id": "[redacted]",
@@ -461,11 +461,11 @@
         "task_id": "logic-1"
       },
       "seq": 28,
-      "timestamp": 1794931803.8381696,
+      "timestamp": 1795022333.1536524,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -478,11 +478,11 @@
         "task_id": "logic-1"
       },
       "seq": 29,
-      "timestamp": 1794931803.8686934,
+      "timestamp": 1795022333.1734595,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -494,21 +494,21 @@
         "task_id": "logic-1"
       },
       "seq": 30,
-      "timestamp": 1794931803.8746915,
+      "timestamp": 1795022333.1940203,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
-        "duration_seconds": 0.6409999999996217,
+        "duration_seconds": 1.0159999999996217,
         "total_tokens": 30
       },
       "seq": 31,
-      "timestamp": 1794931803.8792114,
+      "timestamp": 1795022333.2051558,
       "type": "budget_updated"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "iteration": 1,
@@ -519,11 +519,11 @@
         "tool": "read_file"
       },
       "seq": 32,
-      "timestamp": 1794931803.9018924,
+      "timestamp": 1795022333.230795,
       "type": "tool_called"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -545,11 +545,11 @@
         "task_id": "logic-1"
       },
       "seq": 33,
-      "timestamp": 1794931803.908405,
+      "timestamp": 1795022333.236857,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -557,7 +557,7 @@
         "error_details": null,
         "parent_step_idx": 2,
         "render_info": {
-          "duration_ms": 15,
+          "duration_ms": 47,
           "evidence_ref": "[redacted]",
           "files": [
             "service.py"
@@ -572,11 +572,11 @@
         "task_id": "logic-1"
       },
       "seq": 34,
-      "timestamp": 1794931803.922475,
+      "timestamp": 1795022333.268601,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "evidence_ref": "[redacted]",
@@ -589,14 +589,14 @@
         "tool": "read_file"
       },
       "seq": 35,
-      "timestamp": 1794931803.9277165,
+      "timestamp": 1795022333.268601,
       "type": "evidence_retrieved"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
-        "duration_seconds": 0.015000000000327418,
+        "duration_seconds": 0.07799999999951979,
         "error_code": null,
         "evidence_ref": "[redacted]",
         "iteration": 1,
@@ -609,11 +609,11 @@
         "tool": "read_file"
       },
       "seq": 36,
-      "timestamp": 1794931803.9321547,
+      "timestamp": 1795022333.2878242,
       "type": "tool_result"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -626,11 +626,11 @@
         "task_id": "logic-1"
       },
       "seq": 37,
-      "timestamp": 1794931803.9492767,
+      "timestamp": 1795022333.3232563,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -642,11 +642,11 @@
         "task_id": "logic-1"
       },
       "seq": 38,
-      "timestamp": 1794931803.955195,
+      "timestamp": 1795022333.3360374,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "iteration": 2,
@@ -655,11 +655,11 @@
         "task_id": "logic-1"
       },
       "seq": 39,
-      "timestamp": 1794931803.95972,
+      "timestamp": 1795022333.3427877,
       "type": "iteration_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
@@ -670,11 +670,11 @@
         "task_id": "logic-1"
       },
       "seq": 40,
-      "timestamp": 1794931804.0170324,
+      "timestamp": 1795022333.4248476,
       "type": "model_call_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -694,15 +694,15 @@
         "task_id": "logic-1"
       },
       "seq": 41,
-      "timestamp": 1794931804.0210543,
+      "timestamp": 1795022333.426856,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "attempt": 1,
-        "duration_seconds": 0.0,
+        "duration_seconds": 0.015000000001236913,
         "finish_reason": "stop",
         "iteration": 2,
         "operation_id": "[redacted]",
@@ -713,21 +713,21 @@
         "total_tokens": 15
       },
       "seq": 42,
-      "timestamp": 1794931804.0271666,
+      "timestamp": 1795022333.442607,
       "type": "model_call_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
-        "duration_seconds": 0.7809999999999491,
+        "duration_seconds": 1.25,
         "total_tokens": 45
       },
       "seq": 43,
-      "timestamp": 1794931804.028171,
+      "timestamp": 1795022333.442607,
       "type": "budget_updated"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "end_offset": 431,
@@ -740,11 +740,11 @@
         "task_id": "logic-1"
       },
       "seq": 44,
-      "timestamp": 1794931804.0321705,
+      "timestamp": 1795022333.442607,
       "type": "evidence_delivered"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -752,7 +752,7 @@
         "error_details": null,
         "parent_step_idx": 2,
         "render_info": {
-          "duration_ms": 30,
+          "duration_ms": 63,
           "title": "Planned action: submit_candidates"
         },
         "run_id": "[redacted]",
@@ -763,11 +763,11 @@
         "task_id": "logic-1"
       },
       "seq": 45,
-      "timestamp": 1794931804.05715,
+      "timestamp": 1795022333.489809,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -780,11 +780,11 @@
         "task_id": "logic-1"
       },
       "seq": 46,
-      "timestamp": 1794931804.0888472,
+      "timestamp": 1795022333.5445478,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -796,11 +796,11 @@
         "task_id": "logic-1"
       },
       "seq": 47,
-      "timestamp": 1794931804.094457,
+      "timestamp": 1795022333.5624142,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "count": 1,
@@ -810,11 +810,11 @@
         "task_id": "logic-1"
       },
       "seq": 48,
-      "timestamp": 1794931804.098457,
+      "timestamp": 1795022333.5706115,
       "type": "candidate_submitted"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "graph_scope": "agent",
@@ -827,11 +827,11 @@
         "task_id": "logic-1"
       },
       "seq": 49,
-      "timestamp": 1794931804.1160378,
+      "timestamp": 1795022333.6000266,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "agent_name": "logic_correctness",
@@ -839,7 +839,7 @@
         "error_details": null,
         "parent_step_idx": null,
         "render_info": {
-          "duration_ms": 375,
+          "duration_ms": 608,
           "title": "Running logic_correctness (logic-1)"
         },
         "run_id": "[redacted]",
@@ -850,14 +850,14 @@
         "task_id": "logic-1"
       },
       "seq": 50,
-      "timestamp": 1794931804.1216815,
+      "timestamp": 1795022333.617566,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
-        "duration_seconds": 0.39099999999962165,
+        "duration_seconds": 0.6410000000014406,
         "iteration": 2,
         "outcome": "succeeded",
         "phase": "investigation",
@@ -867,11 +867,11 @@
         "total_tokens": 30
       },
       "seq": 51,
-      "timestamp": 1794931804.1267595,
+      "timestamp": 1795022333.623523,
       "type": "agent_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "graph_scope": "review",
         "node": "logic_correctness",
@@ -879,22 +879,22 @@
         "outcome": "succeeded"
       },
       "seq": 52,
-      "timestamp": 1794931804.130694,
+      "timestamp": 1795022333.6334724,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "graph_scope": "review",
         "node": "join",
         "operation_id": "[redacted]"
       },
       "seq": 53,
-      "timestamp": 1794931804.1358204,
+      "timestamp": 1795022333.6520498,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "logic_correctness",
         "count": 1,
@@ -903,22 +903,22 @@
         "task_id": "logic-1"
       },
       "seq": 54,
-      "timestamp": 1794931804.150753,
+      "timestamp": 1795022333.6683724,
       "type": "finding_created"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "count": 1,
         "outcome": "succeeded",
         "phase": "structural_gate"
       },
       "seq": 55,
-      "timestamp": 1794931804.159472,
+      "timestamp": 1795022333.679456,
       "type": "validation_passed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "graph_scope": "review",
         "node": "join",
@@ -926,31 +926,31 @@
         "outcome": "succeeded"
       },
       "seq": 56,
-      "timestamp": 1794931804.1728225,
+      "timestamp": 1795022333.6953418,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "graph_scope": "review",
         "node": "synthesizer_verifier",
         "operation_id": "[redacted]"
       },
       "seq": 57,
-      "timestamp": 1794931804.1773806,
+      "timestamp": 1795022333.7209277,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "phase": "finalization"
       },
       "seq": 58,
-      "timestamp": 1794931804.1845045,
+      "timestamp": 1795022333.7385309,
       "type": "finalization_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "iteration": 0,
@@ -959,11 +959,11 @@
         "task_id": "__final"
       },
       "seq": 59,
-      "timestamp": 1794931804.1988232,
+      "timestamp": 1795022333.7592978,
       "type": "agent_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "agent_name": "synthesizer_verifier",
@@ -988,11 +988,11 @@
         "task_id": "__final"
       },
       "seq": 60,
-      "timestamp": 1794931804.2037146,
+      "timestamp": 1795022333.7751594,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1004,11 +1004,11 @@
         "task_id": "__final"
       },
       "seq": 61,
-      "timestamp": 1794931804.2097204,
+      "timestamp": 1795022333.7867856,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "iteration": 1,
@@ -1017,11 +1017,11 @@
         "task_id": "__final"
       },
       "seq": 62,
-      "timestamp": 1794931804.214783,
+      "timestamp": 1795022333.7951066,
       "type": "iteration_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": 1,
@@ -1032,11 +1032,11 @@
         "task_id": "__final"
       },
       "seq": 63,
-      "timestamp": 1794931804.2615223,
+      "timestamp": 1795022333.8722274,
       "type": "model_call_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "agent_name": "synthesizer_verifier",
@@ -1056,15 +1056,15 @@
         "task_id": "__final"
       },
       "seq": 64,
-      "timestamp": 1794931804.2903404,
+      "timestamp": 1795022333.8808742,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "attempt": 1,
-        "duration_seconds": 0.125,
+        "duration_seconds": 0.014999999999417923,
         "finish_reason": "stop",
         "iteration": 1,
         "operation_id": "[redacted]",
@@ -1075,21 +1075,21 @@
         "total_tokens": 15
       },
       "seq": 65,
-      "timestamp": 1794931804.374806,
+      "timestamp": 1795022333.8879158,
       "type": "model_call_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
-        "duration_seconds": 1.1409999999996217,
+        "duration_seconds": 1.7029999999995198,
         "total_tokens": 60
       },
       "seq": 66,
-      "timestamp": 1794931804.374806,
+      "timestamp": 1795022333.8879158,
       "type": "budget_updated"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "end_offset": 431,
@@ -1102,11 +1102,11 @@
         "task_id": "__final"
       },
       "seq": 67,
-      "timestamp": 1794931804.3788054,
+      "timestamp": 1795022333.907055,
       "type": "evidence_delivered"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "agent_name": "synthesizer_verifier",
@@ -1114,7 +1114,7 @@
         "error_details": null,
         "parent_step_idx": 6,
         "render_info": {
-          "duration_ms": 140,
+          "duration_ms": 61,
           "title": "Planned action: submit_verification"
         },
         "run_id": "[redacted]",
@@ -1125,11 +1125,11 @@
         "task_id": "__final"
       },
       "seq": 68,
-      "timestamp": 1794931804.4072735,
+      "timestamp": 1795022333.9380114,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1142,11 +1142,11 @@
         "task_id": "__final"
       },
       "seq": 69,
-      "timestamp": 1794931804.432836,
+      "timestamp": 1795022333.9964066,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1158,11 +1158,11 @@
         "task_id": "__final"
       },
       "seq": 70,
-      "timestamp": 1794931804.4378414,
+      "timestamp": 1795022334.0067513,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "count": 1,
@@ -1174,11 +1174,11 @@
         "verdict": "uncertain"
       },
       "seq": 71,
-      "timestamp": 1794931804.4423711,
+      "timestamp": 1795022334.0120802,
       "type": "verification_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1191,11 +1191,11 @@
         "task_id": "__final"
       },
       "seq": 72,
-      "timestamp": 1794931804.4709713,
+      "timestamp": 1795022334.0435748,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1207,11 +1207,11 @@
         "task_id": "__final"
       },
       "seq": 73,
-      "timestamp": 1794931804.4769728,
+      "timestamp": 1795022334.059492,
       "type": "graph_node_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "graph_scope": "agent",
@@ -1224,11 +1224,11 @@
         "task_id": "__final"
       },
       "seq": 74,
-      "timestamp": 1794931804.5384195,
+      "timestamp": 1795022334.1561518,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
         "agent_name": "synthesizer_verifier",
@@ -1236,7 +1236,7 @@
         "error_details": null,
         "parent_step_idx": null,
         "render_info": {
-          "duration_ms": 342,
+          "duration_ms": 390,
           "title": "Running synthesizer_verifier (__final)"
         },
         "run_id": "[redacted]",
@@ -1247,14 +1247,14 @@
         "task_id": "__final"
       },
       "seq": 75,
-      "timestamp": 1794931804.5484207,
+      "timestamp": 1795022334.166288,
       "type": "step_update"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "agent_id": "synthesizer_verifier",
-        "duration_seconds": 0.35900000000037835,
+        "duration_seconds": 0.4069999999992433,
         "iteration": 1,
         "outcome": "succeeded",
         "phase": "synthesis",
@@ -1264,52 +1264,52 @@
         "total_tokens": 15
       },
       "seq": 76,
-      "timestamp": 1794931804.5534296,
+      "timestamp": 1795022334.1780474,
       "type": "agent_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "outcome": "succeeded",
         "phase": "acceptance"
       },
       "seq": 77,
-      "timestamp": 1794931804.5984917,
+      "timestamp": 1795022334.2370155,
       "type": "validation_passed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "phase": "rendering"
       },
       "seq": 78,
-      "timestamp": 1794931804.610038,
+      "timestamp": 1795022334.25456,
       "type": "report_render_started"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
-        "duration_seconds": 0.0,
+        "duration_seconds": 0.014999999999417923,
         "outcome": "succeeded",
         "phase": "rendering"
       },
       "seq": 79,
-      "timestamp": 1794931804.61716,
+      "timestamp": 1795022334.264465,
       "type": "report_render_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
-        "duration_seconds": 0.43800000000010186,
+        "duration_seconds": 0.5470000000004802,
         "outcome": "succeeded",
         "phase": "finalization"
       },
       "seq": 80,
-      "timestamp": 1794931804.6337054,
+      "timestamp": 1795022334.2794418,
       "type": "finalization_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "graph_scope": "review",
         "node": "synthesizer_verifier",
@@ -1317,16 +1317,16 @@
         "outcome": "succeeded"
       },
       "seq": 81,
-      "timestamp": 1794931804.6397147,
+      "timestamp": 1795022334.2898748,
       "type": "graph_node_completed"
     },
     {
-      "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+      "job_id": "08e7818346da4d59afb9773a1e62a2e0",
       "payload": {
         "status": "completed"
       },
       "seq": 82,
-      "timestamp": 1794931804.669641,
+      "timestamp": 1795022334.3229294,
       "type": "job_completed"
     }
   ],
@@ -1346,6 +1346,18 @@
         "Capture omissions are client-reported; inspection coverage covers captured source only.",
         "Offline test fixture"
       ],
+      "metrics": {
+        "assigned": 1,
+        "eligible": 3,
+        "excluded": 1,
+        "excluded_by_reason": {
+          "excluded_source": 1
+        },
+        "failed": 0,
+        "inspected": 1,
+        "skipped_limits": 0,
+        "total_discovered": 4
+      },
       "skipped": {
         "dist/generated.js": "excluded_source",
         "\ue000.py": "not_inspected",
@@ -1355,7 +1367,7 @@
     "limitations": [
       "Independent arithmetic checks cover only explicit predicates on their declared integer domains. Source relevance and other prose remain model judgments, not independently proven facts."
     ],
-    "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
+    "snapshot_id": "f3db69962724473c845f19b938d6e0e6",
     "summary": "Partial review: 0 confirmed defect(s), 1 uncertain candidate(s), 0 advisory finding(s). 1 captured source file(s) inspected; 3 skipped and 0 failed coverage entry/entries. Coverage applies only to the captured source and recorded evidence.",
     "uncertain_high_impact_candidates": [
       {
@@ -1364,15 +1376,15 @@
         "confidence": 0.7,
         "description": "The first item is indexed without an empty check",
         "evidence_refs": [
-          "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+          "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
         ],
-        "finding_id": "finding-0aa3a8896e8cf7b7d490ef0d",
+        "finding_id": "finding-5a5bedd9608e72802b221126",
         "impact": "Request can fail",
         "kind": "high_impact_candidate",
         "location": {
           "end_line": 2,
           "file_path": "service.py",
-          "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
+          "snapshot_id": "f3db69962724473c845f19b938d6e0e6",
           "start_line": 2
         },
         "remediation": "",
@@ -1391,7 +1403,7 @@
             "assessments": [
               {
                 "evidence_refs": [
-                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+                  "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "title",
@@ -1399,7 +1411,7 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+                  "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "description",
@@ -1407,7 +1419,7 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+                  "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "impact",
@@ -1415,21 +1427,21 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+                  "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
                 ],
                 "explanation": "No additional remediation claim.",
                 "field": "remediation",
                 "status": "supported"
               }
             ],
-            "candidate_digest": "dfed3aa0f580d713b139095ef4c0e7d13042180adddba43cb7878882ade0fb8f",
+            "candidate_digest": "58658ae2bf29e2bb5661402db773f3c988b6b93a9c32d79a256ae74e3abbb560",
             "causal_basis": "For items=[], indexing element zero raises IndexError before a value can be returned."
           },
           "confidence": 0.7,
           "evidence_refs": [
-            "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+            "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
           ],
-          "finding_id": "finding-0aa3a8896e8cf7b7d490ef0d",
+          "finding_id": "finding-5a5bedd9608e72802b221126",
           "rationale": "Boundary failure follows syntactically; caller contract is unknown",
           "verdict": "uncertain"
         }
@@ -1439,7 +1451,7 @@
       "duplicate_reviews": [],
       "followup_requests": [],
       "provenance": {
-        "finding-0aa3a8896e8cf7b7d490ef0d": {
+        "finding-5a5bedd9608e72802b221126": {
           "agent_id": "logic_correctness",
           "task_id": "logic-1"
         }
@@ -1453,8 +1465,8 @@
     "\ud83d\ude00.py": "pass\n"
   },
   "job": {
-    "created_at": 1794931803.2038844,
-    "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+    "created_at": 1795022332.1329582,
+    "job_id": "08e7818346da4d59afb9773a1e62a2e0",
     "ledger": {
       "agent_usage": {
         "logic_correctness": {
@@ -1470,7 +1482,7 @@
           "prompt_tokens": 10
         }
       },
-      "elapsed_seconds": 1.4530000000004293,
+      "elapsed_seconds": 2.17200000000048,
       "inflight": {},
       "operation_retries": {},
       "review_round": 1,
@@ -1498,9 +1510,9 @@
       "tool_calls_per_task": 12,
       "transient_retries": 2
     },
-    "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
+    "snapshot_id": "f3db69962724473c845f19b938d6e0e6",
     "status": "completed",
-    "updated_at": 1794931804.6786659,
+    "updated_at": 1795022334.3332489,
     "workflow_version": "seven-agent-v1",
     "workspace_path": null
   },
@@ -1517,6 +1529,18 @@
         "Capture omissions are client-reported; inspection coverage covers captured source only.",
         "Offline test fixture"
       ],
+      "metrics": {
+        "assigned": 1,
+        "eligible": 3,
+        "excluded": 1,
+        "excluded_by_reason": {
+          "excluded_source": 1
+        },
+        "failed": 0,
+        "inspected": 1,
+        "skipped_limits": 0,
+        "total_discovered": 4
+      },
       "skipped": {
         "dist/generated.js": "excluded_source",
         "\ue000.py": "not_inspected",
@@ -1526,7 +1550,7 @@
     "limitations": [
       "Independent arithmetic checks cover only explicit predicates on their declared integer domains. Source relevance and other prose remain model judgments, not independently proven facts."
     ],
-    "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
+    "snapshot_id": "f3db69962724473c845f19b938d6e0e6",
     "summary": "Partial review: 0 confirmed defect(s), 1 uncertain candidate(s), 0 advisory finding(s). 1 captured source file(s) inspected; 3 skipped and 0 failed coverage entry/entries. Coverage applies only to the captured source and recorded evidence.",
     "uncertain_high_impact_candidates": [
       {
@@ -1535,15 +1559,15 @@
         "confidence": 0.7,
         "description": "The first item is indexed without an empty check",
         "evidence_refs": [
-          "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+          "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
         ],
-        "finding_id": "finding-0aa3a8896e8cf7b7d490ef0d",
+        "finding_id": "finding-5a5bedd9608e72802b221126",
         "impact": "Request can fail",
         "kind": "high_impact_candidate",
         "location": {
           "end_line": 2,
           "file_path": "service.py",
-          "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
+          "snapshot_id": "f3db69962724473c845f19b938d6e0e6",
           "start_line": 2
         },
         "remediation": "",
@@ -1562,7 +1586,7 @@
             "assessments": [
               {
                 "evidence_refs": [
-                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+                  "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "title",
@@ -1570,7 +1594,7 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+                  "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "description",
@@ -1578,7 +1602,7 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+                  "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
                 ],
                 "explanation": "The supplied source and input contract establish this complete field.",
                 "field": "impact",
@@ -1586,21 +1610,21 @@
               },
               {
                 "evidence_refs": [
-                  "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+                  "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
                 ],
                 "explanation": "No additional remediation claim.",
                 "field": "remediation",
                 "status": "supported"
               }
             ],
-            "candidate_digest": "dfed3aa0f580d713b139095ef4c0e7d13042180adddba43cb7878882ade0fb8f",
+            "candidate_digest": "58658ae2bf29e2bb5661402db773f3c988b6b93a9c32d79a256ae74e3abbb560",
             "causal_basis": "For items=[], indexing element zero raises IndexError before a value can be returned."
           },
           "confidence": 0.7,
           "evidence_refs": [
-            "evidence-e51cc3294a2cd80e64e0c723046014077877c0535ce66a9b5d17202a15c9b2de"
+            "evidence-20fe5e76f8285d3a4eb82133ca1b94266cfd53e0db5f4bfc83d96dd2f7b6d0df"
           ],
-          "finding_id": "finding-0aa3a8896e8cf7b7d490ef0d",
+          "finding_id": "finding-5a5bedd9608e72802b221126",
           "rationale": "Boundary failure follows syntactically; caller contract is unknown",
           "verdict": "uncertain"
         }
@@ -1610,7 +1634,7 @@
       "duplicate_reviews": [],
       "followup_requests": [],
       "provenance": {
-        "finding-0aa3a8896e8cf7b7d490ef0d": {
+        "finding-5a5bedd9608e72802b221126": {
           "agent_id": "logic_correctness",
           "task_id": "logic-1"
         }
@@ -1620,6 +1644,8 @@
   },
   "snapshot": {
     "capture_coverage": {
+      "discovered_count": null,
+      "excluded_by_reason": null,
       "failed": {},
       "limitations": [
         "Offline test fixture"
@@ -1628,7 +1654,7 @@
         "dist/generated.js": "excluded_source"
       }
     },
-    "capture_hash": "b4d4b63be35b3e1e42005c92c67136263a7a3ea62dec34bdfec87de27c494302",
+    "capture_hash": "c4483dbd1c98c226a46eb5c5913ea4b7475d457f7fa054e8fec8868353b14f82",
     "content_hash": "a92a5277e19fe4acd1488a7778fa3a0a6f409f8687f2caf403c2be1e04457f52",
     "entries": {
       "service.py": {
@@ -1654,7 +1680,7 @@
       "limitations": []
     },
     "owner": "key-091d54677e472013d98d39c7312be93228f8cf198a5dc893cdb44ff6cb48a599",
-    "snapshot_id": "4582a78be5f14b549ad4de730c88a136"
+    "snapshot_id": "f3db69962724473c845f19b938d6e0e6"
   },
   "source": {
     "content_hash": "c9f28bea98a2738fd61db45b1a927b35357a4a9a22303e1343450814dea7c632",
@@ -1662,7 +1688,7 @@
     "end_line": 2,
     "file_path": "service.py",
     "snapshot_hash": "a92a5277e19fe4acd1488a7778fa3a0a6f409f8687f2caf403c2be1e04457f52",
-    "snapshot_id": "4582a78be5f14b549ad4de730c88a136",
+    "snapshot_id": "f3db69962724473c845f19b938d6e0e6",
     "source_scope": [
       "service.py"
     ],
@@ -1670,7 +1696,7 @@
     "tool": "read_file"
   },
   "unicode_event": {
-    "job_id": "8e80aeac7c8e4760a8792ed86aa09c4e",
+    "job_id": "08e7818346da4d59afb9773a1e62a2e0",
     "payload": {
       "agent_id": "logic_correctness",
       "task_id": "\u4efb\u52a1.\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00\ud840\udc00"

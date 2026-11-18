@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ActivityBar, ActivityView } from '../components/ActivityBar'
+import { BottomDrawer, BottomDrawerTab } from '../components/BottomDrawer'
 import { CodeEditor, LineRange, OpenTab } from '../components/CodeEditor'
 import { FileExplorer } from '../components/FileExplorer'
+import { HistoryPanel } from '../components/HistoryPanel'
+import { ExecutionMode, SettingsPanel } from '../components/SettingsPanel'
+import { WorkspaceSearchPanel } from '../components/WorkspaceSearchPanel'
 import { DurableReviewClient, ServiceError } from './durable-client'
+import { isRangeCoveredByTab, mergeSourceExcerpt } from './source-buffer'
 import { JobActivity } from './JobActivity'
 import { ReportPanel } from './ReportPanel'
 import { useReviewSession } from './useReviewSession'
@@ -23,12 +29,44 @@ export function DurableApp() {
   const [highlightRange, setHighlightRange] = useState<LineRange | null>(null)
   const [mobilePane, setMobilePane] = useState('review')
   const [evidence, setEvidence] = useState<string | null>(null)
+  const [activeActivity, setActiveActivity] = useState<ActivityView>('explorer')
+  const [sidebarWidth, setSidebarWidth] = useState(272)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerTab, setDrawerTab] = useState<BottomDrawerTab>('problems')
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>('balanced')
+  const [jobTokens, setJobTokens] = useState('')
   const evidenceRequest = useRef<AbortController | null>(null)
+  const draggingSidebar = useRef(false)
 
   const busy = state.busy || folderBusy
   const inputLocked = busy || session.hasPendingSubmission()
   const canChangeInput = () => !folderBusy && !session.getSnapshot().busy && !session.hasPendingSubmission()
   const active = state.job?.status === 'queued' || state.job?.status === 'running'
+
+  const allFindings = useMemo(
+    () =>
+      state.report
+        ? [
+            ...state.report.confirmed_defects,
+            ...state.report.uncertain_high_impact_candidates,
+            ...state.report.advisories,
+          ]
+        : [],
+    [state.report],
+  )
+
+  const findingCountsByPath = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const item of allFindings) {
+      counts[item.location.file_path] = (counts[item.location.file_path] ?? 0) + 1
+    }
+    return counts
+  }, [allFindings])
+
+  const parsedTokenBudget = useMemo(() => {
+    const parsed = Number(jobTokens)
+    return Number.isFinite(parsed) && parsed >= 1000 ? Math.floor(parsed) : undefined
+  }, [jobTokens])
 
   useEffect(() => {
     let cancelled = false
@@ -40,6 +78,7 @@ export function DurableApp() {
             setWorkspacePath(res.path)
             setPathInput(res.path)
           }
+          void session.refreshHistory()
         }
       })
       .catch(err => {
@@ -49,7 +88,28 @@ export function DurableApp() {
         }
       })
     return () => { cancelled = true }
-  }, [client])
+  }, [client, session])
+
+  useEffect(() => {
+    if (state.job?.status && ['completed', 'failed', 'cancelled'].includes(state.job.status)) {
+      void session.refreshHistory()
+    }
+  }, [state.job?.job_id, state.job?.status, session])
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!draggingSidebar.current) return
+      const next = Math.min(440, Math.max(200, e.clientX - 48))
+      setSidebarWidth(next)
+    }
+    const onUp = () => { draggingSidebar.current = false }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [])
 
   useEffect(() => {
     evidenceRequest.current?.abort()
@@ -154,7 +214,10 @@ export function DurableApp() {
       setHighlightRange(range ? { path: filePath, ...range } : null)
 
       const existing = tabs.find(t => t.path === filePath)
-      if (existing && (existing.file || existing.loading)) {
+      if (existing?.file && isRangeCoveredByTab(existing.excerptBuffer, range)) {
+        return
+      }
+      if (existing?.file && !existing.excerptBuffer && !existing.file.tooLarge) {
         return
       }
 
@@ -162,35 +225,43 @@ export function DurableApp() {
         if (prev.some(t => t.path === filePath)) {
           return prev.map(t => (t.path === filePath ? { ...t, loading: true, error: null } : t))
         }
-        return [...prev, { path: filePath, loading: true, error: null, file: null }]
+        return [...prev, { path: filePath, loading: true, error: null, file: null, excerptBuffer: null }]
       })
 
       const job = state.job
       const snapshotId = job?.snapshot_id ?? state.report?.snapshot_id
       try {
         let file = workspacePath ? await client.readFile(filePath).catch(() => null) : null
-        if (!file && job && snapshotId) {
+        let excerptBuffer = existing?.excerptBuffer ?? null
+        if (file && !file.binary && !file.tooLarge && file.content != null) {
+          excerptBuffer = mergeSourceExcerpt(null, { startLine: 1, endLine: Math.max(1, file.lineCount ?? 1), data: file.content }, true)
+        } else if (!file && job && snapshotId) {
           const reqStart = range && range.endLine > 200 ? Math.max(1, range.startLine - 40) : 1
-          const reqEnd = reqStart === 1 ? Math.max(200, range?.endLine ?? 200) : reqStart + 199
-          const clampedEnd = Math.min(reqStart + 199, reqEnd)
-          const excerpt = await client.source(job.job_id, snapshotId, filePath, reqStart, clampedEnd)
-          const prefix = excerpt.start_line > 1 ? '\n'.repeat(excerpt.start_line - 1) : ''
-          const content = prefix + excerpt.data
+          const reqEnd = reqStart + 199
+          const excerpt = await client.source(job.job_id, snapshotId, filePath, reqStart, reqEnd)
+          excerptBuffer = mergeSourceExcerpt(excerptBuffer, {
+            startLine: excerpt.start_line,
+            endLine: excerpt.end_line,
+            data: excerpt.data,
+          })
           file = {
             path: filePath,
-            size: excerpt.data.length,
+            size: excerptBuffer.content.length,
             binary: false,
             tooLarge: false,
             maxBytes: 2_000_000,
-            lineCount: content.split('\n').length,
-            content,
+            lineCount: excerptBuffer.lines.length,
+            content: excerptBuffer.content,
           }
         }
         if (!file) {
           file = await client.readFile(filePath)
+          if (file.content != null) {
+            excerptBuffer = mergeSourceExcerpt(null, { startLine: 1, endLine: Math.max(1, file.lineCount ?? 1), data: file.content }, true)
+          }
         }
         setTabs(prev =>
-          prev.map(t => (t.path === filePath ? { ...t, loading: false, error: null, file } : t)),
+          prev.map(t => (t.path === filePath ? { ...t, loading: false, error: null, file, excerptBuffer } : t)),
         )
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to read file'
@@ -256,23 +327,72 @@ export function DurableApp() {
     }
   }
 
-  return <div className="workspace">
+  function handleSelectActivity(view: ActivityView) {
+    if (view === 'findings') {
+      setMobilePane('review')
+      setDrawerTab('problems')
+      setDrawerOpen(true)
+      requestAnimationFrame(() => document.getElementById('review-results')?.focus())
+      return
+    }
+    setActiveActivity(view)
+    setMobilePane('files')
+    if (view === 'history') void session.refreshHistory()
+  }
+
+  return <div className="workspace ide-shell">
     <a className="skip-link" href="#review-results" onClick={event => {
       event.preventDefault(); setMobilePane('review')
       requestAnimationFrame(() => document.getElementById('review-results')?.focus())
     }}>Skip to review results</a>
-    <header className="titlebar">
-      <div className="brand">DevWatch</div>
+    <header className="titlebar ide-topbar">
+      <div className="brand">DeWatch <span className="brand-badge">Review IDE</span></div>
       <div className="crumb">
         <strong>{state.job ? `Job ${state.job.job_id}` : workspacePath || 'Open a local workspace folder'}</strong>
       </div>
-      <button
-        className="review-button"
-        disabled={busy || active || !workspacePath || Boolean(state.intent && !state.job)}
-        onClick={() => { if (workspacePath) void session.start(workspacePath) }}
-      >
-        Run review
-      </button>
+      <div className="topbar-controls">
+        <span className={`stage-pill stage-${state.stage}`}>{state.stage}</span>
+        <label className="topbar-field">
+          <span>Execution mode</span>
+          <select
+            aria-label="Execution mode"
+            disabled={inputLocked}
+            value={executionMode}
+            onChange={e => setExecutionMode(e.target.value as ExecutionMode)}
+          >
+            <option value="balanced">balanced</option>
+            <option value="parallel">parallel</option>
+            <option value="sequential">sequential</option>
+          </select>
+        </label>
+        <label className="topbar-field">
+          <span>Token budget</span>
+          <input
+            type="number"
+            aria-label="Token budget"
+            min={1000}
+            step={1000}
+            placeholder="Auto"
+            disabled={inputLocked}
+            value={jobTokens}
+            onChange={e => setJobTokens(e.target.value)}
+          />
+        </label>
+        <button
+          className="review-button"
+          disabled={busy || active || !workspacePath || Boolean(state.intent && !state.job)}
+          onClick={() => {
+            if (workspacePath) {
+              void session.start(workspacePath, {
+                executionMode,
+                jobTokens: parsedTokenBudget,
+              })
+            }
+          }}
+        >
+          Run review
+        </button>
+      </div>
     </header>
     <section className="source-bar" aria-label="Review connection and workspace">
       <details open={connectionOpen} onToggle={event => setConnectionOpen(event.currentTarget.open)}><summary>Service connection</summary><form className="connection-controls" onSubmit={configure}>
@@ -314,25 +434,93 @@ export function DurableApp() {
       {([['review', 'Review', 'review-results'], ['files', 'Files', 'source-files'], ['source', 'Source', 'source-pane']] as const).map(([pane, label, target]) =>
         <button key={pane} type="button" aria-controls={target} aria-pressed={mobilePane === pane} onClick={() => setMobilePane(pane)}>{label}</button>)}
     </nav>
-    <div className="body" data-mobile-pane={mobilePane}>
-      <aside id="source-files" className="explorer-pane" aria-label="File explorer">
-        <FileExplorer
-          workspacePath={workspacePath}
-          selectedFile={activePath}
-          onSelectFile={filePath => { void openFile(filePath) }}
-          loadDir={loadDir}
-        />
+    <div
+      className="body ide-body"
+      data-mobile-pane={mobilePane}
+      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+    >
+      <ActivityBar
+        activeView={activeActivity}
+        findingCount={allFindings.length}
+        historyCount={state.history.length}
+        onSelectView={handleSelectActivity}
+      />
+      <aside id="source-files" className="explorer-pane ide-sidebar" aria-label="File explorer">
+        <div hidden={activeActivity !== 'explorer'} className="sidebar-pane-slot">
+          <FileExplorer
+            workspacePath={workspacePath}
+            selectedFile={activePath}
+            findingCounts={findingCountsByPath}
+            onSelectFile={filePath => { void openFile(filePath) }}
+            loadDir={loadDir}
+          />
+        </div>
+        {activeActivity === 'search' && (
+          <WorkspaceSearchPanel
+            tabs={tabs}
+            onJumpToLine={(filePath, line) => { void openFile(filePath, { startLine: line, endLine: line }) }}
+          />
+        )}
+        {activeActivity === 'history' && (
+          <HistoryPanel
+            jobs={state.history}
+            activeJobId={state.job?.job_id}
+            busy={busy}
+            onSelectJob={selectedId => {
+              setJobId(selectedId)
+              void session.switchJob(selectedId)
+            }}
+            onRefresh={() => { void session.refreshHistory() }}
+          />
+        )}
+        {activeActivity === 'settings' && (
+          <SettingsPanel
+            executionMode={executionMode}
+            jobTokens={jobTokens}
+            serviceUrl={serviceUrl}
+            onChangeExecutionMode={setExecutionMode}
+            onChangeJobTokens={setJobTokens}
+          />
+        )}
       </aside>
-      <main id="source-pane" className="editor-pane" tabIndex={-1} aria-label="Code editor">
-        <CodeEditor
-          tabs={tabs}
-          activePath={activePath}
-          highlightRange={highlightRange}
-          onSelectTab={setActivePath}
-          onCloseTab={closeTab}
+      <div
+        className="ide-resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        tabIndex={0}
+        onPointerDown={e => {
+          e.preventDefault()
+          draggingSidebar.current = true
+        }}
+        onKeyDown={e => {
+          if (e.key === 'ArrowLeft') setSidebarWidth(w => Math.max(200, w - 16))
+          if (e.key === 'ArrowRight') setSidebarWidth(w => Math.min(440, w + 16))
+        }}
+      />
+      <div className="ide-center-column">
+        <main id="source-pane" className="editor-pane" tabIndex={-1} aria-label="Code editor">
+          <CodeEditor
+            tabs={tabs}
+            activePath={activePath}
+            highlightRange={highlightRange}
+            findings={allFindings}
+            onSelectTab={setActivePath}
+            onCloseTab={closeTab}
+          />
+        </main>
+        <BottomDrawer
+          open={drawerOpen}
+          activeTab={drawerTab}
+          report={state.report}
+          events={state.events}
+          steps={state.steps}
+          onToggleOpen={() => setDrawerOpen(v => !v)}
+          onSelectTab={setDrawerTab}
+          onOpenFinding={openFinding}
         />
-      </main>
-      <div className="review-column">
+      </div>
+      <div className="review-column ide-right-column">
         <JobActivity job={state.job} events={state.events} steps={state.steps} connection={state.connection} onEvidence={reference => { void openEvidence(reference) }} />
         {evidence != null && <section className="tool-evidence" aria-label="Tool evidence"><h2>Tool evidence</h2>
           <button type="button" className="header-button" onClick={() => { evidenceRequest.current?.abort(); setEvidence(null) }}>Close evidence</button>
@@ -340,8 +528,10 @@ export function DurableApp() {
         <ReportPanel report={state.report} onSource={openFinding} />
       </div>
     </div>
-    <footer className="statusbar">
+    <footer className="statusbar ide-statusbar">
       <span>{workspacePath ? `Workspace: ${workspacePath}` : 'No workspace open'}</span>
+      <span>Mode: {executionMode}</span>
+      <span>{allFindings.length} findings</span>
       <span className="status-spacer" />
       <span>{state.job?.status ?? 'No job submitted'}</span>
     </footer>

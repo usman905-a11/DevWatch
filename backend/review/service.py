@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import Field
 
-from backend.review.contracts import AgentId, AgentWorkItem, ContractModel, ModelTier
+from backend.review.contracts import AgentId, AgentWorkItem, BalancedLimits, ContractModel, ModelTier
 from backend.review.declared_context import validate_context_files
 from backend.review.jobs import DurableJobManager, JobConflict, JobEvent, JobNotFound, JobStore, JobView, MAX_EVENT_CURSOR
 from backend.review.repository import RepositoryContext
@@ -44,6 +44,7 @@ class ServiceSettings:
     allowed_origins: tuple[str, ...] = ("http://localhost:3000", "http://localhost:5173",
                                       "http://127.0.0.1:3000", "http://127.0.0.1:5173")
     max_request_bytes: int = 11_000_000
+    default_job_tokens: int | None = None
 
     def __post_init__(self):
         if set(self.models) != set(ModelTier) or any(not name.strip() for name in self.models.values()):
@@ -62,6 +63,8 @@ class ServiceSettings:
         small = model or os.getenv("DEVWATCH_MODEL_SMALL") or os.getenv("DEVWATCH_FAST_MODEL") or os.getenv("LLM_MODEL") or ""
         medium = model or os.getenv("DEVWATCH_MODEL_MEDIUM") or os.getenv("LLM_MODEL") or small
         strong = os.getenv("DEVWATCH_MODEL_STRONG") or os.getenv("DEVWATCH_HEAVY_MODEL") or medium
+        raw_tokens = os.getenv("DEVWATCH_JOB_TOKENS", "").strip()
+        default_job_tokens = int(raw_tokens) if raw_tokens.isdigit() and int(raw_tokens) > 0 else None
         return cls(
             runtime_root=Path(os.getenv("DEVWATCH_RUNTIME_DIR", ".devwatch/runtime")),
             models={
@@ -71,6 +74,7 @@ class ServiceSettings:
             },
             api_keys=frozenset({key}) if key else frozenset(),
             production=os.getenv("DEVWATCH_ENV", "development").lower() == "production",
+            default_job_tokens=default_job_tokens,
         )
 
     def principal(self, headers, *, client_host):
@@ -129,6 +133,8 @@ class JobRequest(ContractModel):
     workspace_path: str | None = Field(default=None, min_length=1, max_length=4096)
     changed_files: list[str] | None = Field(default=None, max_length=1000)
     context_files: list[str] | None = Field(default=None, max_length=4)
+    execution_mode: Literal["parallel", "balanced", "sequential"] | None = None
+    job_tokens: int | None = Field(default=None, ge=1)
 
 
 class HealthResponse(ContractModel):
@@ -176,6 +182,10 @@ class EventsResponse(ContractModel):
     next_cursor: int = Field(ge=0)
 
 
+class JobsListResponse(ContractModel):
+    jobs: list[JobView]
+
+
 def _public_job(job):
     data = {
         field: getattr(job, field)
@@ -216,6 +226,8 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
             yield
         finally:
             await manager.close()
+            if hasattr(provider, "aclose"):
+                await provider.aclose()
 
     app = FastAPI(title="DevWatch Local Review Service", lifespan=lifespan)
     app.state.workspace = WorkspaceManager()
@@ -328,10 +340,15 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         return app.state.artifacts.capture(owner=principal, files=body.files, capture_coverage=body.capture_coverage,
                                            git_metadata=body.git_metadata)
 
+    @app.get("/api/jobs", response_model=JobsListResponse)
+    async def list_jobs(limit: int = Query(50, ge=1, le=200), principal=Depends(owner)):
+        records = app.state.jobs.list_jobs(owner=principal, limit=limit)
+        return {"jobs": [_public_job(record) for record in records]}
+
     @app.post("/api/jobs", status_code=202, response_model=JobView)
     async def submit(body: JobRequest, principal=Depends(owner),
                      idempotency_key: str = Header(min_length=1, max_length=256)):
-        payload = body.model_dump(exclude_none=True)
+        payload = body.model_dump(exclude_none=True, exclude={"execution_mode", "job_tokens"})
         ws = _workspace_for(principal)
         if body.workspace_path is not None:
             resolved = ws.set_root(body.workspace_path)
@@ -346,8 +363,14 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
         validate_context_files(manifest, body.context_files)
         if body.changed_files is not None and any(path not in manifest.entries for path in body.changed_files):
             raise ValueError("changed files must belong to the workspace")
+        mode_concurrency = {"sequential": 1, "balanced": 2, "parallel": 3}
+        limits = None
+        if body.execution_mode is not None or body.job_tokens is not None or settings.default_job_tokens is not None:
+            concurrency = mode_concurrency[body.execution_mode] if body.execution_mode is not None else 3
+            job_tokens = body.job_tokens if body.job_tokens is not None else settings.default_job_tokens
+            limits = BalancedLimits(concurrent_model_calls=concurrency, job_tokens=job_tokens)
         job = await app.state.manager.submit(owner=principal, request=payload,
-                                            idempotency_key=idempotency_key)
+                                            idempotency_key=idempotency_key, limits=limits)
         return _public_job(job)
 
     @app.get("/api/jobs/{identity}", response_model=JobView)

@@ -280,11 +280,27 @@ class _ReviewSession:
         if self.declared_context is not None:
             selected['declared_context'] = self.declared_context
         if state["task"].agent_id == AgentId.PLANNER:
-            from backend.review.intelligence import SUPPORTED_EXTENSIONS
+            from backend.review.intelligence import SUPPORTED_EXTENSIONS, import_edges
+            analyzed = self.repository.analyze()
+            graph = import_edges(analyzed, self.changed)
+            in_degree: dict[str, int] = {}
+            out_degree: dict[str, int] = {}
+            for edge in graph["edges"]:
+                in_degree[edge["to"]] = in_degree.get(edge["to"], 0) + 1
+                out_degree[edge["from"]] = out_degree.get(edge["from"], 0) + 1
             prioritized = sorted(
                 self.changed,
-                key=lambda path: (PurePosixPath(path).suffix.lower() not in SUPPORTED_EXTENSIONS, path),
+                key=lambda path: (
+                    PurePosixPath(path).suffix.lower() not in SUPPORTED_EXTENSIONS,
+                    -(in_degree.get(path, 0) * 2 + out_degree.get(path, 0)),
+                    -analyzed[path]["branch_count"],
+                    path,
+                ),
             )
+            hub_files = sorted(
+                in_degree,
+                key=lambda path: (-in_degree[path], -out_degree.get(path, 0), path),
+            )[:10]
             selected["repository_metadata"] = {
                 "snapshot_id": self.repository.snapshot_id,
                 "file_count": len(self.repository.manifest.entries),
@@ -292,19 +308,26 @@ class _ReviewSession:
                 "file_extensions": sorted({PurePosixPath(path).suffix.lower() for path in self.repository.manifest.entries}),
             }
             selected["changes"] = list(prioritized)
-            analyzed = self.repository.analyze()
             selected["intelligence"] = {path: {
                 "status": facts["status"], "symbol_count": len(facts["symbols"]),
                 "selected_symbols": facts["symbols"][:3], "call_count": len(facts["calls"]),
                 "branches": facts["branch_count"], "limitations": facts["limitations"],
             } for path in prioritized for facts in [analyzed[path]]}
+            selected["import_graph"] = {
+                "edges": graph["edges"][:50],
+                "hub_files": hub_files,
+                "unresolved_count": len(graph["unresolved"]),
+            }
             omitted = 0
             omitted_changes = 0
             while len(json.dumps(selected, ensure_ascii=False).encode("utf-8")) > self.repository.CONTEXT_BYTES:
-                if selected["intelligence"]:
+                if selected.get("intelligence"):
                     selected["intelligence"].pop(next(reversed(selected["intelligence"])))
                     omitted += 1
                     selected["omitted_intelligence_count"] = omitted
+                elif selected.get("import_graph") is not None:
+                    selected.pop("import_graph")
+                    selected.setdefault("limitations", []).append("Import graph omitted from planner context due to budget")
                 elif selected["evidence"]:
                     selected["evidence"].pop()
                     selected["omitted_evidence_count"] += 1
@@ -314,6 +337,18 @@ class _ReviewSession:
                     selected["omitted_changes_count"] = omitted_changes
                 else:
                     raise ReviewExecutionError("scope metadata exceeds the selective context limit")
+            if omitted_changes > 0:
+                selected.setdefault("limitations", []).append(
+                    f"Large scope prioritized by import centrality and complexity; {omitted_changes} file(s) omitted from planner list."
+                )
+        elif state["task"].agent_id == AgentId.ARCHITECTURE_SECURITY:
+            from backend.review.intelligence import import_edges
+            graph = import_edges(self.repository.analyze(), self.repository.manifest.entries)
+            task_files = set(state["task"].files)
+            relevant_edges = [edge for edge in graph["edges"] if edge["from"] in task_files or edge["to"] in task_files][:30]
+            unresolved = [item for item in graph["unresolved"] if item["from"] in task_files][:20]
+            if relevant_edges or unresolved:
+                selected["import_graph"] = {"edges": relevant_edges, "unresolved": unresolved}
         if state["task"].agent_id == AgentId.SYNTHESIZER_VERIFIER:
             selected["coverage"] = self.board.coverage().model_dump(mode="json")
             selected["review_tasks"] = {identity: {"files": task.files, "symbols": task.symbols, "focus": task.focus[:200]}
@@ -370,6 +405,7 @@ class _ReviewSession:
         for task in plan.review_tasks:
             if any(path not in self.repository.manifest.entries for path in task.files):
                 raise ReviewExecutionError("planner requested source outside the snapshot")
+        self.board.record_assigned_files(path for task in plan.review_tasks for path in task.files)
         ordered_tasks = sorted(
             (task.model_dump(mode="json") for task in plan.review_tasks),
             key=lambda task: (task["agent_id"], task["task_id"]),

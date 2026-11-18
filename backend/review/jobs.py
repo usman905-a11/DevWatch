@@ -674,6 +674,16 @@ class JobStore(_SQLiteStore):
         with self._transaction() as db:
             return self._get(db, job_id, owner)
 
+    def list_jobs(self, *, owner: str, limit: int = 50) -> list[JobRecord]:
+        if not 1 <= limit <= 200:
+            raise ValueError("limit must be between 1 and 200")
+        with self._transaction() as db:
+            rows = db.execute(
+                "SELECT record FROM jobs WHERE owner=? ORDER BY created_at DESC, rowid DESC LIMIT ?",
+                (owner, limit),
+            ).fetchall()
+        return [JobRecord.model_validate_json(row["record"]) for row in rows]
+
     def transition(self, job_id: str, *, owner: str, expected_status: JobStatus,
                    status: JobStatus, result: dict[str, Any] | None = None,
                    error: str | None = None) -> JobRecord:

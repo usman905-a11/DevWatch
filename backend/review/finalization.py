@@ -287,6 +287,13 @@ def render_accepted_report(report: AcceptedReport) -> dict[str, str]:
             lines.extend(finding_lines)
     lines.extend(["## Coverage", "", f"Files inspected: {len(draft.coverage.inspected_files)}",
                   f"Symbols inspected: {len(draft.coverage.inspected_symbols)}"])
+    if draft.coverage.metrics is not None:
+        m = draft.coverage.metrics
+        lines.append(
+            f"Coverage metrics: discovered={m.total_discovered}, eligible={m.eligible}, "
+            f"excluded={m.excluded}, assigned={m.assigned}, inspected={m.inspected}, "
+            f"skipped_limits={m.skipped_limits}, failed={m.failed}"
+        )
     for label, entries in (("Skipped", draft.coverage.skipped), ("Failed", draft.coverage.failed)):
         for path, reason in sorted(entries.items()):
             lines.append(f"- {label}: {_markdown_text(path)} — {_markdown_text(reason)}")

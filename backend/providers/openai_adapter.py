@@ -31,6 +31,16 @@ from backend.providers.exceptions import (
 logger = logging.getLogger("backend.providers.openai")
 
 
+def _default_request_delay() -> float:
+    raw = os.getenv("DEVWATCH_REQUEST_DELAY", "").strip()
+    if not raw:
+        return 0.0
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return 0.0
+
+
 class OpenAIProviderAdapter(LLMProvider):
     """Adapter for Gemini and other OpenAI-compatible chat APIs."""
 
@@ -38,14 +48,16 @@ class OpenAIProviderAdapter(LLMProvider):
         self,
         provider_name: str = "gemini",
         max_concurrency: int = 3,
-        request_delay: float = 0.5,
+        request_delay: float | None = None,
     ):
         self.provider_name = provider_name
         self.max_concurrency = max_concurrency
         if not 1 <= max_concurrency <= 3:
             raise ValueError("Provider concurrency must be between one and three")
-        self.request_delay = request_delay
+        self.request_delay = _default_request_delay() if request_delay is None else float(request_delay)
         self._semaphore: Optional[asyncio.Semaphore] = None
+        self._shared_client: Optional[httpx.AsyncClient] = None
+        self._shared_loop: Any = None
 
     @property
     def semaphore(self) -> asyncio.Semaphore:
@@ -72,7 +84,26 @@ class OpenAIProviderAdapter(LLMProvider):
             limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
         )
 
-    def _get_client_config(self) -> Dict[str, Any]:
+    def _acquire_httpx_client(self) -> tuple[httpx.AsyncClient, bool]:
+        """Return (http_client, close_after_call); reuses pooled keep-alive client unless instance factory is overridden."""
+        if "_get_httpx_async_client" in self.__dict__:
+            return self._get_httpx_async_client(), True
+        loop = asyncio.get_running_loop()
+        if (
+            self._shared_client is None
+            or self._shared_client.is_closed
+            or self._shared_loop is not loop
+        ):
+            self._shared_client = self._get_httpx_async_client()
+            self._shared_loop = loop
+        return self._shared_client, False
+
+    async def aclose(self) -> None:
+        client, self._shared_client, self._shared_loop = self._shared_client, None, None
+        if client is not None and not client.is_closed:
+            await self._close_transport(client.aclose())
+
+    def _get_client_config(self, http_client: Optional[httpx.AsyncClient] = None) -> Dict[str, Any]:
         if self.provider_name == "gemini":
             api_key = os.getenv("GEMINI_API_KEY")
             if not api_key:
@@ -80,7 +111,7 @@ class OpenAIProviderAdapter(LLMProvider):
             return {
                 "api_key": api_key,
                 "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                "http_client": self._get_httpx_async_client(),
+                "http_client": http_client or self._get_httpx_async_client(),
                 "max_retries": 0,
             }
 
@@ -96,7 +127,7 @@ class OpenAIProviderAdapter(LLMProvider):
                 "base_url": base_url,
                 "default_headers": headers,
                 "max_retries": 0,
-                "http_client": self._get_httpx_async_client(),
+                "http_client": http_client or self._get_httpx_async_client(),
             }
 
         api_key = os.getenv("OPENAI_API_KEY")
@@ -106,7 +137,7 @@ class OpenAIProviderAdapter(LLMProvider):
         kwargs: Dict[str, Any] = {
             "api_key": api_key,
             "max_retries": 0,
-            "http_client": self._get_httpx_async_client(),
+            "http_client": http_client or self._get_httpx_async_client(),
         }
         if os.getenv("OPENAI_BASE_URL"):
             kwargs["base_url"] = os.getenv("OPENAI_BASE_URL")
@@ -195,11 +226,14 @@ class OpenAIProviderAdapter(LLMProvider):
 
         config = None
         client = None
+        http_client = None
+        close_after = True
         start_time = time.time()
 
         async with self.semaphore:
             try:
-                config = self._get_client_config()
+                http_client, close_after = self._acquire_httpx_client()
+                config = self._get_client_config(http_client=http_client)
                 if self.request_delay > 0:
                     await asyncio.sleep(self.request_delay)
                 import openai
@@ -253,11 +287,12 @@ class OpenAIProviderAdapter(LLMProvider):
             except Exception as err:
                 raise self._translate_sdk_error(err)
             finally:
-                transport = config.get("http_client") if config else None
-                if client is not None:
-                    await self._close_transport(client.close())
-                elif transport is not None:
-                    await self._close_transport(transport.aclose())
+                if close_after:
+                    transport = config.get("http_client") if config else http_client
+                    if client is not None:
+                        await self._close_transport(client.close())
+                    elif transport is not None:
+                        await self._close_transport(transport.aclose())
 
     @staticmethod
     async def _close_transport(closing):

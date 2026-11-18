@@ -394,7 +394,14 @@ def build_workspace_manifest(
     patterns = _load_gitignore_patterns(root_real)
     entries: dict[str, SourceEntry] = {}
     skipped_reasons: dict[str, str] = {}
+    excluded_counts: dict[str, int] = {}
+    discovered_count = 0
     total_bytes = 0
+
+    def _record_skip(rel: str, reason: str, *, store_path: bool = True) -> None:
+        excluded_counts[reason] = excluded_counts.get(reason, 0) + 1
+        if store_path:
+            skipped_reasons[rel] = reason
 
     for dirpath, dirnames, filenames in os.walk(root_real, followlinks=False):
         rel_dir = Path(dirpath).relative_to(root_real).as_posix()
@@ -406,31 +413,37 @@ def build_workspace_manifest(
             d_rel = f"{rel_dir}/{dname}" if rel_dir else dname
             d_full = Path(dirpath) / dname
             if _is_link_or_reparse(d_full):
-                skipped_reasons[d_rel] = "symlink_directory"
+                discovered_count += 1
+                _record_skip(d_rel, "symlink_directory")
                 continue
             if is_ignored_entry(d_rel, dname, True, patterns):
+                if dname not in {".git", ".devwatch"}:
+                    discovered_count += 1
+                    _record_skip(d_rel, "ignored", store_path=False)
                 continue
             kept_dirs.append(dname)
         dirnames[:] = kept_dirs
 
         for fname in sorted(filenames):
+            discovered_count += 1
             f_rel = f"{rel_dir}/{fname}" if rel_dir else fname
             f_full = Path(dirpath) / fname
             if _is_link_or_reparse(f_full) and _symlink_escapes_root(root_real, f_full):
-                skipped_reasons[f_rel] = "outside_workspace"
+                _record_skip(f_rel, "outside_workspace")
                 continue
             if is_sensitive_rel_path(f_rel):
-                skipped_reasons[f_rel] = "excluded_secret"
+                _record_skip(f_rel, "excluded_secret")
                 continue
             if is_ignored_entry(f_rel, fname, False, patterns):
+                _record_skip(f_rel, "ignored", store_path=False)
                 continue
             try:
                 resolved, norm_rel = _resolve_within_root(root_real, f_rel, allow_root=False)
             except PathOutsideWorkspaceError:
-                skipped_reasons[f_rel] = "outside_workspace"
+                _record_skip(f_rel, "outside_workspace")
                 continue
             if is_sensitive_rel_path(norm_rel):
-                skipped_reasons[f_rel] = "excluded_secret"
+                _record_skip(f_rel, "excluded_secret")
                 continue
 
             if not resolved.is_file():
@@ -440,18 +453,18 @@ def build_workspace_manifest(
             except OSError:
                 continue
             if size > max_file_bytes:
-                skipped_reasons[norm_rel] = "too_large"
+                _record_skip(norm_rel, "too_large")
                 continue
             if total_bytes + size > max_total_bytes:
-                skipped_reasons[norm_rel] = "total_size_limit"
+                _record_skip(norm_rel, "total_size_limit")
                 continue
             try:
                 raw = resolved.read_bytes()
             except OSError:
-                skipped_reasons[norm_rel] = "unreadable"
+                _record_skip(norm_rel, "unreadable")
                 continue
             if is_binary_bytes(raw):
-                skipped_reasons[norm_rel] = "binary"
+                _record_skip(norm_rel, "binary")
                 continue
 
             text = raw.decode("utf-8")
@@ -463,8 +476,21 @@ def build_workspace_manifest(
                 line_count=len(text.splitlines()),
             )
 
+    limitations: list[str] = []
+    if len(entries) > Config.MAX_FILES_PER_REVIEW:
+        limitations.append(
+            f"Workspace contains {len(entries)} eligible files (exceeding single-batch prompt capacity "
+            f"{Config.MAX_FILES_PER_REVIEW}); planner prioritization and partial omission accounting active."
+        )
+
     content_digest = _content_hash(entries)
-    coverage = CaptureCoverage(skipped=skipped_reasons, failed={}, limitations=[])
+    coverage = CaptureCoverage(
+        skipped=skipped_reasons,
+        failed={},
+        limitations=limitations,
+        discovered_count=discovered_count,
+        excluded_by_reason=excluded_counts,
+    )
     git_meta = GitMetadata()
     manifest_id = hashlib.sha256(content_digest.encode("utf-8")).hexdigest()[:32]
 

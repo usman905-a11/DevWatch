@@ -1,6 +1,7 @@
 /** Authenticated, bounded SSE replay. Stopping observation never cancels execution. */
 import { ConnectionError, DurableReviewClient } from './durable-client'
 import {
+  AgentId,
   identity,
   JobEvent,
   JobStatus,
@@ -13,6 +14,124 @@ import {
   StepUpdatePayload,
   StreamEvent,
 } from './wire'
+
+export type ReviewStage =
+  | 'idle'
+  | 'queued'
+  | 'planning'
+  | 'investigating'
+  | 'verifying'
+  | 'synthesizing'
+  | 'finalizing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'interrupted'
+
+export interface AgentRunStatus {
+  agentId: AgentId
+  state: 'idle' | 'running' | 'completed' | 'failed' | 'cancelled'
+  taskId?: string
+  phase?: string
+  stepTitle?: string
+  toolCount: number
+  tokens: number
+  stopReason?: string
+}
+
+const ALL_AGENT_IDS: AgentId[] = [
+  'planner',
+  'bug_reliability',
+  'logic_correctness',
+  'quality_testability',
+  'architecture_security',
+  'performance_scalability',
+  'synthesizer_verifier',
+]
+
+export function deriveReviewStage(events: StreamEvent[], job: JobView | null): ReviewStage {
+  if (!job) return 'idle'
+  if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled' || job.status === 'interrupted') {
+    return job.status
+  }
+  if (job.status === 'queued') return 'queued'
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i]
+    const p = ev.payload as Record<string, any>
+    if (ev.type === 'report_render_started' || ev.type === 'finalization_started') return 'finalizing'
+    if (ev.type === 'verification_completed' || (p.agent_id === 'synthesizer_verifier' && p.phase === 'synthesis')) return 'synthesizing'
+    if (p.agent_id === 'synthesizer_verifier' || p.node === 'synthesizer_verifier' || p.phase === 'verification') return 'verifying'
+    if (
+      p.agent_id &&
+      ['bug_reliability', 'logic_correctness', 'quality_testability', 'architecture_security', 'performance_scalability'].includes(String(p.agent_id))
+    ) {
+      return 'investigating'
+    }
+    if (p.agent_id === 'planner' || p.node === 'planner' || ev.type === 'plan_created') return 'planning'
+  }
+  return 'planning'
+}
+
+export function deriveAgentStatuses(
+  events: StreamEvent[],
+  steps: TrajectoryStep[],
+  job: JobView | null,
+): Record<AgentId, AgentRunStatus> {
+  const out = {} as Record<AgentId, AgentRunStatus>
+  const usageMap = job?.ledger?.agent_usage ?? {}
+  for (const agentId of ALL_AGENT_IDS) {
+    const usage = usageMap[agentId]
+    out[agentId] = {
+      agentId,
+      state: 'idle',
+      toolCount: 0,
+      tokens: (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0),
+    }
+  }
+  for (const ev of events) {
+    const p = ev.payload as Record<string, any>
+    const id = (p.agent_id ?? p.node) as AgentId | undefined
+    if (!id || !(id in out)) continue
+    const entry = out[id]
+    if (p.task_id) entry.taskId = String(p.task_id)
+    if (p.phase) entry.phase = String(p.phase)
+    if (ev.type === 'agent_started' || ev.type === 'iteration_started' || ev.type === 'graph_node_started') {
+      entry.state = 'running'
+    } else if (ev.type === 'graph_node_completed') {
+      entry.state = 'completed'
+    } else if (ev.type === 'tool_called') {
+      entry.state = 'running'
+      entry.toolCount += 1
+    } else if (ev.type === 'agent_completed') {
+      if (p.outcome === 'cancelled') entry.state = 'cancelled'
+      else if (p.outcome === 'failed') entry.state = 'failed'
+      else entry.state = 'completed'
+      if (p.stop_reason) entry.stopReason = String(p.stop_reason)
+      if (typeof p.total_tokens === 'number' && entry.tokens === 0) entry.tokens = p.total_tokens
+    } else if (ev.type === 'agent_reused') {
+      entry.state = 'completed'
+      if (p.stop_reason) entry.stopReason = String(p.stop_reason)
+    } else if (ev.type === 'error_occurred' && p.stop_reason) {
+      entry.state = 'failed'
+      entry.stopReason = String(p.stop_reason)
+    }
+  }
+  for (const step of steps) {
+    const id = step.agentName as AgentId
+    if (id in out) {
+      out[id].stepTitle = step.title
+      if (step.status === 'RUNNING' && out[id].state === 'idle') out[id].state = 'running'
+    }
+  }
+  if (job && ['completed', 'failed', 'cancelled', 'interrupted'].includes(job.status)) {
+    for (const id of ALL_AGENT_IDS) {
+      if (out[id].state === 'running') {
+        out[id].state = job.status === 'completed' ? 'completed' : job.status === 'cancelled' ? 'cancelled' : 'failed'
+      }
+    }
+  }
+  return out
+}
 
 const LIVE_STEP_OUTPUT_CAP_BYTES = 65536
 

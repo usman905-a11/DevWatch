@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 import re
+import time
+from typing import Any
 from uuid import uuid4
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
@@ -31,6 +33,10 @@ class StoreLayout:
     def checkpoints(self) -> Path:
         return self.root / "checkpoints.sqlite"
 
+    @property
+    def repo_cache_db(self) -> Path:
+        return self.root / "cache" / "repo-cache.sqlite"
+
 
 class SnapshotIntegrityError(ValueError):
     pass
@@ -48,6 +54,8 @@ class CaptureCoverage(ContractModel):
     skipped: dict[str, str] = Field(default_factory=dict, max_length=1000)
     failed: dict[str, str] = Field(default_factory=dict, max_length=1000)
     limitations: list[str] = Field(default_factory=list, max_length=100)
+    discovered_count: int | None = Field(default=None, ge=0)
+    excluded_by_reason: dict[str, int] | None = None
 
     @field_validator("skipped", "failed")
     @classmethod
@@ -248,3 +256,59 @@ class ArtifactStore(_SQLiteStore):
                 (snapshot_id, evidence_ref),
             ).fetchone()
         return row["payload"] if row is not None else None
+
+
+class ASTCacheStore(_SQLiteStore):
+    """Persistent SQLite cache for deterministic AST intelligence keyed by (parser_version, extension, content_hash)."""
+
+    def __init__(self, path: Path | str):
+        super().__init__(
+            path,
+            """
+            CREATE TABLE IF NOT EXISTS ast_cache (
+                cache_key TEXT PRIMARY KEY,
+                content_hash TEXT NOT NULL,
+                parser_version TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                facts TEXT NOT NULL,
+                updated_at REAL NOT NULL
+            );
+            """,
+        )
+
+    @staticmethod
+    def cache_key(*, parser_version: str, extension: str, content_hash: str) -> str:
+        raw = f"{parser_version}\0{extension}\0{content_hash}".encode("utf-8")
+        return sha256(raw).hexdigest()
+
+    def get_many(self, keys: list[str]) -> dict[str, dict[str, Any]]:
+        if not keys:
+            return {}
+        placeholders = ",".join("?" for _ in keys)
+        with self._transaction() as db:
+            rows = db.execute(
+                f"SELECT cache_key, facts FROM ast_cache WHERE cache_key IN ({placeholders})",
+                tuple(keys),
+            ).fetchall()
+        out: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            try:
+                out[row["cache_key"]] = json.loads(row["facts"])
+            except (ValueError, TypeError):
+                continue
+        return out
+
+    def put_many(self, items: list[tuple[str, str, str, str, dict[str, Any]]]) -> None:
+        if not items:
+            return
+        now = time.time()
+        rows = [
+            (key, content_hash, parser_version, file_path, json.dumps(facts, ensure_ascii=False), now)
+            for key, content_hash, parser_version, file_path, facts in items
+        ]
+        with self._transaction() as db:
+            db.executemany(
+                "INSERT OR REPLACE INTO ast_cache(cache_key, content_hash, parser_version, file_path, facts, updated_at) "
+                "VALUES(?,?,?,?,?,?)",
+                rows,
+            )

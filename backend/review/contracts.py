@@ -113,12 +113,24 @@ class FindingCandidate(ContractModel):
     remediation: str = Field(default="", max_length=1000)
     arithmetic_claims: list[ArithmeticClaim] = Field(default_factory=list, max_length=8)
 
+class CoverageMetrics(ContractModel):
+    total_discovered: int = Field(default=0, ge=0)
+    eligible: int = Field(default=0, ge=0)
+    excluded: int = Field(default=0, ge=0)
+    excluded_by_reason: dict[str, int] = Field(default_factory=dict)
+    assigned: int = Field(default=0, ge=0)
+    inspected: int = Field(default=0, ge=0)
+    skipped_limits: int = Field(default=0, ge=0)
+    failed: int = Field(default=0, ge=0)
+
+
 class Coverage(ContractModel):
     inspected_files: list[str] = Field(default_factory=list)
     inspected_symbols: list[str] = Field(default_factory=list)
     skipped: dict[str, str] = Field(default_factory=dict)
     failed: dict[str, str] = Field(default_factory=dict)
     limitations: list[str] = Field(default_factory=list)
+    metrics: CoverageMetrics | None = None
 
 
 StopReason = Literal["evidence_complete", "finished_without_result", "invalid_schema", "model_unavailable",

@@ -37,6 +37,9 @@ export interface SubmissionIntent {
   workspace_path?: string
   snapshot_id?: string
   changed_files?: readonly string[]
+  context_files?: readonly string[]
+  execution_mode?: 'parallel' | 'balanced' | 'sequential'
+  job_tokens?: number
   idempotency_key: string
 }
 export class ServiceError extends Error {
@@ -153,13 +156,24 @@ export class DurableReviewClient {
     if (intent.snapshot_id) identity(intent.snapshot_id)
     if (!/^[\x21-\x7e]{1,256}$/.test(intent.idempotency_key)) throw new ProtocolError('Invalid idempotency key')
     intent.changed_files?.forEach(sourcePath)
+    intent.context_files?.forEach(sourcePath)
     const body = {
       ...(intent.workspace_path ? { workspace_path: intent.workspace_path } : {}),
       ...(intent.snapshot_id ? { snapshot_id: intent.snapshot_id } : {}),
       ...(intent.changed_files === undefined ? {} : { changed_files: intent.changed_files }),
+      ...(intent.context_files === undefined ? {} : { context_files: intent.context_files }),
+      ...(intent.execution_mode === undefined ? {} : { execution_mode: intent.execution_mode }),
+      ...(intent.job_tokens === undefined ? {} : { job_tokens: intent.job_tokens }),
     }
     return parseJob(await this.json('/api/jobs', { method: 'POST', headers: {
       'Content-Type': 'application/json', 'Idempotency-Key': intent.idempotency_key }, body: JSON.stringify(body) }, signal))
+  }
+
+  async listJobs(limit = 50, signal?: AbortSignal): Promise<JobView[]> {
+    const clamped = Math.max(1, Math.min(200, Math.trunc(limit)))
+    const raw = (await this.json(`/api/jobs?limit=${clamped}`, {}, signal)) as Record<string, unknown>
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.jobs)) throw new ProtocolError('Invalid job list response')
+    return raw.jobs.map(item => parseJob(item))
   }
 
   async status(jobId: string, signal?: AbortSignal): Promise<JobView> {

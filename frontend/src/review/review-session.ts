@@ -1,22 +1,37 @@
 import { DurableReviewClient, SubmissionIntent } from './durable-client'
 import {
+  AgentRunStatus,
   applyStepUpdate,
+  deriveAgentStatuses,
+  deriveReviewStage,
   observeJob,
   Observation,
   pruneTrajectorySteps,
   reconcileTerminalJobSteps,
+  ReviewStage,
   TrajectoryStep,
 } from './durable-events'
-import { JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StepRenderInfo, StepStatus, StepType, StreamEvent } from './wire'
+import { AgentId, JobView, ReportDraft, SnapshotManifest, SourceExcerpt, StepRenderInfo, StepStatus, StepType, StreamEvent } from './wire'
 
 export interface SessionState {
   job: JobView | null; manifest: SnapshotManifest | null; report: ReportDraft | null
   source: SourceExcerpt | null; sourceError: string | null; events: StreamEvent[]
   steps: TrajectoryStep[]
+  stage: ReviewStage
+  agentStatuses: Record<AgentId, AgentRunStatus>
+  history: JobView[]
   intent: SubmissionIntent | null; busy: boolean; error: string | null; connection: string
 }
 const empty = (): SessionState => ({ job: null, manifest: null, report: null, source: null, sourceError: null,
-  events: [], steps: [], intent: null, busy: false, error: null, connection: 'disconnected' })
+  events: [], steps: [], stage: 'idle', agentStatuses: deriveAgentStatuses([], [], null), history: [],
+  intent: null, busy: false, error: null, connection: 'disconnected' })
+
+export interface StartReviewOptions {
+  changedFiles?: readonly string[]
+  contextFiles?: readonly string[]
+  executionMode?: 'parallel' | 'balanced' | 'sequential'
+  jobTokens?: number
+}
 
 /** Owns viewer resources, never owns job execution. State is React-independent. */
 export class ReviewSession {
@@ -31,12 +46,30 @@ export class ReviewSession {
   constructor(readonly client: DurableReviewClient) {}
   getSnapshot = () => this.state
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
-  private update(patch: Partial<SessionState>) { this.state = { ...this.state, ...patch }; this.listeners.forEach(listener => listener()) }
+  private update(patch: Partial<SessionState>) {
+    const merged = { ...this.state, ...patch }
+    const stage = deriveReviewStage(merged.events, merged.job)
+    const agentStatuses = deriveAgentStatuses(merged.events, merged.steps, merged.job)
+    this.state = { ...merged, stage, agentStatuses }
+    this.listeners.forEach(listener => listener())
+  }
   hasPendingSubmission = () => Boolean(this.state.intent && !this.state.job)
   dispose() { this.generation++; this.navigation++; this.request.abort(); this.observation?.stop(); this.observation = undefined }
   reset() {
     if (this.hasPendingSubmission()) return
-    this.dispose(); this.stepsByIdx = new Map(); this.request = new AbortController(); this.update(empty())
+    const preservedHistory = this.state.history
+    this.dispose(); this.stepsByIdx = new Map(); this.request = new AbortController(); this.update({ ...empty(), history: preservedHistory })
+  }
+  async refreshHistory(limit = 30) {
+    try {
+      const history = await this.client.listJobs(limit, this.request.signal)
+      this.update({ history })
+    } catch {
+      // History refresh is non-fatal when offline or unauthenticated.
+    }
+  }
+  async switchJob(jobId: string) {
+    await this.attach(jobId)
   }
   private async perform(action: (generation: number, signal: AbortSignal) => Promise<void>) {
     const generation = this.generation, signal = this.request.signal
@@ -46,13 +79,19 @@ export class ReviewSession {
       if (generation === this.generation) this.update({ error: error instanceof Error ? error.message : 'Service operation failed' })
     } finally { if (generation === this.generation) this.update({ busy: false }) }
   }
-  async start(workspacePath: string, changedFiles?: readonly string[]) {
+  async start(workspacePath: string, changedOrOptions?: readonly string[] | StartReviewOptions) {
     if (this.state.busy || this.hasPendingSubmission()) return
     this.reset()
+    const opts: StartReviewOptions = Array.isArray(changedOrOptions)
+      ? { changedFiles: changedOrOptions }
+      : (changedOrOptions as StartReviewOptions | undefined) ?? {}
     await this.perform(async (generation, signal) => {
       const intent: SubmissionIntent = {
         workspace_path: workspacePath,
-        ...(changedFiles ? { changed_files: changedFiles } : {}),
+        ...(opts.changedFiles ? { changed_files: opts.changedFiles } : {}),
+        ...(opts.contextFiles?.length ? { context_files: opts.contextFiles } : {}),
+        ...(opts.executionMode ? { execution_mode: opts.executionMode } : {}),
+        ...(opts.jobTokens != null ? { job_tokens: opts.jobTokens } : {}),
         idempotency_key: crypto.randomUUID(),
       }
       this.update({ intent }) // Preserve exact intent before POST, including unknown outcome.

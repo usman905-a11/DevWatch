@@ -1,14 +1,18 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Editor, { OnMount } from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
-import { AlertTriangle, FileCode2, FileWarning, Loader2, X } from 'lucide-react'
+import { AlertTriangle, FileCode2, FileWarning, Lock, Loader2, X } from 'lucide-react'
 import { FsReadResponse } from '../review/durable-client'
+import type { ExcerptBuffer } from '../review/source-buffer'
+import type { ReportFinding } from '../review/wire'
+import { DEWATCH_MONACO_THEME, ensureLocalMonaco, registerDeWatchMonacoTheme } from './monacoSetup'
 
 export interface OpenTab {
   path: string
   loading: boolean
   error?: string | null
   file?: FsReadResponse | null
+  excerptBuffer?: ExcerptBuffer | null
 }
 
 export interface LineRange {
@@ -21,6 +25,7 @@ interface CodeEditorProps {
   tabs: OpenTab[]
   activePath: string | null
   highlightRange: LineRange | null
+  findings?: ReportFinding[]
   onSelectTab: (path: string) => void
   onCloseTab: (path: string) => void
 }
@@ -83,71 +88,110 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   tabs,
   activePath,
   highlightRange,
+  findings = [],
   onSelectTab,
   onCloseTab,
 }) => {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<typeof import('monaco-editor') | null>(null)
   const decorationsRef = useRef<string[]>([])
+  const [monacoReady, setMonacoReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void ensureLocalMonaco()
+      .then(() => { if (!cancelled) setMonacoReady(true) })
+      .catch(() => { if (!cancelled) setMonacoReady(true) })
+    return () => { cancelled = true }
+  }, [])
 
   const activeTab = tabs.find(tab => tab.path === activePath) ?? null
 
-  const applyHighlight = (range: LineRange | null) => {
+  const findingCountByPath = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const f of findings) {
+      counts[f.location.file_path] = (counts[f.location.file_path] ?? 0) + 1
+    }
+    return counts
+  }, [findings])
+
+  const activeFileFindings = useMemo(
+    () => (activeTab ? findings.filter(f => f.location.file_path === activeTab.path) : []),
+    [activeTab, findings],
+  )
+
+  const applyDecorations = (range: LineRange | null) => {
     const ed = editorRef.current
     const monaco = monacoRef.current
     if (!ed || !monaco) return
-    if (!range || !activeTab || range.path !== activeTab.path || !activeTab.file?.content) {
+    if (!activeTab || !activeTab.file?.content) {
       decorationsRef.current = ed.deltaDecorations(decorationsRef.current, [])
       return
     }
-    const start = Math.max(1, range.startLine)
-    const end = Math.max(start, range.endLine)
-    ed.revealLineInCenter(start)
-    ed.setPosition({ lineNumber: start, column: 1 })
-    decorationsRef.current = ed.deltaDecorations(decorationsRef.current, [
-      {
+    const nextDecorations: MonacoEditor.IModelDeltaDecoration[] = activeFileFindings.map(finding => {
+      const start = Math.max(1, finding.location.start_line)
+      const end = Math.max(start, finding.location.end_line)
+      return {
         range: new monaco.Range(start, 1, end, 1),
         options: {
           isWholeLine: true,
-          className: 'bg-amber-500/20 border-l-2 border-amber-400',
+          className: `editor-finding-inline editor-finding-${finding.severity}`,
+          linesDecorationsClassName: `editor-finding-gutter editor-finding-gutter-${finding.severity}`,
+          hoverMessage: [{ value: `**[${finding.severity.toUpperCase()}]** ${finding.title}` }],
         },
-      },
-    ])
+      }
+    })
+    if (range && range.path === activeTab.path) {
+      const start = Math.max(1, range.startLine)
+      const end = Math.max(start, range.endLine)
+      ed.revealLineInCenter(start)
+      ed.setPosition({ lineNumber: start, column: 1 })
+      nextDecorations.push({
+        range: new monaco.Range(start, 1, end, 1),
+        options: {
+          isWholeLine: true,
+          className: 'editor-finding-highlight',
+          linesDecorationsClassName: 'editor-finding-gutter',
+        },
+      })
+    }
+    decorationsRef.current = ed.deltaDecorations(decorationsRef.current, nextDecorations)
   }
 
   useEffect(() => {
-    applyHighlight(highlightRange)
-  }, [highlightRange, activeTab?.path, activeTab?.file?.content])
+    applyDecorations(highlightRange)
+  }, [highlightRange, activeTab?.path, activeTab?.file?.content, activeFileFindings])
 
   const handleMount: OnMount = (ed, monaco) => {
     editorRef.current = ed
     monacoRef.current = monaco
-    applyHighlight(highlightRange)
+    registerDeWatchMonacoTheme(monaco)
+    monaco.editor.setTheme(DEWATCH_MONACO_THEME)
+    applyDecorations(highlightRange)
   }
 
   return (
-    <div className="h-full w-full flex flex-col bg-zinc-950 overflow-hidden">
-      {/* Tab bar */}
-      <div className="flex items-center border-b border-zinc-800 bg-zinc-900/70 overflow-x-auto shrink-0 min-h-[34px]">
+    <div className="code-editor">
+      <div className="editor-tabbar" role="tablist" aria-label="Open source files">
         {tabs.length === 0 ? (
-          <div className="px-3 text-xs text-zinc-500">No open files</div>
+          <div className="editor-tabbar-empty">No open files</div>
         ) : (
           tabs.map(tab => {
             const isActive = tab.path === activePath
             const name = tab.path.split('/').pop() ?? tab.path
+            const tabFindings = findingCountByPath[tab.path] ?? 0
             return (
               <div
                 key={tab.path}
+                role="tab"
+                aria-selected={isActive}
                 onClick={() => onSelectTab(tab.path)}
                 title={tab.path}
-                className={`group flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-zinc-800 cursor-pointer shrink-0 ${
-                  isActive
-                    ? 'bg-zinc-950 text-zinc-100 border-t-2 border-t-sky-500'
-                    : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
-                }`}
+                className={`editor-tab ${isActive ? 'active' : ''}`}
               >
-                <FileCode2 className="w-3.5 h-3.5 text-sky-400/80 shrink-0" />
-                <span className="max-w-[160px] truncate">{name}</span>
+                <FileCode2 className="icon-xs icon-file" />
+                <span className="editor-tab-name">{name}</span>
+                {tabFindings > 0 && <span className="editor-tab-badge">{tabFindings}</span>}
                 <button
                   type="button"
                   aria-label={`Close ${name}`}
@@ -155,9 +199,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                     e.stopPropagation()
                     onCloseTab(tab.path)
                   }}
-                  className="ml-1 rounded p-0.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700/60"
+                  className="editor-tab-close"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="icon-xs" />
                 </button>
               </div>
             )
@@ -165,43 +209,66 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         )}
       </div>
 
-      {/* Editor body */}
-      <div className="flex-1 min-h-0 relative">
+      {activeTab && (
+        <div className="editor-breadcrumb">
+          <span className="breadcrumb-path">{activeTab.path}</span>
+          {highlightRange && highlightRange.path === activeTab.path && (
+            <span className="breadcrumb-range">
+              Line {highlightRange.startLine}
+              {highlightRange.endLine > highlightRange.startLine ? `–${highlightRange.endLine}` : ''}
+            </span>
+          )}
+          <span className="breadcrumb-spacer" />
+          {activeFileFindings.length > 0 && (
+            <span className="breadcrumb-findings">{activeFileFindings.length} finding(s) in file</span>
+          )}
+          <span className="breadcrumb-lang">{detectMonacoLanguage(activeTab.path)}</span>
+          <span className="breadcrumb-readonly">
+            <Lock className="icon-xs" /> Read-Only
+          </span>
+        </div>
+      )}
+
+      <div className="editor-body">
         {!activeTab ? (
-          <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-sm gap-2">
-            <FileCode2 className="w-8 h-8 text-zinc-700" />
+          <div className="editor-state">
+            <FileCode2 className="icon-lg icon-muted" />
             <p>Select a file from the explorer or click a finding to inspect it.</p>
           </div>
         ) : activeTab.loading ? (
-          <div className="h-full flex items-center justify-center text-zinc-400 text-sm gap-2">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading {activeTab.path}...
+          <div className="editor-state editor-state-inline">
+            <Loader2 className="icon-sm spin" /> Loading {activeTab.path}...
           </div>
         ) : activeTab.error ? (
-          <div className="h-full flex flex-col items-center justify-center text-red-400 text-sm gap-2 p-6 text-center">
-            <AlertTriangle className="w-7 h-7" />
-            <p className="font-medium">Unable to open {activeTab.path}</p>
-            <p className="text-xs text-red-300/80">{activeTab.error}</p>
+          <div className="editor-state editor-state-error">
+            <AlertTriangle className="icon-lg" />
+            <p className="editor-state-title">Unable to open {activeTab.path}</p>
+            <p className="editor-state-detail">{activeTab.error}</p>
           </div>
         ) : activeTab.file?.tooLarge ? (
-          <div className="h-full flex flex-col items-center justify-center text-amber-300 text-sm gap-2 p-6 text-center">
-            <FileWarning className="w-8 h-8 text-amber-400" />
-            <p className="font-medium">File is too large to display in the editor</p>
-            <p className="text-xs text-zinc-400">
+          <div className="editor-state editor-state-warn">
+            <FileWarning className="icon-lg" />
+            <p className="editor-state-title">File is too large to display in the editor</p>
+            <p className="editor-state-detail">
               {activeTab.path} is {formatBytes(activeTab.file.size)} (limit: {formatBytes(activeTab.file.maxBytes)}).
             </p>
           </div>
         ) : activeTab.file?.binary ? (
-          <div className="h-full flex flex-col items-center justify-center text-zinc-300 text-sm gap-2 p-6 text-center">
-            <FileWarning className="w-8 h-8 text-zinc-400" />
-            <p className="font-medium">Binary file cannot be displayed</p>
-            <p className="text-xs text-zinc-500">
+          <div className="editor-state editor-state-warn">
+            <FileWarning className="icon-lg" />
+            <p className="editor-state-title">Binary file cannot be displayed</p>
+            <p className="editor-state-detail">
               {activeTab.path} ({formatBytes(activeTab.file.size)}) appears to be binary.
             </p>
+          </div>
+        ) : !monacoReady ? (
+          <div className="editor-state editor-state-inline">
+            <Loader2 className="icon-sm spin" /> Loading editor...
           </div>
         ) : (
           <Editor
             height="100%"
-            theme="vs-dark"
+            theme={DEWATCH_MONACO_THEME}
             path={activeTab.path}
             language={detectMonacoLanguage(activeTab.path)}
             value={activeTab.file?.content ?? ''}
