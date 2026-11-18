@@ -3,9 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import App from '../App'
 
 describe('durable review workspace', () => {
-  it('offers authenticated connection, local capture and reopening jobs without a server path API', () => {
+  it('relies on backend .env authentication, local folder picker and reopening jobs without credential inputs', () => {
     const html = renderToStaticMarkup(<App />)
-    expect(html).toContain('API key')
+    expect(html).not.toContain('API key')
+    expect(html).not.toContain('Service URL')
+    expect(html).not.toContain('Service connection')
     expect(html).toContain('Open job')
     expect(html).toContain('Open local folder')
     expect(html).toContain('Jobs keep running when this view closes')

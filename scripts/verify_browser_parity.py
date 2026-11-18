@@ -66,7 +66,9 @@ def run():
                 cwd=ROOT, stdout=output, stderr=output, creationflags=flags)
             vite = subprocess.Popen(["node", str(ROOT / "frontend/node_modules/vite/bin/vite.js"), "--host", "127.0.0.1",
                                      "--port", str(VITE_PORT), "--strictPort"],
-                cwd=ROOT / "frontend", stdout=output, stderr=output, creationflags=flags)
+                cwd=ROOT / "frontend",
+                env={**os.environ, "DEVWATCH_SERVICE_URL": f"http://127.0.0.1:{SERVICE_PORT}", "DEVWATCH_API_KEY": ""},
+                stdout=output, stderr=output, creationflags=flags)
             try:
                 wait(f"http://127.0.0.1:{SERVICE_PORT}/openapi.json"); wait(f"http://127.0.0.1:{VITE_PORT}")
                 with sync_playwright() as playwright:
@@ -77,16 +79,22 @@ def run():
                         page.on("pageerror", lambda error: errors.append(str(error)))
                         page.goto(f"http://127.0.0.1:{VITE_PORT}"); page.wait_for_load_state("networkidle")
 
-                        def connect():
-                            page.get_by_text("Service connection", exact=True).click()
-                            page.get_by_label("Service URL").fill(f"http://127.0.0.1:{SERVICE_PORT}")
-                            page.get_by_role("button", name="Connect", exact=True).click()
-                            page.get_by_text("Service connection", exact=True).click()
+                        def pick_folder(target: Path):
+                            def _forward_pick(route):
+                                headers = {k: v for k, v in route.request.headers.items() if k.lower() != "content-length"}
+                                headers["content-type"] = "application/json"
+                                api_res = page.request.post(
+                                    f"http://127.0.0.1:{SERVICE_PORT}/workspace",
+                                    headers=headers,
+                                    data=json.dumps({"path": str(target)}),
+                                )
+                                route.fulfill(status=api_res.status, body=api_res.body(), content_type="application/json")
 
-                        connect()
-                        page.get_by_label("Folder path").fill(str(source))
+                            page.route("**/workspace/pick", _forward_pick, times=1)
+                            page.get_by_role("button", name="Open local folder", exact=True).click()
+
                         started = time.monotonic()
-                        page.get_by_role("button", name="Set workspace", exact=True).click()
+                        pick_folder(source)
                         tree = page.locator("#source-files")
                         def tree_item(rel_path: str):
                             return tree.locator(f'[role="treeitem"][title="{rel_path}"]')
@@ -122,7 +130,6 @@ def run():
 
                         job = page.locator(".job-bar > code").inner_text().split()[-1]
                         page.reload(); page.wait_for_load_state("networkidle")
-                        connect()
                         page.get_by_label("Job ID", exact=True).fill(job)
                         page.get_by_role("button", name="Open job", exact=True).click()
                         expect(page.get_by_role("button", name="Download JSON")).to_be_visible(timeout=10000)

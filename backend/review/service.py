@@ -11,6 +11,8 @@ import hmac
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -197,6 +199,52 @@ def _public_job(job):
     return data
 
 
+async def _run_folder_picker_dialog() -> tuple[str | None, str | None]:
+    """Run the native OS folder dialog in a clean child process to avoid thread-local Tcl issues."""
+    script = (
+        "import json, tkinter as tk\n"
+        "from tkinter import filedialog\n"
+        "root = tk.Tk()\n"
+        "root.withdraw()\n"
+        "try:\n"
+        "    root.attributes('-topmost', True)\n"
+        "except Exception:\n"
+        "    pass\n"
+        "try:\n"
+        "    selected = filedialog.askdirectory(title='Open Workspace Folder')\n"
+        "finally:\n"
+        "    root.destroy()\n"
+        "print(json.dumps({'path': selected or None}))\n"
+    )
+    creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        script,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        creationflags=creationflags,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+    except TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return None, "Folder picker dialog timed out."
+    if proc.returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip() or f"Folder picker failed ({proc.returncode})"
+        return None, detail
+    raw = stdout.decode("utf-8", errors="replace").strip().splitlines()
+    if not raw:
+        return None, None
+    try:
+        payload = json.loads(raw[-1])
+    except json.JSONDecodeError as exc:
+        return None, str(exc)
+    selected = payload.get("path") if isinstance(payload, dict) else None
+    return (str(selected) if selected else None), None
+
+
 def _cursor(value):
     if not value.isascii() or not value.isdigit() or len(value) > 19 or int(value) > MAX_EVENT_CURSOR:
         raise ValueError("invalid reconnect cursor")
@@ -296,26 +344,12 @@ def create_app(*, settings: ServiceSettings | None = None, provider=None):
 
     @app.post("/workspace/pick", response_model=WorkspacePickResponse)
     async def pick_workspace(principal=Depends(owner)):
-        def _pick() -> str | None:
-            import tkinter as tk
-            from tkinter import filedialog
-
-            root = tk.Tk()
-            root.withdraw()
-            try:
-                root.attributes("-topmost", True)
-            except Exception:
-                pass
-            try:
-                selected = filedialog.askdirectory(title="Open Workspace Folder")
-            finally:
-                root.destroy()
-            return selected or None
-
         try:
-            selected = await asyncio.to_thread(_pick)
+            selected, error = await _run_folder_picker_dialog()
         except Exception as exc:
             return WorkspacePickResponse(path=None, error=str(exc))
+        if error:
+            return WorkspacePickResponse(path=None, error=error)
         if not selected:
             return {"path": None, "cancelled": True}
         resolved = _workspace_for(principal).set_root(selected)

@@ -6,7 +6,6 @@ export type ExecutionMode = 'balanced' | 'parallel' | 'sequential'
 interface SettingsPanelProps {
   executionMode: ExecutionMode
   jobTokens: string
-  serviceUrl: string
   onChangeExecutionMode: (mode: ExecutionMode) => void
   onChangeJobTokens: (value: string) => void
 }
@@ -14,7 +13,6 @@ interface SettingsPanelProps {
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   executionMode,
   jobTokens,
-  serviceUrl,
   onChangeExecutionMode,
   onChangeJobTokens,
 }) => {
@@ -51,12 +49,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         </section>
 
         <section className="settings-card">
-          <h3>Service endpoint</h3>
+          <h3>Backend connection</h3>
           <p className="settings-kv">
-            <span>URL:</span> <code>{serviceUrl}</code>
+            <span>Auth:</span> <code>Configured via .env</code>
           </p>
           <p className="settings-hint">
-            API credentials stay memory-only in the browser tab and are never stored to disk.
+            Service URL and authentication credentials are supplied server-side from the root .env configuration.
           </p>
         </section>
 

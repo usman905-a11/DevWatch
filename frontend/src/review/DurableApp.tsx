@@ -14,14 +14,10 @@ import { useReviewSession } from './useReviewSession'
 import { ReportFinding } from './wire'
 
 export function DurableApp() {
-  const [client, setClient] = useState(() => new DurableReviewClient())
+  const [client] = useState(() => new DurableReviewClient())
   const { session, state } = useReviewSession(client)
-  const [serviceUrl, setServiceUrl] = useState(client.serviceUrl)
-  const [apiKey, setApiKey] = useState('')
-  const [connectionOpen, setConnectionOpen] = useState(false)
   const [jobId, setJobId] = useState('')
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
-  const [pathInput, setPathInput] = useState('')
   const [folderBusy, setFolderBusy] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
   const [tabs, setTabs] = useState<OpenTab[]>([])
@@ -76,15 +72,13 @@ export function DurableApp() {
           setLocalError(null)
           if (res.path) {
             setWorkspacePath(res.path)
-            setPathInput(res.path)
           }
           void session.refreshHistory()
         }
       })
       .catch(err => {
         if (!cancelled && err instanceof ServiceError && err.status === 401) {
-          setConnectionOpen(true)
-          setLocalError('Service requires an API key. Enter it under Service connection and click Connect.')
+          setLocalError('Backend authentication failed. Check DEVWATCH_API_KEY in .env and restart the dev server.')
         }
       })
     return () => { cancelled = true }
@@ -128,19 +122,10 @@ export function DurableApp() {
   const applyWorkspace = (resolved: string) => {
     session.reset()
     setWorkspacePath(resolved)
-    setPathInput(resolved)
     setTabs([])
     setActivePath(null)
     setHighlightRange(null)
     setLocalError(null)
-  }
-
-  function normalizeWorkspaceInput(raw: string): string {
-    const trimmed = raw.trim()
-    if (trimmed.length >= 2 && trimmed[0] === trimmed[trimmed.length - 1] && (trimmed[0] === '"' || trimmed[0] === "'")) {
-      return trimmed.slice(1, -1).trim()
-    }
-    return trimmed
   }
 
   async function pickWorkspaceFolder() {
@@ -152,51 +137,16 @@ export function DurableApp() {
       if (res.path) {
         applyWorkspace(res.path)
       } else if (res.error) {
-        setLocalError('Native folder picker unavailable. Enter the folder path below.')
+        setLocalError('Native folder picker unavailable on the backend service.')
       }
     } catch (err) {
       if (err instanceof ServiceError && err.status === 401) {
-        setConnectionOpen(true)
-        setLocalError('Service requires an API key. Enter it under Service connection and click Connect.')
+        setLocalError('Backend authentication failed. Check DEVWATCH_API_KEY in .env and restart the dev server.')
       } else {
-        setLocalError('Could not open folder picker. Check service connection or enter the folder path below.')
+        setLocalError('Could not open folder picker. Check that the backend service is connected.')
       }
     } finally {
       setFolderBusy(false)
-    }
-  }
-
-  async function submitWorkspacePath(event: React.FormEvent) {
-    event.preventDefault()
-    if (!canChangeInput()) return
-    const cleaned = normalizeWorkspaceInput(pathInput)
-    if (!cleaned) return
-    setFolderBusy(true)
-    setLocalError(null)
-    try {
-      const res = await client.setWorkspace(cleaned)
-      if (res.path) applyWorkspace(res.path)
-    } catch (err) {
-      if (err instanceof ServiceError && err.status === 401) {
-        setConnectionOpen(true)
-        setLocalError('Service requires an API key. Enter it under Service connection and click Connect.')
-      } else {
-        setLocalError('Workspace path could not be opened. Check that the directory exists.')
-      }
-    } finally {
-      setFolderBusy(false)
-    }
-  }
-
-  function configure(event: React.FormEvent) {
-    event.preventDefault()
-    if (!canChangeInput()) return
-    try {
-      setClient(new DurableReviewClient(serviceUrl, apiKey.trim()))
-      setConnectionOpen(false)
-      setLocalError(null)
-    } catch {
-      setLocalError('Enter a valid HTTP service address and API key.')
     }
   }
 
@@ -394,24 +344,20 @@ export function DurableApp() {
         </button>
       </div>
     </header>
-    <section className="source-bar" aria-label="Review connection and workspace">
-      <details open={connectionOpen} onToggle={event => setConnectionOpen(event.currentTarget.open)}><summary>Service connection</summary><form className="connection-controls" onSubmit={configure}>
-        <label>Service URL<input type="url" value={serviceUrl} autoComplete="off" onChange={event => setServiceUrl(event.target.value)} required /></label>
-        <label>API key<input type="password" value={apiKey} autoComplete="off" onChange={event => setApiKey(event.target.value)} /></label>
-        <button className="header-button" disabled={inputLocked}>Connect</button>
-        <p>Credentials stay in this view. Jobs keep running when this view closes.</p>
-      </form></details>
-      <button className="header-button" type="button" disabled={inputLocked} onClick={() => { void pickWorkspaceFolder() }}>
+    <section className="source-bar" aria-label="Workspace and job controls">
+      <button className="header-button folder-picker-btn" type="button" disabled={inputLocked} onClick={() => { void pickWorkspaceFolder() }}>
         Open local folder
       </button>
-      <form className="job-controls" onSubmit={event => { void submitWorkspacePath(event) }}>
-        <label>Folder path<input value={pathInput} placeholder="e.g. E:\\my-repo" autoComplete="off" onChange={event => setPathInput(event.target.value)} required /></label>
-        <button className="header-button" disabled={inputLocked}>Set workspace</button>
-      </form>
+      {workspacePath && (
+        <span className="workspace-pill" title={workspacePath}>
+          Folder: <code>{workspacePath}</code>
+        </span>
+      )}
       <form className="job-controls" onSubmit={openJob}>
         <label>Job ID<input value={jobId} autoComplete="off" onChange={event => setJobId(event.target.value)} required /></label>
         <button className="header-button" disabled={inputLocked}>Open job</button>
       </form>
+      <span className="status-note">Jobs keep running when this view closes.</span>
     </section>
     <section className="job-bar" aria-label="Durable job controls">
       {state.job && <>
@@ -451,7 +397,9 @@ export function DurableApp() {
             workspacePath={workspacePath}
             selectedFile={activePath}
             findingCounts={findingCountsByPath}
+            pickerBusy={inputLocked}
             onSelectFile={filePath => { void openFile(filePath) }}
+            onOpenFolder={() => { void pickWorkspaceFolder() }}
             loadDir={loadDir}
           />
         </div>
@@ -477,7 +425,6 @@ export function DurableApp() {
           <SettingsPanel
             executionMode={executionMode}
             jobTokens={jobTokens}
-            serviceUrl={serviceUrl}
             onChangeExecutionMode={setExecutionMode}
             onChangeJobTokens={setJobTokens}
           />

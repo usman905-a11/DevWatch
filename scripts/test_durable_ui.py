@@ -10,13 +10,19 @@ sys.path.insert(0, str(ROOT / ".tools" / "browser"))
 from playwright.sync_api import sync_playwright, expect
 
 
-def connect(page):
-    details = page.locator("details").first
-    if not details.get_attribute("open") is not None:
-        page.get_by_text("Service connection", exact=True).click()
-    page.get_by_label("Service URL").fill("http://127.0.0.1:8019")
-    page.get_by_label("API key", exact=True).fill("browser-fixture-key")
-    page.get_by_role("button", name="Connect", exact=True).click()
+def pick_folder(page, target: Path):
+    def _forward_pick(route):
+        headers = {k: v for k, v in route.request.headers.items() if k.lower() != "content-length"}
+        headers["content-type"] = "application/json"
+        api_res = page.request.post(
+            "http://127.0.0.1:8019/workspace",
+            headers=headers,
+            data=json.dumps({"path": str(target.resolve())}),
+        )
+        route.fulfill(status=api_res.status, body=api_res.body(), content_type="application/json")
+
+    page.route("**/workspace/pick", _forward_pick, times=1)
+    page.get_by_role("button", name="Open local folder", exact=True).click()
 
 
 def main():
@@ -36,9 +42,7 @@ def main():
 
         page.goto("http://127.0.0.1:5173")
         page.wait_for_load_state("networkidle")
-        connect(page)
-        page.get_by_label("Folder path").fill(str(source.resolve()))
-        page.get_by_role("button", name="Set workspace", exact=True).click()
+        pick_folder(page, source)
         expect(page.locator('#source-files [role="treeitem"][title="service.py"]')).to_be_visible(timeout=10000)
 
         expect(page.get_by_role("button", name="Run review")).to_be_enabled()
@@ -60,7 +64,6 @@ def main():
         # Reopen job without workspace open and verify Open source still loads from /api/jobs/{id}/source.
         page.reload()
         page.wait_for_load_state("networkidle")
-        connect(page)
         page.get_by_label("Job ID", exact=True).fill(job_id)
         page.get_by_role("button", name="Open job", exact=True).click()
         expect(page.get_by_role("heading", name="Uncertain high-impact candidates (1)")).to_be_visible(timeout=20000)
@@ -78,8 +81,7 @@ def main():
         assert not page.evaluate("Object.keys(localStorage).length || Object.keys(sessionStorage).length")
 
         # Accepted POST with a lost response retains recovery intent cleanly.
-        page.get_by_label("Folder path").fill(str(source.resolve()))
-        page.get_by_role("button", name="Set workspace", exact=True).click()
+        pick_folder(page, source)
         expect(page.get_by_role("button", name="Run review")).to_be_enabled(timeout=10000)
         def lose_response(route):
             route.fetch()

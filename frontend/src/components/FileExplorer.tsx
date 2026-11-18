@@ -20,7 +20,9 @@ interface FileExplorerProps {
   workspacePath: string | null
   selectedFile: string | null
   findingCounts?: Record<string, number>
+  pickerBusy?: boolean
   onSelectFile: (path: string) => void
+  onOpenFolder?: () => void
   loadDir: (path: string) => Promise<FsEntry[]>
 }
 
@@ -75,7 +77,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   workspacePath,
   selectedFile,
   findingCounts = {},
+  pickerBusy = false,
   onSelectFile,
+  onOpenFolder,
   loadDir,
 }) => {
   const [data, setData] = useState<TreeNodeData[]>([])
@@ -241,7 +245,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       )}
       <div ref={containerRef} className="explorer-tree-host">
         {!workspacePath ? (
-          <div className="explorer-empty">Open a local folder to browse files.</div>
+          <div className="explorer-empty explorer-empty-stack">
+            <span>Open a local folder to browse files.</span>
+            {onOpenFolder && (
+              <button
+                type="button"
+                className="header-button folder-picker-btn"
+                disabled={pickerBusy}
+                onClick={onOpenFolder}
+              >
+                Choose folder
+              </button>
+            )}
+          </div>
         ) : rootLoading ? (
           <div className="explorer-empty explorer-loading">
             <Loader2 className="icon-sm spin" /> Loading workspace...

@@ -49,9 +49,16 @@ export class ConnectionError extends Error {
   constructor() { super('Service connection failed; outcome may be unknown. No submission retry or cancellation was issued.') }
 }
 
+function defaultServiceUrl(): string {
+  if (typeof window !== 'undefined' && window.location && /^https?:/.test(window.location.origin)) {
+    return window.location.origin
+  }
+  return 'http://localhost:8000'
+}
+
 export class DurableReviewClient {
   readonly serviceUrl: string
-  constructor(serviceUrl = 'http://localhost:8000', private readonly apiKey = '', private readonly fetcher: typeof fetch = (input, options) => fetch(input, options)) {
+  constructor(serviceUrl = defaultServiceUrl(), private readonly apiKey = '', private readonly fetcher: typeof fetch = (input, options) => fetch(input, options)) {
     const url = new URL(serviceUrl)
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash
       || /[\x00-\x20\x7f]/.test(serviceUrl) || (apiKey && !/^[\x21-\x7e]{1,256}$/.test(apiKey))) throw new ProtocolError('Invalid service configuration')

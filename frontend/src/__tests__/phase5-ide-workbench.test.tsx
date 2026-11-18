@@ -42,7 +42,11 @@ describe('Phase 5 Modern Dark IDE Workbench', () => {
     expect(html).toContain('sequential')
     expect(html).toContain('Resize sidebar')
     expect(html).toContain('Open local folder')
-    expect(html).toContain('Set workspace')
+    expect(html).toContain('Choose folder')
+    expect(html).not.toContain('Folder path')
+    expect(html).not.toContain('Set workspace')
+    expect(html).not.toContain('Service URL')
+    expect(html).not.toContain('API key')
     expect(html).toContain('Open job')
     expect(html).not.toContain('Repository path')
     expect(html).not.toContain('Apply fix')
@@ -95,13 +99,13 @@ describe('Phase 5 Modern Dark IDE Workbench', () => {
       <SettingsPanel
         executionMode="balanced"
         jobTokens="120000"
-        serviceUrl="http://localhost:8000"
         onChangeExecutionMode={vi.fn()}
         onChangeJobTokens={vi.fn()}
       />,
     )
     expect(settingsHtml).toContain('Execution defaults')
     expect(settingsHtml).toContain('dewatch-dark')
+    expect(settingsHtml).toContain('.env')
   })
 
   it('shows code breadcrumb, finding count badge on tabs, rich 7-agent grid, filtered report controls, and bottom workbench drawer', () => {
